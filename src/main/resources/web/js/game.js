@@ -1,14 +1,26 @@
 // Çizim, efekt, ses ve arayüz. Oyun kuralları js/core.js içindedir, haritalar js/maps.js içinde.
 'use strict';
 
-const W = 1100;
-const H = 900;
-const TOWER_ORDER = ['octopus', 'eel', 'jellyfish'];
-const TOWER_ROLE = {
-    octopus: 'Hızlı · havayı da vurur · zırha zayıf',
-    eel: 'Alan şoku · zırh deler · havayı vuramaz',
-    jellyfish: 'Yavaşlatır · destek kulesi',
+// tuval boyutu haritadan gelir (varsayılan 1350x900 = 3:2)
+let W = 1350;
+let H = 900;
+// kule, düşman ve mermi çizimleri tüm haritalarda ortaktır; haritaya özel olan arka plan ve kule listesidir
+const SPRITE_FILES = {
+    towers: {
+        octopus: 'assets/tower_octopus.png', eel: 'assets/tower_eel.png', jellyfish: 'assets/jellyfish.png',
+        swordfish: 'assets/tower_swordfish.png', angler: 'assets/tower_angler.png', puffer: 'assets/tower_puffer.png',
+    },
+    enemies: {
+        standard: 'assets/enemy_shark.png', armored: 'assets/enemy_lobster.png', flying: 'assets/enemy_ray.png',
+        swarm: 'assets/enemy_pup.png', boss_shark: 'assets/enemy_king.png', boss_crab: 'assets/enemy_king_crab.png',
+        boss_manta: 'assets/enemy_king_manta.png', boss_brood: 'assets/enemy_king_brood.png',
+    },
+    projectiles: {
+        octopus: 'assets/projectile_octopus.png', eel: 'assets/projectile_eel.png', jellyfish: 'assets/projectile_jellyfish.png',
+        swordfish: 'assets/projectile_swordfish.png', puffer: 'assets/projectile_puffer.png',
+    },
 };
+const towerOrder = () => currentMap.towers;
 const MODE_LABEL = { first: 'İlk', last: 'Son', strong: 'En Güçlü', close: 'En Yakın' };
 
 // ------------------------------------------------------------------ kayıtlar
@@ -52,15 +64,18 @@ const ready = img => img && img.complete && img.naturalWidth > 0;
 
 let sprites = null;
 function loadSprites(map) {
-    const a = map.assets;
-    sprites = { bg: loadImage(a.bg), towers: {}, enemies: {}, projectiles: {} };
-    Object.keys(a.towers).forEach(k => { sprites.towers[k] = loadImage(a.towers[k]); });
-    Object.keys(a.enemies).forEach(k => { sprites.enemies[k] = loadImage(a.enemies[k]); });
-    Object.keys(a.projectiles).forEach(k => { sprites.projectiles[k] = loadImage(a.projectiles[k]); });
+    sprites = { bg: loadImage(map.bg), towers: {}, enemies: {}, projectiles: {} };
+    Object.keys(SPRITE_FILES.towers).forEach(k => { sprites.towers[k] = loadImage(SPRITE_FILES.towers[k]); });
+    Object.keys(SPRITE_FILES.enemies).forEach(k => { sprites.enemies[k] = loadImage(SPRITE_FILES.enemies[k]); });
+    Object.keys(SPRITE_FILES.projectiles).forEach(k => { sprites.projectiles[k] = loadImage(SPRITE_FILES.projectiles[k]); });
     sprites.caustics = map.ambient && map.ambient.caustics ? loadImage('assets/fx/caustics.png') : null;
 }
-function enemySprite(type) {
-    return sprites.enemies[type] || (type === 'boss' ? sprites.enemies.armored : sprites.enemies.standard);
+function enemyKey(type, kind) { return type === 'boss' ? 'boss_' + (kind || 'shark') : type; }
+function enemySprite(e) { return sprites.enemies[enemyKey(e.type, e.kind)] || sprites.enemies.standard; }
+// dalga özeti ve önizleme için tür adı
+function typeName(type) {
+    if (type === 'boss') return Core.BOSS_KINDS[currentMap.boss || 'shark'].name;
+    return (currentMap.enemyNames && currentMap.enemyNames[type]) || Core.ENEMY_NAMES[type] || type;
 }
 
 // ------------------------------------------------------------------ durum
@@ -82,7 +97,6 @@ let endDelay = 0;
 let endShown = false;
 let fx = { floaters: [], rings: [], bubbles: [], flash: 0 };
 let ambient = null;
-let pathSamples = [];
 let res = 1;
 
 const canvas = document.getElementById('gameCanvas');
@@ -154,7 +168,7 @@ function onWorldEvent(type, d) {
             addLog(`'${d.tower.name}-ID${pad3(d.tower.id)}' satıldı. +${d.refund} Enerji. Kalan Enerji: ${world.money}.`);
             break;
         case 'waveStart': {
-            const info = Object.entries(d.counts).map(([t, c]) => `${currentMap.enemyNames[t] || t}: ${c}`).join(', ');
+            const info = Object.entries(d.counts).map(([t, c]) => `${typeName(t)}: ${c}`).join(', ');
             addLog(`=== DALGA ${d.wave} BAŞLADI === (${info}, Toplam: ${d.total})`);
             if (d.counts.boss) playBossSound();
             break;
@@ -168,9 +182,17 @@ function onWorldEvent(type, d) {
         case 'aoe':
             fx.rings.push({ x: d.x, y: d.y, r: 10, max: d.radius * 1.15, life: 0.45, maxLife: 0.45, color: '255,230,80', aoeImg: true });
             break;
+        case 'splash':
+            fx.rings.push({ x: d.x, y: d.y, r: 8, max: d.radius, life: 0.5, maxLife: 0.5, color: '255,150,60', fill: true });
+            spawnBubbles(d.x, d.y, 6);
+            break;
+        case 'brood':
+            addLog(`${label(d.enemy)} yavrularını saçtı! (+${d.count} yavru köpek balığı)`);
+            fx.rings.push({ x: d.enemy.x, y: d.enemy.y, r: 20, max: 110, life: 0.7, maxLife: 0.7, color: '255,120,120' });
+            break;
         case 'hit': {
             const slowText = d.slowed ? `, Yavaşlatma %${Math.round(d.tower.slow * 100)} (${d.tower.slowTime} sn) uygulandı` : '';
-            addLog(`${d.tower.aoe ? 'Şok alanı' : 'Mermi'} isabet: ${label(d.enemy)} Net Hasar: ${d.dmg.toFixed(1)}${slowText}. Kalan Can: ${d.enemy.health.toFixed(0)}/${d.enemy.maxHealth}`);
+            addLog(`${d.tower.type === 'eel' ? 'Şok alanı' : d.tower.type === 'puffer' ? 'Patlama' : 'Mermi'} isabet: ${label(d.enemy)} Net Hasar: ${d.dmg.toFixed(1)}${slowText}. Kalan Can: ${d.enemy.health.toFixed(0)}/${d.enemy.maxHealth}`);
             break;
         }
         case 'kill':
@@ -210,23 +232,7 @@ function spawnBubbles(x, y, n) {
 
 function buildAmbient(map) {
     const a = map.ambient || {};
-    const out = { motes: [], rays: [], bubbles: [], fish: [] };
-    if (a.fish) {
-        const schools = a.fish.schools || 2;
-        for (let sIdx = 0; sIdx < schools; sIdx++) {
-            const dir = Math.random() < 0.5 ? 1 : -1;
-            const y0 = 80 + Math.random() * (H - 160);
-            const x0 = Math.random() * W;
-            const col = a.fish.colors[sIdx % a.fish.colors.length];
-            const n = 5 + Math.floor(Math.random() * 4);
-            for (let i = 0; i < n; i++) {
-                out.fish.push({
-                    x: x0 - dir * i * (14 + Math.random() * 16), y: y0 + (Math.random() - 0.5) * 60,
-                    dir, sp: 38 + Math.random() * 14 + sIdx * 6, size: 9 + Math.random() * 5, ph: Math.random() * 6.28, col,
-                });
-            }
-        }
-    }
+    const out = { motes: [], rays: [], bubbles: [] };
     for (let i = 0; i < (a.motes || 0); i++) {
         out.motes.push({ x: Math.random() * W, y: Math.random() * H, r: 0.8 + Math.random() * 1.8, ph: Math.random() * 6.28, sp: 6 + Math.random() * 14 });
     }
@@ -239,32 +245,13 @@ function buildAmbient(map) {
     return out;
 }
 
-function buildPathSamples(w) {
-    pathSamples = w.paths.map(p => {
-        const pts = [];
-        for (let d = 0; d <= p.length; d += 46) pts.push(d);
-        return { path: p, ds: pts };
-    });
-}
-function pointAtDistance(path, d) {
-    const dist = path.dist;
-    let lo = 0;
-    let hi = dist.length - 1;
-    while (hi - lo > 1) {
-        const mid = (lo + hi) >> 1;
-        if (dist[mid] <= d) lo = mid; else hi = mid;
-    }
-    const a = path.points[lo];
-    const b = path.points[hi];
-    const len = dist[hi] - dist[lo] || 1;
-    const t = (d - dist[lo]) / len;
-    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, angle: Math.atan2(b.y - a.y, b.x - a.x) };
-}
-
 function selectMap(mapIndex) {
     currentMapIndex = mapIndex;
     currentMap = MAPS[mapIndex];
+    W = (currentMap.size && currentMap.size.w) || 1350;
+    H = (currentMap.size && currentMap.size.h) || 900;
     loadSprites(currentMap);
+    document.getElementById('canvasBackdrop').style.backgroundImage = `url('${currentMap.bg}')`;
 
     ['menuScreen', 'mapSelectScreen', 'winScreen', 'loseScreen', 'towerModal'].forEach(id =>
         document.getElementById(id).classList.add('hidden'));
@@ -272,7 +259,6 @@ function selectMap(mapIndex) {
 
     logs = [];
     world = new Core.World(currentMap, { difficulty, seed: Date.now() & 0x7fffffff, onEvent: onWorldEvent });
-    buildPathSamples(world);
     ambient = buildAmbient(currentMap);
     fx = { floaters: [], rings: [], bubbles: [], flash: 0 };
     paused = false;
@@ -314,7 +300,9 @@ function fitCanvas() {
     const cw = box.clientWidth || W;
     const ch = box.clientHeight || H;
     const scale = Math.min(cw / W, ch / H);
-    res = Math.max(0.75, Math.min(1.6, scale * (window.devicePixelRatio || 1)));
+    // WebKit tuvali 2048 pikselin üstünde sorun çıkarabiliyor
+    const maxRes = Math.min(2048 / W, 2048 / H);
+    res = Math.max(0.75, Math.min(maxRes, scale * (window.devicePixelRatio || 1)));
     canvas.width = Math.round(W * res);
     canvas.height = Math.round(H * res);
     ctx.setTransform(res, 0, 0, res, 0, 0);
@@ -408,8 +396,6 @@ function drawAmbientBack() {
         ctx.restore();
     }
 
-    if (out_fish_guard()) drawFish(a);
-
     if (a.caustics && ready(sprites.caustics)) {
         if (!sprites.causticsPattern) sprites.causticsPattern = ctx.createPattern(sprites.caustics, 'repeat');
         ctx.save();
@@ -425,39 +411,6 @@ function drawAmbientBack() {
         });
         ctx.restore();
     }
-}
-
-function out_fish_guard() {
-    return ambient && ambient.fish && ambient.fish.length > 0;
-}
-
-function drawFish(a) {
-    ambient.fish.forEach(f => {
-        f.x += f.dir * f.sp * 0.016;
-        if (f.dir > 0 && f.x > W + 40) f.x = -40;
-        if (f.dir < 0 && f.x < -40) f.x = W + 40;
-        const wob = Math.sin(animTime * 5 + f.ph);
-        const y = f.y + Math.sin(animTime * 0.9 + f.ph) * 10;
-        ctx.save();
-        ctx.translate(f.x, y);
-        ctx.scale(f.dir, 1);
-        ctx.globalAlpha = a.fish.alpha || 0.8;
-        ctx.fillStyle = f.col;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, f.size, f.size * 0.5, 0, 0, 6.2832);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(-f.size * 0.8, 0);
-        ctx.lineTo(-f.size * 1.6, -f.size * 0.55 + wob * 2);
-        ctx.lineTo(-f.size * 1.6, f.size * 0.55 + wob * 2);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,0.85)';
-        ctx.beginPath();
-        ctx.arc(f.size * 0.5, -f.size * 0.1, f.size * 0.13, 0, 6.2832);
-        ctx.fill();
-        ctx.restore();
-    });
 }
 
 function drawAmbientFront() {
@@ -502,10 +455,8 @@ function drawAmbientFront() {
 }
 
 function drawPath() {
-    const style = currentMap.pathStyle || 'flow';
-    if (style === 'none') return;
-
-    if (style === 'rail') {
+    // yalnızca 'rail' stili yol çizer; diğer haritalarda yol arka plana işlidir
+    if (currentMap.pathStyle === 'rail') {
         world.paths.forEach(p => {
             ctx.beginPath();
             ctx.moveTo(p.points[0].x, p.points[0].y);
@@ -519,39 +470,7 @@ function drawPath() {
             ctx.stroke();
             ctx.setLineDash([]);
         });
-        return;
     }
-
-    // 'flow': yolun üstünde akan küçük oklar, çıkışta (üs) parlayan kapı
-    const col = currentMap.flowColor || '255,236,170';
-    pathSamples.forEach(ps => {
-        const off = (animTime * 34) % 46;
-        for (let d = off; d < ps.path.length - 20; d += 46) {
-            const pt = pointAtDistance(ps.path, d);
-            const fade = Math.min(1, d / 80, (ps.path.length - d) / 80);
-            ctx.save();
-            ctx.translate(pt.x, pt.y);
-            ctx.rotate(pt.angle);
-            ctx.fillStyle = `rgba(${col},${0.34 * fade})`;
-            ctx.beginPath();
-            ctx.moveTo(7, 0);
-            ctx.lineTo(-4, -6);
-            ctx.lineTo(-1, 0);
-            ctx.lineTo(-4, 6);
-            ctx.closePath();
-            ctx.fill();
-            ctx.restore();
-        }
-        const end = ps.path.points[ps.path.points.length - 1];
-        const pulse = 0.5 + 0.5 * Math.sin(animTime * 2.4);
-        const g = ctx.createRadialGradient(end.x, end.y, 4, end.x, end.y, 46 + pulse * 8);
-        g.addColorStop(0, 'rgba(255,90,100,0.55)');
-        g.addColorStop(1, 'rgba(255,90,100,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(end.x, end.y, 54, 0, 6.2832);
-        ctx.fill();
-    });
 }
 
 function drawSpots() {
@@ -636,7 +555,7 @@ function drawEnemy(e) {
     }
     drawShadow(e.x, e.y + size * 0.36, size * 0.34, size * 0.1, 0.22);
 
-    const img = enemySprite(e.type);
+    const img = enemySprite(e);
     ctx.save();
     ctx.translate(e.x, e.y + bob);
     if (currentMap.flipSprites && e.dirX > 0) ctx.scale(-1, 1);
@@ -683,12 +602,22 @@ function drawTower(t) {
         ctx.ellipse(t.x, t.y + 34, 46, 15, 0, 0, 6.2832);
         ctx.stroke();
     }
+    if (t.auraDmg > 0) {
+        // destek kulesinden güç alıyor
+        const pulse = 0.5 + 0.5 * Math.sin(animTime * 3 + t.id);
+        ctx.strokeStyle = `rgba(255,236,130,${0.45 + pulse * 0.3})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(t.x, t.y + 38, 40, 13, 0, 0, 6.2832);
+        ctx.stroke();
+    }
     drawShadow(t.x, t.y + 38, 36, 11, 0.28);
 
     if (selected || hoverTowerId === t.id) {
         ctx.beginPath();
-        ctx.strokeStyle = selected ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.28)';
-        ctx.fillStyle = selected ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)';
+        const sup = t.support;
+        ctx.strokeStyle = sup ? (selected ? 'rgba(255,230,120,0.8)' : 'rgba(255,230,120,0.45)') : (selected ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.28)');
+        ctx.fillStyle = sup ? 'rgba(255,230,120,0.07)' : (selected ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)');
         ctx.lineWidth = 2;
         ctx.arc(t.x, t.y, t.range, 0, 6.2832);
         ctx.fill();
@@ -703,12 +632,13 @@ function drawTower(t) {
         ctx.fillRect(t.x - 25, t.y - 25, 50, 50);
     }
 
-    for (let i = 0; i < 3; i++) {
+    const n = Core.MAX_LEVEL;
+    for (let i = 0; i < n; i++) {
         ctx.fillStyle = i < t.level ? '#ffcc00' : 'rgba(0,0,0,0.45)';
         ctx.strokeStyle = 'rgba(0,0,0,0.7)';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(t.x - 12 + i * 12, t.y + 58, 4.2, 0, 6.2832);
+        ctx.arc(t.x + (i - (n - 1) / 2) * 10.5, t.y + 58, 3.7, 0, 6.2832);
         ctx.fill();
         ctx.stroke();
     }
@@ -724,6 +654,39 @@ function drawTower(t) {
 
 function drawProjectile(p) {
     const img = sprites.projectiles[p.type];
+    if (p.lob) {
+        // havan: yay çizerek uçar, yere yaklaştıkça küçülür
+        const f = p.flight;
+        const lift = Math.sin(Math.PI * f) * 70;
+        drawShadow(p.x, p.y + 4, 9, 4, 0.3);
+        ctx.save();
+        ctx.translate(p.x, p.y - lift);
+        ctx.rotate(animTime * 6);
+        const sz = 30 + Math.sin(Math.PI * f) * 8;
+        if (ready(img)) ctx.drawImage(img, -sz / 2, -sz / 2, sz, sz);
+        else {
+            ctx.fillStyle = '#f5a742';
+            ctx.beginPath();
+            ctx.arc(0, 0, 10, 0, 6.2832);
+            ctx.fill();
+        }
+        ctx.restore();
+        return;
+    }
+    if (p.type === 'swordfish') {
+        // keskin nişancı: hızlı, uzun bir ışık oku
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle);
+        const g = ctx.createLinearGradient(-46, 0, 10, 0);
+        g.addColorStop(0, 'rgba(180,240,255,0)');
+        g.addColorStop(1, 'rgba(230,252,255,0.95)');
+        ctx.fillStyle = g;
+        ctx.fillRect(-46, -2.5, 56, 5);
+        if (ready(img)) ctx.drawImage(img, -22, -22, 56, 56);
+        ctx.restore();
+        return;
+    }
     if (ready(img)) {
         ctx.save();
         ctx.translate(p.x, p.y);
@@ -748,6 +711,12 @@ function drawFx() {
         ctx.globalAlpha = 1 - k;
         if (r.aoeImg && ready(sprites.projectiles.eel)) {
             ctx.drawImage(sprites.projectiles.eel, r.x - radius, r.y - radius, radius * 2, radius * 2);
+        }
+        if (r.fill) {
+            ctx.fillStyle = `rgba(${r.color},0.22)`;
+            ctx.beginPath();
+            ctx.arc(r.x, r.y, radius, 0, 6.2832);
+            ctx.fill();
         }
         ctx.strokeStyle = `rgba(${r.color},0.9)`;
         ctx.lineWidth = 3;
@@ -796,17 +765,17 @@ function drawFx() {
 function renderTowerMarket() {
     const container = document.getElementById('towerMarketContainer');
     container.innerHTML = '';
-    TOWER_ORDER.forEach((type, idx) => {
+    towerOrder().forEach((type, idx) => {
         const btn = document.createElement('div');
         btn.className = 'tower-button';
         btn.setAttribute('draggable', 'true');
         btn.setAttribute('data-tower', type);
-        const name = currentMap.towerNames[type];
+        const def = Core.TOWER_TYPES[type];
+        const name = (currentMap.towerNames && currentMap.towerNames[type]) || def.name;
         btn.innerHTML = `
-            <div class="tower-icon-box"><img src="${currentMap.assets.towers[type]}" alt="${name}"></div>
+            <div class="tower-icon-box"><img src="${SPRITE_FILES.towers[type]}" alt="${name}"></div>
             <div class="tower-info"><strong>${name} <span class="hotkey">${idx + 1}</span></strong>
                 <div class="tower-cost"><span class="cost-val"></span> Enerji</div>
-                <div class="tower-role">${TOWER_ROLE[type]}</div>
             </div>`;
         btn.addEventListener('dragstart', () => {
             draggedType = type;
@@ -819,6 +788,8 @@ function renderTowerMarket() {
             draggedType = null;
         });
         btn.addEventListener('click', () => armTower(type));
+        btn.addEventListener('mouseenter', () => { document.getElementById('towerHint').innerText = `${name}: ${def.role}`; });
+        btn.addEventListener('mouseleave', () => { document.getElementById('towerHint').innerText = 'Bir kulenin üzerine gel'; });
         container.appendChild(btn);
     });
 }
@@ -923,13 +894,19 @@ document.addEventListener('keydown', (e) => {
         startNextWave();
     } else if (k === 'p') togglePause();
     else if (k === 'f') toggleSpeed();
-    else if (k >= '1' && k <= '3') armTower(TOWER_ORDER[+k - 1]);
+    else if (k >= '1' && k <= '9' && towerOrder()[+k - 1]) armTower(towerOrder()[+k - 1]);
 });
 
 // ------------------------------------------------------------------ kule penceresi
 
 function statLine(t) {
-    return `Hasar: ${t.dmg}   Menzil: ${t.range}   Atış Aralığı: ${t.rate.toFixed(2)} sn`;
+    if (t.support) {
+        return `Etki alanı: ${t.range}   Hasar: +%${Math.round(t.supDmg * 100)}   Atış hızı: +%${Math.round(t.supRate * 100)}`;
+    }
+    let line = `Hasar: ${t.dmg}   Menzil: ${t.range}   Atış Aralığı: ${t.rate.toFixed(2)} sn`;
+    if (t.aoe) line += `   Alan: ${t.aoe}`;
+    if (t.auraDmg > 0) line += `\nDestek bonusu: hasar +%${Math.round(t.auraDmg * 100)} · hız +%${Math.round(t.auraRate * 100)}`;
+    return line;
 }
 
 function openTowerModal(tower) {
@@ -940,7 +917,9 @@ function openTowerModal(tower) {
     if (tower.level < Core.MAX_LEVEL) {
         const next = Object.assign(Object.create(Core.Tower.prototype), tower, { level: tower.level + 1 });
         next.derive();
-        stats += `\nSonraki: Hasar ${next.dmg} · Menzil ${next.range} · ${next.rate.toFixed(2)} sn`;
+        stats += tower.support
+            ? `\nSonraki: Hasar +%${Math.round(next.supDmg * 100)} · Hız +%${Math.round(next.supRate * 100)} · Alan ${next.range}`
+            : `\nSonraki: Hasar ${next.dmg} · Menzil ${next.range} · ${next.rate.toFixed(2)} sn`;
     }
     document.getElementById('towerModalStats').innerText = stats;
     document.getElementById('towerModalPerk').innerText = tower.perk();
@@ -1066,8 +1045,8 @@ function renderWavePreview() {
         return;
     }
     const chips = Object.entries(next.counts).map(([type, count]) => {
-        const img = currentMap.assets.enemies[type] || (type === 'boss' ? currentMap.assets.enemies.armored : currentMap.assets.enemies.standard);
-        const name = currentMap.enemyNames[type] || type;
+        const img = SPRITE_FILES.enemies[enemyKey(type, currentMap.boss)];
+        const name = typeName(type);
         return `<span class="chip" title="${name}"><img src="${img}" alt="">×${count}</span>`;
     }).join('');
     box.innerHTML = `<div class="preview-title">Sıradaki: Dalga ${next.wave}</div><div class="chips">${chips}</div>`;
@@ -1144,6 +1123,7 @@ function renderMapSelectScreen() {
         };
         pills.appendChild(b);
     });
+    document.getElementById('difficultyInfo').innerText = Core.describeDifficulty(Core.DIFFICULTY[difficulty]);
 
     const grid = document.getElementById('mapGrid');
     grid.innerHTML = '';
@@ -1152,7 +1132,7 @@ function renderMapSelectScreen() {
         const earned = rec ? '★'.repeat(rec.stars) + '☆'.repeat(3 - rec.stars) : '☆☆☆';
         const card = document.createElement('button');
         card.className = 'map-card';
-        card.style.backgroundImage = `url('${m.assets.bg}')`;
+        card.style.backgroundImage = `url('${m.bg}')`;
         card.innerHTML = `
             <div class="map-card-shade"></div>
             <div class="map-card-earned ${rec ? 'done' : ''}">${earned}</div>

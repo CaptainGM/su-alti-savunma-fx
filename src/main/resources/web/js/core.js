@@ -11,10 +11,27 @@
         boss: { speed: 19, hp: 700, reward: 110, damage: 40, armor: 45, flying: false, size: 150 },
     };
 
+    // Patron çeşitleri: her harita birini seçer (map.boss)
+    const BOSS_KINDS = {
+        shark: { name: 'Kral Köpek Balığı', hp: 1.0, speed: 1.0, armor: 45, flying: false, heavy: false, note: 'dengeli patron' },
+        crab: { name: 'Dev Kral Yengeç', hp: 1.35, speed: 0.72, armor: 80, flying: false, heavy: true, note: 'çok zırhlı ve yavaş' },
+        manta: { name: 'Manta İmparatoru', hp: 0.85, speed: 1.35, armor: 20, flying: true, heavy: false, note: 'havadan gelir' },
+        brood: { name: 'Yavru Anası', hp: 1.0, speed: 0.95, armor: 30, flying: false, heavy: false, splits: 8, note: 'yarı canda yavru saçar' },
+    };
+
+    const ENEMY_NAMES = {
+        standard: 'Köpek Balığı', armored: 'Istakoz', flying: 'Vatoz',
+        swarm: 'Yavru Köpek Balığı', boss: 'Patron',
+    };
+
+    // role: markette görünen kısa açıklama
     const TOWER_TYPES = {
-        octopus: { cost: 50, range: 210, dmg: 9, rate: 0.9, projSpeed: 520 },
-        eel: { cost: 80, range: 180, dmg: 28, rate: 2.6, aoe: 62, groundOnly: true, pierce: 0.5 },
-        jellyfish: { cost: 70, range: 200, dmg: 12, rate: 1.7, slow: 0.5, slowTime: 3, projSpeed: 480 },
+        octopus: { name: 'Ahtapot', cost: 50, range: 210, dmg: 9, rate: 0.9, projSpeed: 520, role: 'Hızlı · havayı da vurur · zırha zayıf' },
+        eel: { name: 'Yılan Balığı', cost: 80, range: 180, dmg: 28, rate: 2.6, aoe: 62, groundOnly: true, pierce: 0.5, role: 'Alan şoku · zırh deler · havayı vuramaz' },
+        jellyfish: { name: 'Deniz Anası', cost: 70, range: 200, dmg: 12, rate: 1.7, slow: 0.5, slowTime: 3, projSpeed: 480, role: 'Yavaşlatır · destek vuruşu' },
+        swordfish: { name: 'Kılıç Balığı', cost: 120, range: 380, dmg: 80, rate: 3.6, projSpeed: 1100, pierce: 0.35, defaultMode: 'strong', role: 'Keskin nişancı · çok uzun menzil · patronlara ölümcül' },
+        angler: { name: 'Fener Balığı', cost: 100, range: 190, dmg: 0, rate: 99, support: true, role: 'Destek · yakındaki kulelere hasar ve hız verir' },
+        puffer: { name: 'Balon Balığı', cost: 110, range: 270, dmg: 38, rate: 3.0, aoe: 78, lob: true, groundOnly: true, projSpeed: 300, role: 'Havan topu · kümelere alan hasarı · havayı vuramaz' },
     };
 
     const MAX_LEVEL = 5;
@@ -22,11 +39,17 @@
     const HIGH_GROUND_RANGE = 1.2;
     const TARGET_MODES = ['first', 'last', 'strong', 'close'];
 
+    // Zorluk: oyunu gerçekten değiştiren altı ayar (arayüzde de gösterilir)
     const DIFFICULTY = {
-        easy: { label: 'Kolay', hp: 0.85, money: 1.2, reward: 1.05, health: 120 },
-        normal: { label: 'Normal', hp: 1.25, money: 1.0, reward: 0.95, health: 100 },
-        hard: { label: 'Zor', hp: 1.25, money: 0.92, reward: 0.92, health: 90 },
+        easy: { label: 'Kolay', hp: 0.8, speed: 0.95, money: 1.3, reward: 1.1, bonus: 1.2, refund: 0.6, health: 130 },
+        normal: { label: 'Normal', hp: 1.0, speed: 1.0, money: 1.0, reward: 1.0, bonus: 1.0, refund: 0.5, health: 100 },
+        hard: { label: 'Zor', hp: 1.12, speed: 1.04, money: 0.92, reward: 0.95, bonus: 0.9, refund: 0.4, health: 85 },
     };
+
+    function describeDifficulty(d) {
+        const pct = v => (v >= 1 ? '+' : '') + Math.round((v - 1) * 100) + '%';
+        return `Düşman canı ${pct(d.hp)} · hızı ${pct(d.speed)} · başlangıç enerjisi ${pct(d.money)} · ödül ${pct(d.reward)} · üs canı ${d.health} · satış iadesi %${Math.round(d.refund * 100)}`;
+    }
 
     function mulberry32(seed) {
         let a = seed >>> 0;
@@ -85,7 +108,7 @@
     // ---------------------------------------------------------------- dalga planı
 
     function waveHpScale(n) {
-        return 1 + 0.30 * (n - 1) + 0.035 * (n - 1) * (n - 1);
+        return 1.25 * (1 + 0.30 * (n - 1) + 0.035 * (n - 1) * (n - 1));
     }
 
     function totalWavesOf(map) {
@@ -134,10 +157,11 @@
         }
 
         if (has('boss')) {
+            const kind = map.boss || 'shark';
             if (n === total) {
-                items.push({ type: 'boss', gap: 3, hpMul: 1 });
+                items.push({ type: 'boss', kind, gap: 3, hpMul: 1 });
             } else if (total >= 8 && n === Math.floor(total / 2)) {
-                items.push({ type: 'boss', gap: 3, hpMul: 0.45, mini: true });
+                items.push({ type: 'boss', kind, gap: 3, hpMul: 0.45, mini: true });
             }
         }
 
@@ -153,6 +177,23 @@
 
     // ---------------------------------------------------------------- varlıklar
 
+    // yol üzerinde d mesafesindeki nokta
+    function pointAt(path, d) {
+        d = Math.max(0, Math.min(path.length, d));
+        const dist = path.dist;
+        let lo = 0;
+        let hi = dist.length - 1;
+        while (hi - lo > 1) {
+            const mid = (lo + hi) >> 1;
+            if (dist[mid] <= d) lo = mid; else hi = mid;
+        }
+        const a = path.points[lo];
+        const b = path.points[hi];
+        const len = dist[hi] - dist[lo] || 1;
+        const t = (d - dist[lo]) / len;
+        return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    }
+
     class Enemy {
         constructor(world, type, lane, id, waveNo, spawn) {
             const st = ENEMY_TYPES[type];
@@ -162,15 +203,20 @@
             this.type = type;
             this.lane = lane;
             this.mini = !!(spawn && spawn.mini);
-            this.name = world.map.enemyNames[type] || (this.mini ? 'Ara Patron' : type);
-            this.flying = st.flying;
-            this.armor = st.armor;
+            this.kind = type === 'boss' ? ((spawn && spawn.kind) || 'shark') : null;
+            const bk = this.kind ? BOSS_KINDS[this.kind] : null;
+            this.name = (world.map.enemyNames && world.map.enemyNames[type]) || ENEMY_NAMES[type] || type;
+            if (bk) this.name = this.mini ? 'Ara Patron · ' + bk.name : bk.name;
+            this.flying = bk ? bk.flying : st.flying;
+            this.armor = bk ? bk.armor : st.armor;
+            this.heavy = type === 'armored' || (bk ? bk.heavy : false);
+            this.splits = bk && bk.splits && !this.mini ? bk.splits : 0;
             this.size = st.size * (this.mini ? 0.75 : 1);
             // hpScale ilk dalgada 1'dir, son dalgada haritanın değerine ulaşır: erken oyun herkes için yumuşak kalır
             const mapRamp = 1 + ((world.map.hpScale || 1) - 1) * (waveNo - 1) / Math.max(1, world.totalWaves - 1);
-            this.maxHealth = Math.round(st.hp * hpMul * waveHpScale(waveNo) * diff.hp * mapRamp);
+            this.maxHealth = Math.round(st.hp * (bk ? bk.hp : 1) * hpMul * waveHpScale(waveNo) * diff.hp * mapRamp);
             this.health = this.maxHealth;
-            this.speed = st.speed * (world.map.speedScale || 1) * (1 + 0.012 * (waveNo - 1));
+            this.speed = st.speed * (bk ? bk.speed : 1) * (world.map.speedScale || 1) * diff.speed * (1 + 0.012 * (waveNo - 1));
             this.originalSpeed = this.speed;
             this.reward = Math.round(st.reward * (1 + 0.05 * (waveNo - 1)) * diff.reward * (this.mini ? 1.4 : 1));
             this.damage = st.damage;
@@ -185,6 +231,7 @@
             this.x = this.path.points[0].x;
             this.y = this.path.points[0].y;
             this.lastHit = -10;
+            this.didSplit = false;
         }
 
         get progress() { return this.traveled / this.path.length; }
@@ -203,6 +250,7 @@
 
             const d = this.path.dist;
             while (this.segment < d.length - 2 && this.traveled > d[this.segment + 1]) this.segment++;
+            while (this.segment > 0 && this.traveled < d[this.segment]) this.segment--;
             const a = this.path.points[this.segment];
             const b = this.path.points[this.segment + 1];
             const segLen = d[this.segment + 1] - d[this.segment];
@@ -215,7 +263,8 @@
         }
 
         takeDamage(amount, towerType, pierce) {
-            if (towerType === 'octopus' && this.type === 'armored') amount *= 0.5;
+            if (towerType === 'octopus' && this.heavy) amount *= 0.5;
+            if (towerType === 'swordfish' && this.type === 'boss') amount *= 1.5;
             const armor = this.armor * (1 - (pierce || 0));
             const actual = amount * (1 - armor / (armor + 100));
             this.health -= actual;
@@ -239,35 +288,56 @@
             this.spot = spot;
             this.x = spot.x;
             this.y = spot.y;
-            this.name = world.map.towerNames[type];
+            this.name = (world.map.towerNames && world.map.towerNames[type]) || TOWER_TYPES[type].name;
+            this.support = !!TOWER_TYPES[type].support;
             this.level = 1;
             this.lastFire = 0;
             this.target = null;
-            this.mode = 'first';
+            this.mode = TOWER_TYPES[type].defaultMode || 'first';
             this.invested = 0;
             this.firedAt = -10;
+            // destek kulelerinden gelen çarpanlar (World.refreshAuras doldurur)
+            this.auraDmg = 0;
+            this.auraRate = 0;
+            this.auraRange = 0;
             this.derive();
         }
 
-        // seviyeye ve zemine göre güncel değerler
+        // seviyeye, zemine ve destek kulelerine göre güncel değerler
         derive() {
             const st = TOWER_TYPES[this.type];
             const L = this.level - 1;
             const lv3 = this.level >= 3;
             const lv5 = this.level >= 5;
-            this.dmg = Math.round(st.dmg * (1 + 0.35 * L));
-            this.range = Math.round(st.range * (1 + 0.07 * L) * (this.spot.kind === 'high' ? HIGH_GROUND_RANGE : 1));
-            this.rate = +(st.rate * (1 - 0.11 * L)).toFixed(2);
-            this.aoe = st.aoe ? Math.round(st.aoe * (lv5 ? 1.8 : lv3 ? 1.4 : 1)) : 0;
+            const high = this.spot.kind === 'high' ? HIGH_GROUND_RANGE : 1;
+            this.dmg = Math.round(st.dmg * (1 + 0.35 * L) * (1 + this.auraDmg));
+            this.range = Math.round(st.range * (1 + 0.07 * L) * high * (1 + this.auraRange));
+            this.rate = +(st.rate * (1 - 0.11 * L) / (1 + this.auraRate)).toFixed(2);
+            const aoeMul = this.type === 'puffer' ? (lv5 ? 1.5 : lv3 ? 1.25 : 1) : (lv5 ? 1.8 : lv3 ? 1.4 : 1);
+            this.aoe = st.aoe ? Math.round(st.aoe * aoeMul) : 0;
             this.slow = st.slow ? (lv5 ? 0.3 : lv3 ? 0.4 : st.slow) : 0;
             this.slowTime = st.slowTime ? (lv5 ? 5 : lv3 ? 4 : st.slowTime) : 0;
             this.shots = this.type === 'octopus' ? (lv5 ? 3 : lv3 ? 2 : 1) : 1;
+            this.pierce = (st.pierce || 0) + (this.type === 'swordfish' && lv3 ? 0.2 : 0);
+            if (this.type === 'puffer' && lv5) { this.slow = 0.7; this.slowTime = 2; }
+            if (this.support) {
+                // destek: menzil = etki alanı yarıçapı
+                this.supDmg = 0.18 + 0.07 * L;
+                this.supRate = 0.08 + 0.04 * L;
+                this.supRange = lv5 ? 0.2 : lv3 ? 0.1 : 0;
+            }
         }
 
         perk() {
-            if (this.type === 'octopus') return 'Sv 3: iki hedefe birden · Sv 5: üç hedefe birden mürekkep fırlatır';
-            if (this.type === 'eel') return 'Sv 3: şok alanı %40 genişler · Sv 5: alan %80 genişler';
-            return 'Sv 3: yavaşlatma %60, 4 sn · Sv 5: yavaşlatma %70, 5 sn';
+            switch (this.type) {
+                case 'octopus': return 'Sv 3: iki hedefe birden · Sv 5: üç hedefe birden mürekkep fırlatır';
+                case 'eel': return 'Sv 3: şok alanı %40 genişler · Sv 5: alan %80 genişler';
+                case 'jellyfish': return 'Sv 3: yavaşlatma %60, 4 sn · Sv 5: yavaşlatma %70, 5 sn';
+                case 'swordfish': return 'Patronlara %50 fazla hasar · Sv 3: zırhın büyük kısmını deler';
+                case 'angler': return 'Yakındaki kulelere hasar ve atış hızı verir · Sv 3: +%10, Sv 5: +%20 menzil';
+                case 'puffer': return 'Sv 3: patlama %25 büyür · Sv 5: %50 büyür ve düşmanı yavaşlatır';
+                default: return '';
+            }
         }
 
         upgradeCost() {
@@ -276,13 +346,15 @@
             return Math.round(base * [0.8, 1.3, 2.0, 3.0][this.level - 1]);
         }
 
-        sellValue() { return Math.round(this.invested * 0.5); }
+        sellValue(refund) { return Math.round(this.invested * (refund != null ? refund : 0.5)); }
 
         canTarget(enemy) {
+            if (this.support) return false;
             return !(TOWER_TYPES[this.type].groundOnly && enemy.flying);
         }
 
         pick(enemies) {
+            if (this.support) return null;
             let best = null;
             let bestScore = -Infinity;
             for (const e of enemies) {
@@ -303,19 +375,33 @@
     }
 
     class Projectile {
-        constructor(tower, target) {
+        constructor(tower, target, aim) {
             this.x = tower.x;
             this.y = tower.y;
+            this.sx = tower.x;
+            this.sy = tower.y;
             this.target = target;
             this.owner = tower;
             this.type = tower.type;
             this.dmg = tower.dmg;
             this.slow = tower.slow;
             this.slowTime = tower.slowTime;
+            this.pierce = tower.pierce;
+            this.aoe = tower.aoe;
+            this.lob = !!TOWER_TYPES[tower.type].lob;
             this.speed = TOWER_TYPES[tower.type].projSpeed || 500;
             this.active = true;
             this.angle = 0;
+            if (this.lob) {
+                // havan: hedefin ilerleyeceği noktaya doğru uçar
+                this.tx = aim.x;
+                this.ty = aim.y;
+                this.total = Math.hypot(aim.x - tower.x, aim.y - tower.y) || 1;
+            }
         }
+
+        // 0..1 uçuş ilerlemesi (yalnızca havan)
+        get flight() { return this.lob ? Math.min(1, Math.hypot(this.x - this.sx, this.y - this.sy) / this.total) : 0; }
     }
 
     // ---------------------------------------------------------------- dünya
@@ -331,6 +417,7 @@
             this.paths = mapPaths(map).map(buildPath);
             this.spots = map.buildSpots.map(s => ({ x: s.x, y: s.y, kind: s.kind || 'normal', tower: null }));
             this.totalWaves = totalWavesOf(map);
+            this.available = map.towers || Object.keys(TOWER_TYPES);
 
             this.health = this.diff.health;
             this.maxHealth = this.diff.health;
@@ -367,6 +454,7 @@
 
         placeTower(type, spot) {
             if (this.result) return { ok: false, reason: 'over' };
+            if (!this.available.includes(type)) return { ok: false, reason: 'unavailable' };
             if (!spot || spot.tower) return { ok: false, reason: 'occupied' };
             const cost = this.towerCost(type);
             if (this.money < cost) return { ok: false, reason: 'money', cost };
@@ -375,6 +463,7 @@
             tower.invested = cost;
             spot.tower = tower;
             this.towers.push(tower);
+            this.refreshAuras();
             this.emit('build', { tower, cost });
             return { ok: true, tower, cost };
         }
@@ -386,18 +475,43 @@
             tower.level++;
             tower.invested += cost;
             tower.derive();
+            this.refreshAuras();
             this.emit('upgrade', { tower, cost });
             return true;
         }
 
         sellTower(tower) {
-            const refund = tower.sellValue();
+            const refund = tower.sellValue(this.diff.refund);
             this.money += refund;
             tower.spot.tower = null;
             this.towers = this.towers.filter(t => t !== tower);
             this.projectiles.forEach(p => { if (p.owner === tower) p.active = false; });
+            this.refreshAuras();
             this.emit('sell', { tower, refund });
             return refund;
+        }
+
+        // Fener Balığı gibi destek kulelerinin etkisini komşu kulelere dağıtır (toplam bonus sınırlı)
+        refreshAuras() {
+            const supports = this.towers.filter(t => t.support);
+            for (const t of this.towers) {
+                let d = 0;
+                let r = 0;
+                let g = 0;
+                if (!t.support) {
+                    for (const s of supports) {
+                        if (Math.hypot(s.x - t.x, s.y - t.y) <= s.range) {
+                            d += s.supDmg;
+                            r += s.supRate;
+                            g += s.supRange;
+                        }
+                    }
+                }
+                t.auraDmg = Math.min(0.6, d);
+                t.auraRate = Math.min(0.4, r);
+                t.auraRange = Math.min(0.25, g);
+                t.derive();
+            }
         }
 
         // ---- dalga yönetimi
@@ -417,7 +531,7 @@
             return true;
         }
 
-        waveBonus(n) { return Math.round((22 + 7 * n) * this.diff.reward); }
+        waveBonus(n) { return Math.round((22 + 7 * n) * this.diff.bonus); }
 
         // ---- ana döngü
 
@@ -454,6 +568,7 @@
             }
 
             for (const t of this.towers) {
+                if (t.support) continue;
                 t.lastFire += dt;
                 t.target = t.pick(this.enemies);
                 if (t.target && t.lastFire >= t.rate) {
@@ -491,17 +606,27 @@
         fire(t) {
             this.emit('fire', { tower: t, target: t.target });
             t.firedAt = this.time;
-            if (t.aoe) {
+            const lob = !!TOWER_TYPES[t.type].lob;
+            if (t.aoe && !lob) {
+                // anlık alan (yılan balığı)
                 const cx = t.target.x;
                 const cy = t.target.y;
                 this.emit('aoe', { x: cx, y: cy, radius: t.aoe });
-                const pierce = TOWER_TYPES[t.type].pierce;
                 for (const e of this.enemies) {
                     if (e.health > 0 && !e.flying && Math.hypot(e.x - cx, e.y - cy) < t.aoe) {
-                        const res = e.takeDamage(t.dmg, t.type, pierce);
+                        const res = e.takeDamage(t.dmg, t.type, t.pierce);
                         this.afterHit(e, t, res, false);
                     }
                 }
+                return;
+            }
+            if (lob) {
+                // hedefin uçuş süresi boyunca ilerleyeceği yeri tahmin et
+                const target = t.target;
+                const dist = Math.hypot(target.x - t.x, target.y - t.y);
+                const flight = dist / (TOWER_TYPES[t.type].projSpeed || 300);
+                const ahead = pointAt(target.path, target.traveled + target.speed * flight);
+                this.projectiles.push(new Projectile(t, target, ahead));
                 return;
             }
             this.projectiles.push(new Projectile(t, t.target));
@@ -528,6 +653,21 @@
         }
 
         moveProjectile(p, dt) {
+            if (p.lob) {
+                const dx = p.tx - p.x;
+                const dy = p.ty - p.y;
+                const dist = Math.hypot(dx, dy);
+                const stepLen = p.speed * dt;
+                p.angle = Math.atan2(dy, dx);
+                if (dist <= stepLen) {
+                    p.active = false;
+                    this.splash(p);
+                    return;
+                }
+                p.x += (dx / dist) * stepLen;
+                p.y += (dy / dist) * stepLen;
+                return;
+            }
             if (!p.target || p.target.health <= 0) { p.active = false; return; }
             const dx = p.target.x - p.x;
             const dy = p.target.y - p.y;
@@ -536,13 +676,27 @@
             p.angle = Math.atan2(dy, dx);
             if (dist <= Math.max(stepLen, 14)) {
                 p.active = false;
-                const res = p.target.takeDamage(p.dmg, p.type, 0);
+                const res = p.target.takeDamage(p.dmg, p.type, p.pierce);
                 if (p.slow && !res.dead) p.target.slowDown(p.slow, p.slowTime);
                 this.afterHit(p.target, p.owner, res, !!p.slow);
                 return;
             }
             p.x += (dx / dist) * stepLen;
             p.y += (dy / dist) * stepLen;
+        }
+
+        // havan mermisi yere düştü: yarıçap içindeki yer düşmanlarına mesafeyle azalan hasar
+        splash(p) {
+            this.emit('splash', { x: p.tx, y: p.ty, radius: p.aoe });
+            for (const e of this.enemies) {
+                if (e.health <= 0 || e.flying) continue;
+                const d = Math.hypot(e.x - p.tx, e.y - p.ty);
+                if (d > p.aoe) continue;
+                const falloff = 1 - 0.5 * (d / p.aoe);
+                const res = e.takeDamage(p.dmg * falloff, p.type, p.pierce);
+                if (p.slow && !res.dead) e.slowDown(p.slow, p.slowTime);
+                this.afterHit(e, p.owner, res, !!p.slow);
+            }
         }
 
         afterHit(enemy, tower, res, slowed) {
@@ -553,7 +707,20 @@
                 this.stats.kills++;
                 this.stats.earned += enemy.reward;
                 this.emit('kill', { enemy, reward: enemy.reward });
+            } else if (enemy.splits && !enemy.didSplit && enemy.health <= enemy.maxHealth * 0.5) {
+                this.spawnBrood(enemy);
             }
+        }
+
+        // Yavru Anası yarı canda yavru köpek balığı saçar
+        spawnBrood(mother) {
+            mother.didSplit = true;
+            for (let i = 0; i < mother.splits; i++) {
+                const e = new Enemy(this, 'swarm', mother.lane, this.nextEnemyId++, this.wave, { hpMul: 1 });
+                e.traveled = Math.max(0, mother.traveled - 14 - i * 11);
+                this.enemies.push(e);
+            }
+            this.emit('brood', { enemy: mother, count: mother.splits });
         }
 
         get finished() { return this.result !== null; }
@@ -567,9 +734,10 @@
     }
 
     const Core = {
-        ENEMY_TYPES, TOWER_TYPES, DIFFICULTY, MAX_LEVEL, BUILD_SPOT_RADIUS, HIGH_GROUND_RANGE, TARGET_MODES,
+        ENEMY_TYPES, BOSS_KINDS, ENEMY_NAMES, TOWER_TYPES, DIFFICULTY, MAX_LEVEL, BUILD_SPOT_RADIUS, HIGH_GROUND_RANGE, TARGET_MODES,
         World, Enemy, Tower, Projectile,
         buildPath, generateSmoothPath, mapPaths, buildWavePlan, summarizePlan, totalWavesOf, waveHpScale, mulberry32,
+        pointAt, describeDifficulty,
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = Core;

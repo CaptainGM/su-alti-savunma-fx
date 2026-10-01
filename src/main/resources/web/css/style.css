@@ -616,3 +616,47 @@ body {
 .tower-role { font-size: 0.72em; }
 #wavePreview { min-height: 46px; padding: 6px 8px; }
 #gameLog { min-height: 90px; }
+
+/* tuval kutuya tam oturmadığında kenarları haritanın bulanık hâliyle doldur (siyah bant yerine) */
+#canvasBackdrop {
+    position: absolute;
+    inset: -40px;
+    background-size: cover;
+    background-position: center;
+    filter: blur(26px) brightness(0.55) saturate(1.15);
+}
+
+#gameCanvas {
+    position: relative;
+    z-index: 1;
+}
+
+#difficultyInfo {
+    font-size: 0.95em;
+    color: #d6eef8;
+    background: rgba(0, 0, 0, 0.55);
+    padding: 6px 16px;
+    border-radius: 14px;
+    margin: -8px 0 14px;
+    max-width: 90vw;
+    text-align: center;
+}
+
+/* market: iki sütun, açıklama alttaki ipucu satırında */
+#towerMarketContainer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+}
+#towerMarketContainer .tower-button { margin-bottom: 0; padding: 6px 7px; gap: 7px; }
+#towerMarketContainer .tower-icon-box { width: 40px; height: 40px; flex: none; }
+#towerMarketContainer .tower-icon-box img { width: 34px; height: 34px; }
+#towerMarketContainer .tower-info strong { font-size: 0.92em; line-height: 1.15; }
+#towerMarketContainer .tower-cost { font-size: 0.9em; }
+#towerHint {
+    margin-top: 8px;
+    min-height: 2.6em;
+    font-size: 0.82em;
+    color: #9fc3d4;
+    line-height: 1.3;
+}
