@@ -2,49 +2,61 @@
 
 Deniz canlısı temalı bir kule savunma (tower defense) oyunu. Uygulama JavaFX ile açılır, oyun ise `WebView` içinde çalışan HTML5 Canvas/JS motoruyla oynanır.
 
-![Ana menü ekran görüntüsü](screenshot.png)
+![Ana menü](docs/menu.jpg)
 
-Gerçek oynanıştan bir kare — dalga yönetimi, kule marketi ve savaş günlüğü:
+Derin Çukur haritasından bir kare: Fener Balıkları karanlığı aydınlatıyor, sağ üstteki kutu sıradaki dalgaya karşı hangi kulelerin işe yarayacağını söylüyor.
 
-![Oynanış](oynanis.jpeg)
+![Oynanış](docs/oynanis.jpg)
 
 ## Oynanış
 
-- **9 harita**, her birinin yolu ve atmosferi farklı (aşağıdaki tabloya bak)
+- **9 harita**, her birinin yolu, atmosferi ve özel kuralı farklı (aşağıdaki tabloya bak). Her haritada 20-25 kule yeri vardır ve harita boyunca dengeli dağılır; yola yakın yerler kısa menzilli kulelere, uzak ve yüksek (altın halkalı) yerler uzun menzilli kulelere uyar
 - **6 kule türü**, her harita bunlardan 4-6 tanesini sunar:
-  - Ahtapot: hızlı, havayı da vurur, zırhlıya zayıf
+  - Ahtapot: hızlı, havayı da vurur, zırhlıya çok zayıf
   - Yılan Balığı: alan şoku, zırh deler, havayı vuramaz
-  - Deniz Anası: yavaşlatır
+  - Deniz Anası: yavaşlatır; yavaşlayan düşman her kuleden %20 fazla hasar alır
   - Kılıç Balığı: çok uzun menzilli keskin nişancı, hedefe dönerek nişan alır, patronlara %50 fazla hasar
-  - Fener Balığı: dengeli bir kule; karanlık haritada (Derin Çukur) çevresini aydınlatır, ışığındaki kuleler menzil kaybetmez
+  - Fener Balığı: dengeli bir kule; karanlık haritada (Derin Çukur) çevresini aydınlatır, ışığındaki kuleler menzil kaybetmez. Işıkları birleşir, kesişen yer karanlık kalmaz
   - Balon Balığı: havan, sırtındaki namlu düşmana döner, hedefin gideceği yere atar, kümelere alan hasarı
-- **Düşmanlar:** Köpek Balığı, Istakoz (zırhlı), Vatoz (uçan), Yavru Köpek Balığı (hızlı sürü) ve 4 çeşit patron: Kral Köpek Balığı, Dev Kral Yengeç (çok zırhlı), Manta İmparatoru (uçan), Yavru Anası (yarı canda yavru saçar). Patronlar yüksek canlıdır ve aralıklarla yakınlarındaki bir kuleyi **yutar**: kule, patron ölene kadar kilitli kalır. Patron gelirken ekranda uyarı, can çubuğu ve kalp atışı sesi vardır
-- Kule fiyatı aynı türden her kuleyle %12 artar, kule başına 5 seviye vardır (3. ve 5. seviyede yetenek açılır)
-- **Altın halkalı** yerler yüksek zemindir: menzil %20 artar
+- **Düşmanlar:** Köpek Balığı, Istakoz (ağır zırhlı), Vatoz (uçan), Yavru Köpek Balığı (hızlı sürü) ve 4 çeşit patron: Kral Köpek Balığı, Dev Kral Yengeç (çok zırhlı), Manta İmparatoru (uçan), Yavru Anası (yarı canda yavru saçar)
+- Kule başına 5 seviye vardır (3. ve 5. seviyede yetenek açılır). Seviye ve güç değerleri sayı yerine çubukla gösterilir: mavi mevcut değer, sarı yükseltmeyle gelecek kazanç. Fiyat aynı türden her kuleyle %12 artar
 - Kule başına hedef önceliği: İlk / Son / En Güçlü / En Yakın
-- Dalga bonusu, sıradaki dalga önizlemesi, duraklat, 2x hız
+- Dalga bonusu, sıradaki dalga önizlemesi, duraklat, **0,5x / 1x / 2x** hız
 - **Sonsuz mod:** haritayı kazanınca devam edilebilir, patronlar döngüyle gelir, rekor kaydedilir
-- Zorluk seçimi (harita ekranında altında neyin değiştiği yazar):
+
+![Kule penceresi](docs/kule-penceresi.jpg)
+
+### Strateji gerekir
+
+Kuleleri rastgele dizip parayı bitirmek kazandırmaz; botlarla yapılan denge testinde rastgele oynayan da tek türe yığılan da normal zorlukta neredeyse hiç kazanamıyor. Dikkat edilmesi gerekenler:
+
+- **Dalga içeriği:** zırhlı Istakozlara Ahtapot çok az hasar verir (zırh delen Yılan, Kılıç ve Fener Balığı gerekir), uçan Vatozları Yılan ve Balon Balığı vuramaz, sürüyü alan hasarı eritir. Sağ üstteki kutu sıradaki dalganın içeriğini ve işe yarayan kuleleri yazar, yalnızca o haritadaki kuleleri önerir
+- **Alışma:** hasarın yarısından fazlasını tek bir türe yaptırırsan düşmanlar ona alışır ve o türden %30'a kadar az hasar alır. Kutuda turuncu uyarı çıkar, türleri karıştırınca alışma kalkar
+- **Eşleşme:** Deniz Anası ile yavaşlatılan düşman her kuleden %20 fazla hasar alır
+- **Yer seçimi:** menzil ve yer birlikte düşünülür. Altın halkalı yüksek zeminde menzil %20 artar ama bu yerler yola uzaktır
+- **Patron kuleyi yer:** patron zaman zaman yakınındaki en yüksek seviyeli kuleye yönelir, önce çenesini açar (kırmızı çene ve çizgi görünür), sonra kuleyi **yutar**. Yutulan kule yok olur, para iadesi yoktur. Patron saldırı sırasında ölürse kule yenmez. Patron gelirken ekranda uyarı, can çubuğu ve kalp atışı sesi vardır
+
+![Patron kuleyi yiyor](docs/patron-yutma.jpg)
+
+### Zorluk
+
+Zorluk seçimi harita ekranında, altında neyin değiştiği yazar:
 
 | | Kolay | Normal | Zor |
 |---|---|---|---|
-| Düşman canı | -%20 | standart | +%12 |
-| Düşman hızı | -%5 | standart | +%4 |
-| Başlangıç enerjisi | +%30 | standart | -%8 |
-| Öldürme ödülü | +%10 | standart | -%5 |
-| Dalga bonusu | +%20 | standart | -%10 |
-| Üs canı | 130 | 100 | 85 |
-| Satış iadesi | %60 | %50 | %40 |
+| Düşman canı | -%12 | standart | +%6 |
+| Düşman hızı | -%3 | standart | +%3 |
+| Başlangıç enerjisi | +%20 | standart | -%5 |
+| Öldürme ödülü | +%8 | standart | -%3 |
+| Dalga bonusu | +%15 | standart | -%5 |
+| Üs canı | 120 | 100 | 90 |
+| Satış iadesi | %60 | %50 | %45 |
 
-- Kısayollar: `Boşluk` dalga başlat, `P` duraklat, `F` hız, `1-6` kule seç, `F11` tam ekran, `Esc` geri
+Her haritanın düşman canı (`hpScale`) `node tools/balans.js` ile ayrı ayrı ayarlanmıştır: normal zorlukta düzenli dizilen bir oyuncu kazanır, rastgele dizen kaybeder.
 
-## Oyun günlüğü
+- Kısayollar: `Boşluk` dalga başlat, `P` duraklat, `F` hız (1x, 2x, 0,5x), `1-6` kule seç, `F11` tam ekran, `Esc` geri
 
-Savaş günlüğü arayüzde gösterilmez. Her oyun için `loglar/<harita>_<tarih>.txt` dosyası açılır (ör. `loglar/Mercan-Kanali_2026-10-01_18-45-49.txt`) ve inşa, yükseltme, isabet, öldürme, patron saldırısı gibi olaylar oyun sürerken bu dosyaya akar; oyun bitince özet rapor eklenir. `loglar/` klasörü git'e girmez.
-
-## Ayarlar
-
-Ana menüden ya da oyun içindeki **Ayarlar** düğmesinden: efekt sesi ve sessiz mod, tam ekran, pencere boyutu (1280x720'den 2K'ya), görüntü kalitesi, ortam efektleri ve hasar yazılarını kapatma. Ayarlar ve harita rekorları `~/.su-alti-savunma/kayit.json` dosyasına yazılır. Ses sürgüsü 0-100 arasıdır; tüm seslerin genel düzeyi `SoundBank.MASTER_DB` ile birlikte kısılıp açılabilir.
+![Harita seçimi](docs/harita-secimi.jpg)
 
 ## Haritalar
 
@@ -59,14 +71,27 @@ Her haritanın yolu farklı olduğu gibi kendine özel bir kuralı da var. Kural
 | Atlantis Harabeleri | mermer basamaklar | 3 taş koruyucu baş her 10 sn düşmanlara vurup sersemletir |
 | Buz Koyu | iki kanal ortada çapraz geçer | kar fırtınası (önceden uyarır): 9 sn boyunca kule menzilleri %25 kısalır |
 | Girdap | spiral | yolun ikinci yarısında düşmanlar girdaba çekilip hızlanır |
-| Volkanik Bacalar | üç sütunlu dikey zigzag | lav patlamaları (önceden uyarır): düşmanı yakar, yakındaki kuleleri 5 sn susturur (kilit simgesi çıkar). Bazen lav doğrudan bir kuleye düşer ve onu yok eder; uyarı gelince kuleyi satarak kurtarabilirsin |
+| Volkanik Bacalar | üç sütunlu dikey zigzag | lav patlamaları (önceden uyarır): düşmanı yakar, yakındaki kuleleri 5 sn susturur (kilit simgesi çıkar). Zaman zaman gökten bir lav kayası düşer ve uyarısız bir kuleyi yok eder |
 | Derin Çukur | ikiye ayrılıp birleşir, 12 dalga | karanlık: Fener Balığı'nın ışığı dışındaki kulelerin menzili %15 kısalır, ışığın dışı görünür biçimde kararır |
+
+## Ayarlar
+
+Ana menüden ya da oyun içindeki **Ayarlar** düğmesinden: efekt sesi ve sessiz mod, tam ekran, pencere boyutu (1280x720'den 2K'ya), görüntü kalitesi, **hedef FPS** (60 / 120 / 144 / 240 / 360 / sınırsız, varsayılan 120), FPS sayacı, ortam efektleri ve hasar yazılarını kapatma. Ayarlar ve harita rekorları `~/.su-alti-savunma/kayit.json` dosyasına yazılır. Ses sürgüsü 0-100 arasıdır; tüm seslerin genel düzeyi `SoundBank.MASTER_DB` ile birlikte kısılıp açılabilir.
+
+### Akıcılık (FPS)
+
+JavaFX `WebView`'ın kendi `requestAnimationFrame` döngüsü 60 FPS'e kilitlidir. Bu yüzden kareleri Java tarafındaki `AnimationTimer` sürer (`window.javaFrame`), hedef FPS ayarı da bunun üzerinde uygulanır. Asıl yük tuval çizimindeydi ve şunlarla azaltıldı: sprite'lar çizileceği boyuta bir kez küçültülüp önbelleğe alınır (500 piksellik resmi her karede küçültmek kare başına ~0,6 ms tutuyordu), karanlık haritanın gölgesi ve ışık huzmeleri arka plana bir kez pişirilir, boş kule yerleri küçük sprite olarak çizilir, ışık ağı tek katmandır. Sınırsız FPS'te, 12 yükseltilmiş kule ve çalışan bir dalga ile gerçek uygulamada ölçülen değerler: haritaların çoğunda 150-300, en ağır olan Mercan Kanalı'nda 100-150. Varsayılan 120 sınırı tüm haritalarda tutuyor. Ayarlardan FPS sayacını açıp kendi bilgisayarınızda görebilirsiniz.
+
+## Oyun günlüğü
+
+Savaş günlüğü arayüzde gösterilmez. Her oyun için `loglar/<harita>_<tarih>.txt` dosyası açılır (ör. `loglar/Mercan-Kanali_2026-10-01_18-45-49.txt`) ve inşa, yükseltme, isabet, öldürme, patron saldırısı gibi olaylar oyun sürerken bu dosyaya akar; oyun bitince özet rapor eklenir. `loglar/` klasörü git'e girmez.
 
 ## Mimari
 
 ```mermaid
 flowchart LR
     APP[JavaFX Uygulaması] --> WV[WebView]
+    APP -- "AnimationTimer: kare" --> WV
     WV --> UI["game.js (çizim, arayüz)"]
     UI --> CORE["core.js (oyun kuralları)"]
     UI --> MAPS["maps.js (harita verisi)"]
@@ -77,16 +102,16 @@ flowchart LR
     BR --> SAVE[SaveStore]
 ```
 
-- `core.js` DOM'a dokunmaz: düşmanlar, kuleler, dalga planı, ekonomi. Aynı dosya Node'da denge ve birim testleri için de kullanılır
+- `core.js` DOM'a dokunmaz: düşmanlar, kuleler, dalga planı, ekonomi, patron saldırısı, alışma, harita kuralları. Aynı dosya Node'da denge ve birim testleri için de kullanılır
 - `game.js` çizimi, efektleri, sesi ve arayüzü yönetir; `core.js`'den gelen olaylara tepki verir
 - `maps.js` yeni harita eklemek için tek yerdir (yol, kule yerleri, hangi kuleler, patron türü, zorluk, ortam efektleri)
-- Java tarafı pencereyi açar, tam ekranı ve pencere boyutunu yönetir, sesi çalar (`SoundPlayer`), günlüğü (`LogWriter`) ve ayar/rekor dosyasını (`SaveStore`) yazar
+- Java tarafı pencereyi açar, kare döngüsünü sürer, tam ekranı ve pencere boyutunu yönetir, sesi çalar (`SoundPlayer`), günlüğü (`LogWriter`) ve ayar/rekor dosyasını (`SaveStore`) yazar
 - `model/` paketindeki sınıflar (`Tower`, `Enemy`, `WaveManager`...) nesne yönelimli tasarımın Java karşılığıdır ancak şu an çalışan oyun döngüsüne bağlı değildir; oyun kuralları JS tarafındadır ve model katmanından çok daha kapsamlıdır
-- JavaFX `WebView` WebGL ve Web Audio desteklemez; bu yüzden 3B (Three.js) kullanılamıyor, çizim 2B Canvas ile yapılıyor. Ayrıca `globalCompositeOperation = 'lighter'` bu WebView'da tuvali siliyor, CSS `blur()` filtresi ise büyük pencerede sayfayı tamamen beyaz bırakıyor (`RTTexture` hatası); ikisi de kullanılmıyor ve `node tools/test_core.js` bunları denetliyor. Görsel değişikliklerden sonra mutlaka gerçek pencerede `mvn javafx:run` ile de bakın, Chrome'da çalışan her şey WebView'da çalışmaz
+- JavaFX `WebView` WebGL ve Web Audio desteklemez; bu yüzden 3B (Three.js) kullanılamıyor, çizim 2B Canvas ile yapılıyor. Ayrıca `globalCompositeOperation = 'lighter'` bu WebView'da tuvali siliyor, CSS `blur()` filtresi ise büyük pencerede sayfayı tamamen beyaz bırakıyor (`RTTexture` hatası), başlangıç noktasız `ellipse` yayları da yol çiziciyi hataya düşürüyor; bunlar kullanılmıyor ve `node tools/test_core.js` ilk ikisini denetliyor. Görsel değişikliklerden sonra mutlaka gerçek pencerede `mvn javafx:run` ile de bakın, Chrome'da çalışan her şey WebView'da çalışmaz
 
 ## Ses
 
-Sesler dosyadan değil kodla üretilir (`SoundBank.java`): alçak "tok" vuruş, filtrelenmiş gürültü ve ton katmanları. `SoundPlayer` tek bir ses hattı üzerinde yazılımsal bir mikserle çalar. Sesler tepe değerine göre değil insan kulağına göre (A-ağırlıklı) ses düzeyine normalize edilir ve hafif doygunluk uygulanır; böylece alçak sesler kulaklıkta da duyulur. Her sesin düzeyi `SoundBank` içindeki `LEVEL` tablosundan ayarlanır, ayarlardaki ses çubuğu bunun üzerine uygulanır. Patron geldiğinde uyarı sesi, ekranda kırmızı titreşim, patron ayaktayken hızlanan kalp atışı ve ölünce ekran sarsıntısı vardır.
+Sesler dosyadan değil kodla üretilir (`SoundBank.java`): alçak "tok" vuruş, filtrelenmiş gürültü ve ton katmanları. `SoundPlayer` tek bir ses hattı üzerinde yazılımsal bir mikserle çalar. Sesler tepe değerine göre değil insan kulağına göre (A-ağırlıklı) ses düzeyine normalize edilir ve hafif doygunluk uygulanır; böylece alçak sesler kulaklıkta da duyulur. Her sesin düzeyi `SoundBank` içindeki `LEVEL` tablosundan ayarlanır, ayarlardaki ses çubuğu bunun üzerine uygulanır. Patron geldiğinde uyarı sesi, ekranda kırmızı titreşim, patron ayaktayken hızlanan kalp atışı, kule yenirken çene çatırtısı ve ölünce ekran sarsıntısı vardır.
 
 Tüm sesleri WAV olarak yazmak ve düzeylerini görmek için:
 
@@ -106,7 +131,7 @@ java -cp target/classes com.kule.savunma.SoundBank sesler
 mvn javafx:run
 ```
 
-Windows'ta `start.bat` ile de çalıştırılabilir. Geliştirirken `-Dsavunma.hash="#map=2&diff=hard"` ile doğrudan bir haritayı açabilirsiniz.
+Windows'ta `start.bat` ile de çalıştırılabilir. Geliştirirken `-Dsavunma.hash="#map=2&diff=hard"` ile doğrudan bir haritayı açabilirsiniz. `-Dsavunma.perf=true` ile saniyedeki kare sayısı ve kare başına betik süresi konsola yazılır.
 
 ## Araçlar
 
@@ -115,11 +140,18 @@ node tools/test_core.js              # oyun çekirdeği denetimleri
 node tools/balans.js                 # botlarla denge simülasyonu (tüm haritalar)
 node tools/balans.js cukur hard      # tek harita ve zorluk
 node tools/balans.js "" all          # üç zorluk birden
+BOTS=rastgele,karisik SEEDS=11,23,37,41,59 node tools/balans.js yosun   # bot ve tohum seçimi
 python tools/mapgen/build.py         # harita arka planlarını ve önizlemelerini yeniden üretir
-python tools/mapgen/export_js.py --write   # yol ve kule yerlerini maps.js'e yazar
-python tools/sprites/build.py        # kule, mermi ve patron sprite'larını üretir (Kılıç Balığı kaide ve dönen balık olarak ayrı)
+python tools/mapgen/export_js.py --write   # yolları (ve ilk kule yerlerini) maps.js'e yazar
+python tools/mapgen/spots.py         # kule yerlerinin dağılımını önizler (tools/mapgen/spots_preview/)
+python tools/mapgen/spots.py --write # boş kalan bölgelere yer ekleyip maps.js'e yazar
+python tools/sprites/build.py        # kule, mermi ve patron sprite'larını üretir
 python tools/sprites/logo.py         # logo ve uygulama simgesi
 ```
+
+Denge botları: `spam` her yere tek tür dizer, `rastgele` türü, yeri ve yükseltmeyi rastgele seçip parayı bitirir, `karisik` türleri sırayla kullanıp en iyi yerlere dizer, `akilli` bunu sıradaki dalganın içeriğine göre uyarlar. Amaç `spam` ve `rastgele` normal zorlukta kaybederken `karisik`ın kazanmasıdır; yeni bir harita ya da kural eklerken `hpScale` buna göre ayarlanır.
+
+`spots.py` elle yerleştirilmiş yerleri korur; yolun 80-350 piksel çevresinde, aralarında en az ~170 piksel boşluk kalmayacak biçimde yeni yerler ekler (yola uzak olanlar yüksek zemin olur) ve arka planın en karmaşık bölgelerinden (iskelet, kristal öbeği) kaçınır. `export_js.py` kule yerlerini de yeniden yazdığı için sırayla çalıştırılmalıdır: önce `export_js.py --write`, sonra `spots.py --write`.
 
 Harita arka planları ve yeni sprite'lar `tools` altındaki Python betikleriyle üretilir (numpy, scipy, Pillow gerekir); arka planlar 2700x1800 çözünürlüktedir.
 Kendi çizdiğiniz ya da bir görsel üreticiyle oluşturduğunuz bir arka planı kullanmak için `maps.js`'e yeni bir
