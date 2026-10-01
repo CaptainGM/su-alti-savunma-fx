@@ -5,8 +5,12 @@
 //   HPSCALE=1.4 node tools/balans.js yosun  -> haritanın hpScale değerini denemek için
 //   NOMECH=1 node tools/balans.js buz       -> haritanın özel kuralı olmadan (kuralın etkisini ölçmek için)
 //
-// "spam" her yere tek tür kule dikip yükselten oyuncuyu, "karisik" ise türleri dengeli kullanan oyuncuyu temsil eder.
-// Amaç: spam stratejisi karışık stratejiden belirgin şekilde kötü sonuç versin.
+// Botlar:
+//   spam     her yere tek tür kule dikip yükselten oyuncu
+//   rastgele düşünmeden rastgele tür / rastgele yer / rastgele yükseltme ile enerjiyi bitiren oyuncu
+//   karisik  türleri sırayla kullanan, en iyi yerlere dizen oyuncu
+//   akilli   sıradaki dalgayı inceleyip ona göre tür seçen, uzun menzilliyi uzak yere, kısa menzilliyi yola yakın dizen oyuncu
+// Amaç: spam ve rastgele kaybetsin, karisik ve özellikle akilli kazansın (strateji karşılığını versin).
 const path = require('path');
 const web = path.join(__dirname, '..', 'src', 'main', 'resources', 'web', 'js');
 const Core = require(process.env.CORE || path.join(web, 'core.js'));
@@ -47,22 +51,45 @@ const BOTS = {
         }
     },
 
-    // haritadaki türleri tercih sırasıyla döngüyle kullanır, 7 kuleden sonra yükseltmeye ağırlık verir.
-    // Karanlık haritada gerçek oyuncu gibi önce Fener Balığı koyar ve diğer kuleleri ışığın içine dizer.
-    karisik(world) {
+    karisik: makeMixBot(false),
+    akilli: makeMixBot(true),
+};
+
+// rastgele oynayan bot: sabit tohumlu, enerji bitene kadar harcar
+function makeRandomBot(seed) {
+    const rng = Core.mulberry32(seed);
+    const pick = arr => arr[Math.floor(rng() * arr.length)];
+    return function rastgele(world) {
+        for (let guard = 0; guard < 200; guard++) {
+            const frees = world.spots.filter(s => !s.tower);
+            const ups = world.towers.filter(t => t.upgradeCost() !== null && world.money >= t.upgradeCost());
+            const type = pick(world.available);
+            if (ups.length && (!frees.length || rng() < 0.3)) { world.upgradeTower(pick(ups)); continue; }
+            if (frees.length && world.money >= world.towerCost(type)) { world.placeTower(type, pick(frees)); continue; }
+            break;
+        }
+    };
+}
+
+// Türleri tercih sırasıyla döngüyle kullanır, 7 kuleden sonra yükseltmeye ağırlık verir.
+// Karanlık haritada gerçek oyuncu gibi önce Fener Balığı koyar ve diğer kuleleri ışığın içine dizer.
+// smart=true ise 7. kuleden sonra sıradaki dalganın içeriğine bakıp (zırhlı, uçan, sürü) o dalgaya uygun türü öne çıkarır.
+function makeMixBot(smart) {
+    return function (world) {
         const spots = rankedSpots(world);
         const dark = world.darkMul < 1;
         const order = PREFERENCE.filter(t => world.available.includes(t));
+        const has = t => world.available.includes(t);
         for (;;) {
-            let frees = spots.filter(s => !s.tower);
+            const frees = spots.filter(s => !s.tower);
             const n = world.towers.length;
             let type = order[n % order.length];
+            if (smart && n >= 7) type = counterPick(world, type, n);
             let spot;
             if (dark) {
                 const lantern = world.towers.find(t => t.type === 'angler');
                 if (!lantern) {
                     type = 'angler';
-                    // en çok boş yeri ışığına alan konum
                     spot = frees.slice().sort((a, b) => lit(world, b, frees) - lit(world, a, frees))[0];
                 } else {
                     const inLight = frees.filter(s => Math.hypot(s.x - lantern.x, s.y - lantern.y) <= world.lightRadius(lantern));
@@ -78,8 +105,23 @@ const BOTS = {
             if (spot && world.money >= world.towerCost(type)) { world.placeTower(type, spot); continue; }
             break;
         }
-    },
-};
+    };
+}
+
+// sıradaki dalgaya karşı en uygun tür: zırhlıya zırh delen, uçana havaya vuran, sürüye alan hasarı
+function counterPick(world, dflt, n) {
+    const has = t => world.available.includes(t);
+    const mix = Core.summarizePlan(world.planFor(Math.max(1, Math.min(world.totalWaves, world.wave + 1))));
+    const total = Object.values(mix).reduce((a, b) => a + b, 0) || 1;
+    const share = k => (mix[k] || 0) / total;
+    const count = list => world.towers.filter(x => list.includes(x.type)).length;
+    const antiArmor = ['eel', 'swordfish', 'angler'].filter(has);
+    const antiAir = ['octopus', 'angler', 'jellyfish'].filter(has);
+    if (share('armored') >= 0.22 && antiArmor.length && count(antiArmor) < n * 0.4) return antiArmor[n % antiArmor.length];
+    if (share('flying') >= 0.22 && antiAir.length && count(antiAir) < n * 0.6 && (dflt === 'eel' || dflt === 'puffer')) return antiAir[n % antiAir.length];
+    if (share('swarm') >= 0.3 && has('puffer') && count(['puffer']) < n * 0.25) return 'puffer';
+    return dflt;
+}
 
 function lit(world, spot, frees) {
     const r = Core.TOWER_TYPES.angler.range * 1.4;
@@ -88,14 +130,9 @@ function lit(world, spot, frees) {
 
 function play(map, botName, diff, seed) {
     const world = new Core.World(map, { difficulty: diff, seed });
-    const bot = BOTS[botName];
+    const bot = botName === 'rastgele' ? makeRandomBot(seed * 31 + 7) : BOTS[botName];
     const leaks = {};
     world.onEvent = (type, d) => {
-        // dikkatli oyuncu: lav bombası uyarısını görünce o kuleyi satar
-        if (type === 'hazardWarn' && d.bomb && botName === 'karisik') {
-            const tw = world.towers.find(x => x.id === d.bomb.towerId);
-            if (tw) world.sellTower(tw);
-        }
         if (type === 'leak') { const k = d.enemy.type + '@w' + world.wave; leaks[k] = (leaks[k] || 0) + 1; }
     };
     let t = 0;
@@ -128,12 +165,12 @@ const maps = MAPS.filter(m => !mapArg || m.id === mapArg)
     .map(m => (process.env.HPSCALE ? Object.assign({}, m, { hpScale: +process.env.HPSCALE }) : m))
     .map(m => (process.env.NOMECH ? Object.assign({}, m, { mechanics: [] }) : m));
 const diffs = diffArg === 'all' ? ['easy', 'normal', 'hard'] : [diffArg || 'normal'];
-const SEEDS = [11, 23, 37];
+const SEEDS = (process.env.SEEDS ? process.env.SEEDS.split(',').map(Number) : [11, 23, 37]);
 
 console.log('harita'.padEnd(10), 'zorluk'.padEnd(7), 'bot'.padEnd(8), 'kazanma', 'ort.can', 'ort.dalga', 'kule', 'enerji', 'sure');
 for (const map of maps) {
     for (const diff of diffs) {
-        for (const bot of Object.keys(BOTS)) {
+        for (const bot of (process.env.BOTS ? process.env.BOTS.split(',') : ['spam', 'rastgele', 'karisik', 'akilli'])) {
             const runs = SEEDS.map(s => play(map, bot, diff, s));
             if (process.env.DEBUG) console.log(JSON.stringify(runs));
             const wins = runs.filter(r => r.result === 'win').length;
