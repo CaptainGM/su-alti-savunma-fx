@@ -173,7 +173,7 @@ const before = w.money;
 ok(w.collectTreasure() && w.money > before && !w.treasure, 'hazine toplandı');
 
 
-// volkan: lav bombası bir kuleye düşer ve onu yok eder (önceden satılırsa kurtulur)
+// volkan: patlamayla birlikte bir kuleye lav kayası düşer; uyarı geri sayımı yoktur, kule doğrudan yok olur
 w = mk('volkan');
 w.money = 9999;
 const bombTower = w.placeTower('octopus', w.spots[0]).tower;
@@ -182,46 +182,101 @@ decoy.speed = decoy.originalSpeed = 0.01; decoy.traveled = decoy.path.length * 0
 w.enemies.push(decoy);
 w.mech[0].cfg = Object.assign({}, w.mech[0].cfg, { bombChance: 1 });
 w.mech[0].timer = 0.1;
-let bombWarn = null, destroyed = null;
-w.onEvent = (t, d) => { if (t === 'hazardWarn') bombWarn = d.bomb; if (t === 'towerDestroyed') destroyed = d.tower; };
+let warnHasBomb = false, meteor = null, destroyed = null, destroyCause = null;
+w.onEvent = (t, d) => {
+    if (t === 'hazardWarn' && d.bomb) warnHasBomb = true;
+    if (t === 'meteor') meteor = d;
+    if (t === 'towerDestroyed') { destroyed = d.tower; destroyCause = d.cause; }
+};
 runUntilSafe(w, () => destroyed, 30);
-ok(bombWarn && bombWarn.towerId === bombTower.id, 'lav bombası önceden uyarı verdi');
-ok(destroyed === bombTower && !w.towers.includes(bombTower) && !w.spots[0].tower, 'lav bombası kuleyi yok etti, yer boşaldı');
+ok(!warnHasBomb, 'lav uyarısında kuleye ait "sat" uyarısı yok');
+ok(meteor && meteor.towerId === bombTower.id && meteor.time < 1.2, 'lav kayası kısa süre önce görünür şekilde düşmeye başladı');
+ok(destroyed === bombTower && destroyCause === 'lav' && !w.towers.includes(bombTower) && !w.spots[0].tower, 'lav kayası kuleyi yok etti, yer boşaldı');
 
-// lav bombası uyarıdan sonra kule satılırsa kimse zarar görmez
-w = mk('volkan');
-w.money = 9999;
-const sold = w.placeTower('octopus', w.spots[0]).tower;
-const slowOne = Object.assign(new Core.Enemy(w, 'armored', 0, 1, 1, {}), { speed: 0.01, originalSpeed: 0.01 });
-slowOne.traveled = slowOne.path.length * 0.4; slowOne.update(0);
-w.enemies.push(slowOne);
-w.mech[0].cfg = Object.assign({}, w.mech[0].cfg, { bombChance: 1 });
-w.mech[0].timer = 0.1;
-let warnedBomb = false, wrongDestroy = false;
-w.onEvent = (t, d) => { if (t === 'hazardWarn' && d.bomb) { warnedBomb = true; w.sellTower(sold); } if (t === 'towerDestroyed') wrongDestroy = true; };
-runUntilSafe(w, () => warnedBomb && w.mech[0].phase === 'idle', 30);
-ok(warnedBomb && !wrongDestroy, 'bomba düşmeden satılan kule için yıkım olmaz');
-
-// patron saldırısı: yakındaki kuleleri yutar, patron ölünce geri verir
+// patron saldırısı: hırlar, sonra kuleyi yer (kule yok olur, geri gelmez)
 w = mk('mercan');
 w.money = 9999;
 const t1 = w.placeTower('octopus', w.spots[0]).tower;
-const t2 = w.placeTower('octopus', w.spots[1]).tower;
+const nearSpot = w.spots.filter(sp => sp !== w.spots[0]).sort((a, b) => Math.hypot(a.x - w.spots[0].x, a.y - w.spots[0].y) - Math.hypot(b.x - w.spots[0].x, b.y - w.spots[0].y))[0];
+const t2 = w.placeTower('octopus', nearSpot).tower;
+t2.level = 3; t2.derive();                         // en yüksek seviyeli kule hedef olur
 const boss = new Core.Enemy(w, 'boss', 0, 1, 5, { kind: 'shark', hpMul: 1 });
 boss.speed = boss.originalSpeed = 0.01;
-boss.x = t1.x + 40; boss.y = t1.y + 40; boss.traveled = 1;
 boss.furyTimer = 0.1;
 w.enemies.push(boss);
 boss.update = function () { this.x = t1.x + 60; this.y = t1.y + 60; return false; };   // kulelerin yakınında dursun
-let cast = false, eaten = 0, freed = 0;
-w.onEvent = (t) => { if (t === 'bossFury') cast = true; if (t === 'towerDevoured') eaten++; if (t === 'towerFreed') freed++; };
-runUntilSafe(w, () => eaten > 0, 20);
-ok(cast && eaten >= 1 && eaten <= 2 && (t1.devoured || t2.devoured), 'patron önce hırladı, sonra 1-2 kuleyi yuttu');
-const shotsBefore = w.projectiles.length;
+let cast = false, eatenTower = null, eatenBy = null;
+w.onEvent = (t, d) => {
+    if (t === 'bossFury') cast = true;
+    if (t === 'towerDestroyed' && d.cause === 'patron') { eatenTower = d.tower; eatenBy = d.by; }
+};
+runUntilSafe(w, () => eatenTower, 20);
+ok(cast, 'patron önce hırladı (uyarı süresi)');
+ok(eatenTower === t2 && eatenBy === boss, 'patron en yüksek seviyeli kuleyi yedi');
+ok(!w.towers.includes(t2) && !nearSpot.tower && w.towers.includes(t1), 'yenilen kule yok oldu, yeri boşaldı, diğeri yerinde');
 boss.health = 0;
 w.update(0.1);
-ok(freed === eaten && !t1.devoured && !t2.devoured, 'patron ölünce yutulan kuleler geri geliyor');
+ok(!w.towers.includes(t2), 'patron ölse de yenilen kule geri gelmez');
 ok(Core.ENEMY_TYPES.boss.hp >= 750, 'patron yüksek canlı');
+
+// patron saldırı sırasında ölürse kule yenmez
+w = mk('mercan');
+w.money = 9999;
+const s1 = w.placeTower('octopus', w.spots[0]).tower;
+const b2 = new Core.Enemy(w, 'boss', 0, 1, 5, { kind: 'shark', hpMul: 1 });
+b2.speed = b2.originalSpeed = 0.01; b2.furyTimer = 0.1;
+b2.update = function () { this.x = s1.x + 60; this.y = s1.y + 60; return false; };
+w.enemies.push(b2);
+let casting = false;
+w.onEvent = (t) => { if (t === 'bossFury') casting = true; };
+runUntilSafe(w, () => casting, 10);
+b2.health = 0;
+w.update(2);
+ok(casting && w.towers.includes(s1), 'saldırı sırasında öldürülen patron kuleyi yiyemez');
+
+// strateji: yavaşlamış düşman %20 fazla hasar alır
+const slowT = new Core.Enemy(mk('mercan'), 'standard', 0, 1, 1, {});
+const fastT = new Core.Enemy(mk('mercan'), 'standard', 0, 2, 1, {});
+slowT.slowDown(0.5, 3);
+const hSlow = slowT.takeDamage(10, 'eel', 0).dmg;
+const hFast = fastT.takeDamage(10, 'eel', 0).dmg;
+ok(Math.abs(hSlow / hFast - Core.SLOW_VULNERABILITY) < 0.001, 'yavaşlamış düşman fazla hasar alıyor (Deniz Anası eşleşmesi)');
+
+// strateji: aynı türe yığılırsan düşmanlar alışır, karışık oynarsan alışmaz
+w = mk('mercan');
+w.money = 9999;
+w.dealt = { octopus: 1000, eel: 30 };
+w.wave = 4; w.updateAdaptation();
+ok(w.adapt.octopus >= 0.2 && w.adapt.octopus <= Core.ADAPT_MAX + 1e-9 && !w.adapt.eel, 'tek türe dayanan hasar alışmaya yol açtı');
+const octo = new Core.Enemy(w, 'standard', 0, 1, 1, {});
+const octo2 = new Core.Enemy(w, 'standard', 0, 2, 1, {});
+const normal = octo.takeDamage(10, 'octopus', 0).dmg;
+w.strike(octo2, 'octopus', 10, 0);
+ok(Math.abs((octo2.maxHealth - octo2.health) / normal - (1 - w.adapt.octopus)) < 0.01, 'alışılan türün hasarı gerçekten azalıyor');
+w.dealt = { octopus: 400, eel: 350, jellyfish: 300 };
+w.wave = 5; w.updateAdaptation();
+ok(Object.keys(w.adapt).length === 0, 'dengeli karışımda alışma yok');
+w.dealt = { octopus: 1000 };
+w.wave = 2; w.updateAdaptation();
+ok(Object.keys(w.adapt).length === 0, 'ilk dalgalarda alışma yok');
+
+// strateji: ipuçları dalga içeriğine göre geliyor ve yalnızca haritadaki kuleleri öneriyor
+w = mk('buz');
+let adviceAll = [];
+for (let n = 1; n <= w.totalWaves; n++) adviceAll = adviceAll.concat(w.waveAdvice(n));
+ok(adviceAll.some(l => /Zırhlı/.test(l)) && adviceAll.some(l => /Patron/.test(l)), 'dalga ipuçları zırhlı ve patron için çıkıyor');
+ok(!adviceAll.some(l => /Fener Balığı/.test(l)), 'haritada olmayan kule önerilmiyor');
+
+// zırh: Istakoz, Ahtapot'a belirgin biçimde dayanıklı
+{
+    const lob = new Core.Enemy(mk('mercan'), 'armored', 0, 1, 1, {});
+    const std = new Core.Enemy(mk('mercan'), 'standard', 0, 2, 1, {});
+    const rO = lob.takeDamage(10, 'octopus', 0).dmg / std.takeDamage(10, 'octopus', 0).dmg;
+    const lob2 = new Core.Enemy(mk('mercan'), 'armored', 0, 3, 1, {});
+    const std2 = new Core.Enemy(mk('mercan'), 'standard', 0, 4, 1, {});
+    const rE = lob2.takeDamage(10, 'eel', 0.5).dmg / std2.takeDamage(10, 'eel', 0.5).dmg;
+    ok(rO < 0.3 && rE > rO * 2, 'zırhlıya Ahtapot çok az, Yılan Balığı (zırh deler) belirgin fazla hasar veriyor');
+}
 
 // JavaFX WebView uyumluluğu: bunlar Chrome'da çalışır ama burada tuvali siler ya da sayfayı beyaz bırakır
 const fs = require('fs');

@@ -65,6 +65,8 @@ public final class SoundBank {
         LEVEL.put("eruption", -16.0);
         LEVEL.put("wind", -23.0);
         LEVEL.put("zap_small", -27.0);
+        LEVEL.put("chomp", -17.5);
+        LEVEL.put("meteor", -24.0);
     }
 
     private static final Map<String, float[]> BANK = new LinkedHashMap<>();
@@ -305,6 +307,25 @@ public final class SoundBank {
                 // kar fırtınası: yükselip alçalan rüzgâr
                 b = new float[ms(3600)];
                 windNoise(b, 0, 3.4, r);
+                break;
+            case "chomp":
+                // patron kuleyi yer: çene kapanır, kemik gibi çatırdar, alçak darbe
+                b = new float[ms(1100)];
+                thump(b, 0, 190, 45, 0.5, 7, 1.0);
+                thump(b, 0.0, 95, 36, 0.6, 6, 0.8);
+                thump(b, 0.07, 340, 110, 0.12, 26, 0.7);
+                noise(b, 0, 0.05, 6500, 1200, 70, 0.8, r);
+                noise(b, 0.06, 0.09, 3200, 300, 38, 0.7, r);
+                noise(b, 0.15, 0.25, 1200, 80, 12, 0.5, r);
+                sweep(b, 0, 640, 120, 0.14, 0.3, true);
+                echo(b, 0.11, 0.3, 2);
+                break;
+            case "meteor":
+                // lav kayası düşüyor: inen ıslık ve artan hışırtı
+                b = new float[ms(900)];
+                sweep(b, 0, 1500, 260, 0.8, 0.3, false);
+                noise(b, 0, 0.8, 3800, 400, 0.0, 0.55, r);
+                swell(b, 0, 0.8, 0.8, 2.2);
                 break;
             case "zap_small":
                 b = new float[ms(260)];
