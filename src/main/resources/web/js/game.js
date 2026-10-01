@@ -8,7 +8,8 @@ let H = 900;
 const SPRITE_FILES = {
     towers: {
         octopus: 'assets/tower_octopus.png', eel: 'assets/tower_eel.png', jellyfish: 'assets/jellyfish.png',
-        swordfish: 'assets/tower_swordfish.png', swordfish_base: 'assets/tower_swordfish_base.png', swordfish_fish: 'assets/tower_swordfish_fish.png', angler: 'assets/tower_angler.png', puffer: 'assets/tower_puffer.png',
+        swordfish: 'assets/tower_swordfish.png', swordfish_base: 'assets/tower_swordfish_base.png', swordfish_fish: 'assets/tower_swordfish_fish.png', angler: 'assets/tower_angler.png',
+        puffer: 'assets/tower_puffer_icon.png', puffer_body: 'assets/tower_puffer.png', puffer_barrel: 'assets/tower_puffer_barrel.png',
     },
     enemies: {
         standard: 'assets/enemy_shark.png', armored: 'assets/enemy_lobster.png', flying: 'assets/enemy_ray.png',
@@ -17,7 +18,7 @@ const SPRITE_FILES = {
     },
     projectiles: {
         octopus: 'assets/projectile_octopus.png', eel: 'assets/projectile_eel.png', jellyfish: 'assets/projectile_jellyfish.png',
-        swordfish: 'assets/projectile_swordfish.png', puffer: 'assets/projectile_puffer.png',
+        swordfish: 'assets/projectile_swordfish.png', puffer: 'assets/projectile_puffer.png', angler: 'assets/projectile_angler.png',
     },
 };
 const towerOrder = () => currentMap.towers;
@@ -76,7 +77,8 @@ function typeName(type) {
 let currentMapIndex = 0;
 let currentMap = MAPS[0];
 let world = null;
-let logs = [];
+let logQueue = [];
+let lastLogFlush = 0;
 let paused = false;
 let speedMultiplier = 1;
 let selectedTower = null;
@@ -88,7 +90,7 @@ let lastFrame = 0;
 let rafId = 0;
 let endDelay = 0;
 let endShown = false;
-let fx = { floaters: [], rings: [], bubbles: [], flash: 0, warns: [], sparks: [], guardGlow: [] };
+let fx = { floaters: [], rings: [], bubbles: [], flash: 0, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [] };
 let zoneBands = [];
 let ambient = null;
 let res = 1;
@@ -132,16 +134,54 @@ function tensionTick(dt) {
 const pad3 = id => String(id).padStart(3, '0');
 const label = o => `'${o.name}-ID${pad3(o.id)}'`;
 
+// Günlük arayüzde gösterilmez; Java tarafı her oyun için loglar/<harita>_<tarih>.txt dosyasına yazar.
+// Satırlar biriktirilir ve saniyede bir toplu gönderilir (her satır için köprü çağrısı yapılmaz).
+function logBridge(name, arg) {
+    try {
+        if (window.javaBridge && window.javaBridge[name]) window.javaBridge[name](arg);
+    } catch (e) { /* köprü yoksa (tarayıcıda test) yok say */ }
+}
+
+function logStart() {
+    logQueue = [];
+    logBridge('startLog', `${currentMap.name} (${Core.DIFFICULTY[difficulty].label})`);
+    addLog(`Oyun başladı: ${currentMap.name}, zorluk: ${Core.DIFFICULTY[difficulty].label}, başlangıç canı: ${world.maxHealth}, enerji: ${world.money}.`);
+}
+
 function addLog(msg) {
-    const stamp = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    logs.push(stamp);
-    const box = document.getElementById('gameLog');
-    const div = document.createElement('div');
-    div.className = 'log-entry';
-    div.innerText = stamp;
-    box.prepend(div);
-    while (box.childElementCount > 150) box.removeChild(box.lastChild);
-    box.scrollTop = 0;
+    logQueue.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
+}
+
+function flushLog() {
+    lastLogFlush = performance.now();
+    if (!logQueue.length) return;
+    const text = logQueue.join('\n');
+    logQueue = [];
+    logBridge('appendLog', text);
+}
+
+function logEnd() {
+    flushLog();
+    logBridge('endLog');
+}
+
+function buildReport() {
+    if (!world) return '';
+    let txt = '\n================================================\nSON DURUM RAPORU\n================================================\n';
+    txt += `Harita: ${currentMap.name} (${Core.DIFFICULTY[difficulty].label})\n`;
+    txt += `Kalan Can: ${Math.max(0, Math.ceil(world.health))}\nKalan Enerji: ${world.money}\n`;
+    txt += `Ulaşılan Dalga: ${world.wave}/${world.totalWaves}${world.endless ? ' (sonsuz mod)' : ''}\n`;
+    txt += `Kalan Kule: ${world.towers.length}\nYok Edilen Düşman: ${world.stats.kills}\nKaybedilen Kule: ${world.stats.lost || 0}\n`;
+    txt += `Tarih: ${new Date().toLocaleString()}\n`;
+    txt += world.result === 'win' ? '\nSON: Tüm dalgalar temizlendi. OYUN KAZANILDI!\n' : '\nSON: Üs düştü. OYUN KAYBEDİLDİ!\n';
+    return txt;
+}
+
+// oyuncuya kısa bilgi (üstte kaybolan bildirim); ayrıca günlüğe de yazılır
+function notify(text, color) {
+    fx.toasts.push({ text, color: color || '#ffffff', life: 3.2, max: 3.2 });
+    if (fx.toasts.length > 3) fx.toasts.shift();
+    addLog(text);
 }
 
 // ------------------------------------------------------------------ dünya olayları
@@ -152,8 +192,14 @@ function onWorldEvent(type, d) {
             if (d.type === 'eruption') {
                 sfx('rumble');
                 d.points.forEach(p => fx.warns.push({ x: p.x, y: p.y, r: p.r, life: d.time, max: d.time }));
-                addLog('Yanardağ homurdanıyor! Lav patlaması geliyor.');
-                fx.alert = { text: 'LAV PATLAMASI', life: 1.8, max: 1.8 };
+                if (d.bomb) {
+                    fx.warns.push({ x: d.bomb.x, y: d.bomb.y, r: d.bomb.r + 12, life: d.time, max: d.time, bomb: true, towerId: d.bomb.towerId });
+                    notify('Lav bir kuleye düşüyor! Kaybetmek istemiyorsan kuleyi sat.', '#ff9a6a');
+                    fx.alert = { text: 'LAV KULEYE DÜŞÜYOR', life: d.time + 0.4, max: d.time + 0.4 };
+                } else {
+                    addLog('Yanardağ homurdanıyor! Lav patlaması geliyor.');
+                    fx.alert = { text: 'LAV PATLAMASI', life: 1.8, max: 1.8 };
+                }
             } else if (d.type === 'blizzard') {
                 sfx('wind');
                 addLog('Kar fırtınası yaklaşıyor!');
@@ -178,7 +224,43 @@ function onWorldEvent(type, d) {
             break;
         }
         case 'towerStun':
+            d.tower.stunMax = d.time;
             addLog(`${label(d.tower)} aşırı ısındı, ${d.time} sn ateş edemez.`);
+            break;
+        case 'towerDestroyed':
+            sfx('eruption');
+            fx.shake = Math.max(fx.shake || 0, 0.8);
+            fx.rings.push({ x: d.tower.x, y: d.tower.y, r: 10, max: 120, life: 0.7, maxLife: 0.7, color: '255,110,30', fill: true });
+            for (let i = 0; i < 34; i++) {
+                const a = Math.random() * 6.2832;
+                const sp = 80 + Math.random() * 240;
+                fx.sparks.push({ x: d.tower.x, y: d.tower.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 70, life: 0.6 + Math.random() * 0.8, max: 1.4, r: 2 + Math.random() * 4, c: Math.random() < 0.5 ? '255,150,40' : '70,40,30' });
+            }
+            if (selectedTower === d.tower) closeTowerModal();
+            renderTowerList();
+            notify(`${d.tower.name} lav yüzünden yok oldu!`, '#ff9a6a');
+            break;
+        case 'bossFury':
+            sfx('roar');
+            fx.shake = Math.max(fx.shake || 0, 0.45);
+            fx.furies.push({ boss: d.enemy, towers: d.towers, life: d.time, max: d.time });
+            fx.alert = { text: 'PATRON SALDIRIYOR', life: d.time + 0.3, max: d.time + 0.3 };
+            addLog(`${d.enemy.name} öfkelendi ve ${d.towers.length} kuleyi hedef aldı.`);
+            break;
+        case 'towerDevoured':
+            sfx('splash', 0);
+            fx.shake = Math.max(fx.shake || 0, 0.6);
+            fx.rings.push({ x: d.tower.x, y: d.tower.y, r: 10, max: 90, life: 0.5, maxLife: 0.5, color: '210,40,70', fill: true });
+            for (let i = 0; i < 22; i++) {
+                const a = Math.random() * 6.2832;
+                const sp = 60 + Math.random() * 200;
+                fx.sparks.push({ x: d.tower.x, y: d.tower.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40, life: 0.5 + Math.random() * 0.6, max: 1.1, r: 2 + Math.random() * 3, c: '200,30,60' });
+            }
+            notify(`${d.enemy.name} ${d.verb}: ${d.tower.name} savaş dışı kaldı! Patronu öldürünce geri gelir.`, '#ff8a9a');
+            break;
+        case 'towerFreed':
+            sfx('upgrade', 0, 0.5);
+            addLog(`${label(d.tower)} yeniden savaşa döndü.`);
             break;
         case 'guardianWarn': {
             const gi = nearestGuardian(d.x, d.y);
@@ -231,6 +313,15 @@ function onWorldEvent(type, d) {
             break;
         case 'fire':
             sfx('fire_' + d.tower.type, d.tower.type === 'octopus' ? 40 : 55);
+            if (d.tower.type === 'puffer') {
+                // namlu ucundan duman
+                const a = d.tower.aim !== undefined ? d.tower.aim : -1;
+                const mx = d.tower.x + Math.cos(a) * 46;
+                const my = d.tower.y - 17 + Math.sin(a) * 46;
+                for (let i = 0; i < 9; i++) {
+                    fx.sparks.push({ x: mx, y: my, vx: Math.cos(a) * 60 + (Math.random() - 0.5) * 70, vy: Math.sin(a) * 60 + (Math.random() - 0.5) * 70 - 20, life: 0.5 + Math.random() * 0.4, max: 0.9, r: 3 + Math.random() * 4, c: '205,210,215' });
+                }
+            }
             break;
         case 'aoe':
             fx.rings.push({ x: d.x, y: d.y, r: 10, max: d.radius * 1.15, life: 0.45, maxLife: 0.45, color: '255,230,80', aoeImg: true });
@@ -353,10 +444,10 @@ function selectMap(mapIndex) {
         document.getElementById(id).classList.add('hidden'));
     document.getElementById('gameScreen').classList.remove('hidden');
 
-    logs = [];
+    if (world) logEnd();
     world = new Core.World(currentMap, { difficulty, seed: Date.now() & 0x7fffffff, onEvent: onWorldEvent });
     ambient = buildAmbient(currentMap);
-    fx = { floaters: [], rings: [], bubbles: [], flash: 0, tension: 0, shake: 0, alert: null, warns: [], sparks: [], guardGlow: [] };
+    fx = { floaters: [], rings: [], bubbles: [], flash: 0, tension: 0, shake: 0, alert: null, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [] };
     paused = false;
     speedMultiplier = 1;
     selectedTower = null;
@@ -366,7 +457,6 @@ function selectMap(mapIndex) {
     endShown = false;
     endDelay = 0;
 
-    document.getElementById('gameLog').innerHTML = '';
     document.getElementById('pauseButton').innerText = 'DURAKLAT';
     document.getElementById('speedButton').innerText = 'HIZ: 1x';
 
@@ -375,7 +465,7 @@ function selectMap(mapIndex) {
     buildZoneBands();
     canvas.style.transform = '';
     showBanner();
-    addLog(`Oyun başladı! (${currentMap.name} · ${Core.DIFFICULTY[difficulty].label}) Kulelerinizi yeşil alanlara yerleştirin ve dalgayı başlatın.`);
+    logStart();
     uiCache = {};
     updateUI();
     renderTowerList();
@@ -423,6 +513,7 @@ function gameLoop(ts) {
     if (!paused) {
         world.update(dt * speedMultiplier);
         tensionTick(dt);
+        if (performance.now() - lastLogFlush > 1000) flushLog();
         updateFx(dt * speedMultiplier);
     }
     if (world.result && !endShown) {
@@ -441,6 +532,10 @@ function updateFx(dt) {
     fx.rings = fx.rings.filter(r => r.life > 0);
     fx.bubbles.forEach(b => { b.life -= dt; b.x += b.vx * dt; b.y += b.vy * dt; });
     fx.bubbles = fx.bubbles.filter(b => b.life > 0);
+    fx.toasts.forEach(t => { t.life -= dt; });
+    fx.toasts = fx.toasts.filter(t => t.life > 0);
+    fx.furies.forEach(f => { f.life -= dt; });
+    fx.furies = fx.furies.filter(f => f.life > 0 && f.boss.health > 0);
     fx.warns.forEach(w => { w.life -= dt; });
     fx.warns = fx.warns.filter(w => w.life > 0);
     fx.sparks.forEach(p => { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 260 * dt; p.vx *= 0.985; });
@@ -637,6 +732,27 @@ function drawZones() {
 function drawMechanics() {
     const mech = currentMap.mechanics || [];
 
+    // patron saldırısı: hedeflenen kulelere kırmızı çizgi ve halka
+    fx.furies.forEach(f => {
+        const k = 1 - f.life / f.max;
+        f.towers.forEach(t => {
+            if (!world.towers.includes(t)) return;
+            ctx.strokeStyle = `rgba(255,50,80,${0.4 + 0.5 * Math.sin(animTime * 18) ** 2})`;
+            ctx.lineWidth = 3;
+            ctx.setLineDash([12, 9]);
+            ctx.lineDashOffset = -animTime * 120;
+            ctx.beginPath();
+            ctx.moveTo(f.boss.x, f.boss.y);
+            ctx.lineTo(t.x, t.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, 60 - 18 * k, 0, 6.2832);
+            ctx.stroke();
+        });
+    });
+
     // Atlantis koruyucuları: gözleri ve halesi
     (currentMap.guardians || []).forEach((g, i) => {
         const glow = fx.guardGlow[i] || 0;
@@ -659,6 +775,32 @@ function drawMechanics() {
 
     // lav patlaması uyarıları
     fx.warns.forEach(w => {
+        if (w.bomb) {
+            const kk = 1 - w.life / w.max;
+            const pu = 0.5 + 0.5 * Math.sin(animTime * 16);
+            ctx.fillStyle = `rgba(255,40,20,${0.22 + 0.2 * pu})`;
+            ctx.beginPath();
+            ctx.arc(w.x, w.y, w.r, 0, 6.2832);
+            ctx.fill();
+            ctx.strokeStyle = `rgba(255,${Math.round(60 + 120 * pu)},40,1)`;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(w.x, w.y, w.r, 0, 6.2832);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(w.x - w.r, w.y); ctx.lineTo(w.x + w.r, w.y);
+            ctx.moveTo(w.x, w.y - w.r); ctx.lineTo(w.x, w.y + w.r);
+            ctx.stroke();
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 22px sans-serif';
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+            ctx.strokeText('SAT! ' + Math.ceil(w.life), w.x, w.y - w.r - 12);
+            ctx.fillStyle = '#ffd9a8';
+            ctx.fillText('SAT! ' + Math.ceil(w.life), w.x, w.y - w.r - 12);
+            ctx.textAlign = 'left';
+            return;
+        }
         const k = 1 - w.life / w.max;
         const pulse = 0.5 + 0.5 * Math.sin(animTime * 14);
         ctx.fillStyle = `rgba(255,80,20,${0.14 + 0.16 * k + 0.08 * pulse})`;
@@ -723,7 +865,7 @@ function drawMechanics() {
 
     // karanlık: Fener Balığı ışığının dışı kararır
     if (mech.some(m => m.type === 'darkness')) {
-        const lights = world.towers.filter(t => t.support);
+        const lights = world.towers.filter(t => t.type === 'angler');
         ctx.save();
         ctx.beginPath();
         ctx.rect(0, 0, W, H);
@@ -733,26 +875,19 @@ function drawMechanics() {
             ctx.arc(t.x, t.y, lr, 0, 6.2832, true);
         });
         ctx.clip('evenodd');
-        ctx.fillStyle = 'rgba(1,4,14,0.40)';
+        ctx.fillStyle = 'rgba(0,2,10,0.62)';
         ctx.fillRect(0, 0, W, H);
         ctx.restore();
+        // ışığın içi yalnızca çok hafif aydınlanır (kesik çizgi yok)
         lights.forEach(t => {
             const lr = world.lightRadius(t);
-            const g = ctx.createRadialGradient(t.x, t.y, lr * 0.3, t.x, t.y, lr);
-            g.addColorStop(0, 'rgba(255,240,170,0)');
-            g.addColorStop(1, 'rgba(255,235,150,0.14)');
+            const g = ctx.createRadialGradient(t.x, t.y, lr * 0.2, t.x, t.y, lr);
+            g.addColorStop(0, 'rgba(255,240,180,0.05)');
+            g.addColorStop(1, 'rgba(255,240,180,0.02)');
             ctx.fillStyle = g;
             ctx.beginPath();
             ctx.arc(t.x, t.y, lr, 0, 6.2832);
             ctx.fill();
-            ctx.strokeStyle = 'rgba(255,236,150,0.40)';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([8, 10]);
-            ctx.lineDashOffset = -animTime * 12;
-            ctx.beginPath();
-            ctx.arc(t.x, t.y, lr, 0, 6.2832);
-            ctx.stroke();
-            ctx.setLineDash([]);
         });
     }
 
@@ -775,6 +910,60 @@ function drawMechanics() {
 
 // ekranın üstünde kısa durum şeridi (kar fırtınası)
 function drawHud() {
+    drawBossBar();
+    drawToasts();
+    drawBlizzardStrip();
+}
+
+function drawBossBar() {
+    let boss = null;
+    for (const e of world.enemies) if (e.type === 'boss' && e.health > 0 && (!boss || e.maxHealth > boss.maxHealth)) boss = e;
+    if (!boss) return;
+    const bw = 560;
+    const x = W / 2 - bw / 2;
+    const y = 70;
+    const pct = Math.max(0, boss.health / boss.maxHealth);
+    ctx.save();
+    ctx.fillStyle = 'rgba(14,0,6,0.78)';
+    ctx.fillRect(x - 8, y - 30, bw + 16, 56);
+    ctx.strokeStyle = 'rgba(220,40,70,0.9)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x - 8, y - 30, bw + 16, 56);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillStyle = '#ffd0d8';
+    ctx.fillText(boss.name.toUpperCase(), W / 2, y - 8);
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(x, y, bw, 14);
+    const g = ctx.createLinearGradient(x, 0, x + bw, 0);
+    g.addColorStop(0, '#a01030');
+    g.addColorStop(1, '#ff4a60');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, bw * pct, 14);
+    ctx.restore();
+}
+
+function drawToasts() {
+    let y = 122;
+    fx.toasts.forEach(t => {
+        const a = Math.min(1, t.life / 0.5, (t.max - t.life) / 0.15 + 0.2);
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, a));
+        ctx.font = 'bold 20px sans-serif';
+        const w = ctx.measureText(t.text).width + 36;
+        ctx.fillStyle = 'rgba(8,16,30,0.82)';
+        ctx.fillRect(W / 2 - w / 2, y, w, 36);
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.strokeRect(W / 2 - w / 2, y, w, 36);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = t.color;
+        ctx.fillText(t.text, W / 2, y + 25);
+        ctx.restore();
+        y += 44;
+    });
+}
+
+function drawBlizzardStrip() {
     const b = world.mech && world.mech.find(m => m.cfg.type === 'blizzard');
     if (!b || (b.phase !== 'warn' && b.phase !== 'storm')) return;
     const txt = b.phase === 'warn'
@@ -939,22 +1128,12 @@ function drawTower(t) {
         ctx.ellipse(t.x, t.y + 34, 46, 15, 0, 0, 6.2832);
         ctx.stroke();
     }
-    if (t.auraDmg > 0) {
-        // destek kulesinden güç alıyor
-        const pulse = 0.5 + 0.5 * Math.sin(animTime * 3 + t.id);
-        ctx.strokeStyle = `rgba(255,236,130,${0.45 + pulse * 0.3})`;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.ellipse(t.x, t.y + 38, 40, 13, 0, 0, 6.2832);
-        ctx.stroke();
-    }
     drawShadow(t.x, t.y + 38, 36, 11, 0.28);
 
     if (selected || hoverTowerId === t.id) {
         ctx.beginPath();
-        const sup = t.support;
-        ctx.strokeStyle = sup ? (selected ? 'rgba(255,230,120,0.8)' : 'rgba(255,230,120,0.45)') : (selected ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.28)');
-        ctx.fillStyle = sup ? 'rgba(255,230,120,0.07)' : (selected ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)');
+        ctx.strokeStyle = selected ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.28)';
+        ctx.fillStyle = selected ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)';
         ctx.lineWidth = 2;
         ctx.arc(t.x, t.y, t.range, 0, 6.2832);
         ctx.fill();
@@ -963,6 +1142,8 @@ function drawTower(t) {
 
     if (t.type === 'swordfish') {
         drawSwordfish(t, idle, since);
+    } else if (t.type === 'puffer') {
+        drawPuffer(t, idle, since);
     } else {
         const img = sprites.towers[t.type];
         const s = 100 * recoil;
@@ -973,29 +1154,25 @@ function drawTower(t) {
         }
     }
 
-    if (t.stun > 0) {
-        ctx.fillStyle = 'rgba(30,6,0,0.40)';
+    // lav bombasının hedefi olan kule
+    const bombed = fx.warns.find(w => w.bomb && w.towerId === t.id);
+    if (bombed) {
+        const k = 0.5 + 0.5 * Math.sin(animTime * 16);
+        ctx.strokeStyle = `rgba(255,70,30,${0.6 + 0.4 * k})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, 52 + 4 * k, 0, 6.2832);
+        ctx.stroke();
+    }
+
+    // susturulmuş (lav) ya da yutulmuş (patron) kule: kilit simgesi
+    if (t.stun > 0 || t.devoured) {
+        ctx.fillStyle = t.devoured ? 'rgba(40,0,10,0.50)' : 'rgba(30,6,0,0.40)';
         ctx.beginPath();
         ctx.arc(t.x, t.y, 46, 0, 6.2832);
         ctx.fill();
-        for (let i = 0; i < 5; i++) {
-            const a = animTime * 5 + i * 1.2566;
-            ctx.fillStyle = 'rgba(255,150,50,0.95)';
-            ctx.beginPath();
-            ctx.arc(t.x + Math.cos(a) * 36, t.y + Math.sin(a) * 36, 3.2, 0, 6.2832);
-            ctx.fill();
-        }
-    }
-
-    const n = Core.MAX_LEVEL;
-    for (let i = 0; i < n; i++) {
-        ctx.fillStyle = i < t.level ? '#ffcc00' : 'rgba(0,0,0,0.45)';
-        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(t.x + (i - (n - 1) / 2) * 10.5, t.y + 58, 3.7, 0, 6.2832);
-        ctx.fill();
-        ctx.stroke();
+        const frac = t.devoured ? 1 : Math.max(0, t.stun / (t.stunMax || 5));
+        drawLock(t.x, t.y - 66, t.devoured ? '#e0304e' : '#ff9a3a', frac, t.devoured ? null : Math.ceil(t.stun));
     }
 
     if (selected) {
@@ -1008,6 +1185,83 @@ function drawTower(t) {
 }
 
 // Kılıç balığı: kaide sabit, balık hedefe doğru yumuşakça döner ve ateş edince geri tepme yapar
+// kilit simgesi: arkada kalan süreyi gösteren halka ve altında saniye
+function drawLock(x, y, color, frac, secs) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(8,8,16,0.82)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 20, 0, 6.2832);
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, 20, -Math.PI / 2, -Math.PI / 2 + 6.2832 * frac);
+    ctx.stroke();
+    ctx.strokeStyle = '#f2f2f2';
+    ctx.lineWidth = 3.2;
+    ctx.beginPath();
+    ctx.arc(0, -3, 6.5, Math.PI, 0);
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.strokeStyle = '#1a1a22';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.rect(-8.5, -3, 17, 13);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#1a1a22';
+    ctx.beginPath();
+    ctx.arc(0, 3, 2, 0, 6.2832);
+    ctx.fill();
+    if (secs) {
+        ctx.font = 'bold 15px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 3.5;
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        ctx.strokeText(secs, 0, 36);
+        ctx.fillStyle = '#ffd9a8';
+        ctx.fillText(secs, 0, 36);
+        ctx.textAlign = 'left';
+    }
+    ctx.restore();
+}
+
+// hedefe doğru yumuşakça dönen açı (kılıç balığı ve balon balığı namlusu)
+function aimTower(t, rate) {
+    const dt = Math.min(0.05, animTime - (t.aimT === undefined ? animTime : t.aimT));
+    t.aimT = animTime;
+    if (t.aim === undefined) t.aim = -0.8;
+    let goal = t.aim;
+    if (t.target && t.target.health > 0) goal = Math.atan2(t.target.y - t.y, t.target.x - t.x);
+    const diff = Math.atan2(Math.sin(goal - t.aim), Math.cos(goal - t.aim));
+    t.aim += diff * Math.min(1, dt * rate);
+}
+
+// Balon balığı: gövde sabit, başındaki havan namlusu düşmana doğru döner
+function drawPuffer(t, idle, since) {
+    const body = sprites.towers.puffer_body;
+    const barrel = sprites.towers.puffer_barrel;
+    if (!ready(body) || !ready(barrel)) {
+        const icon = sprites.towers.puffer;
+        if (ready(icon)) ctx.drawImage(icon, t.x - 50, t.y - 50 + idle, 100, 100);
+        return;
+    }
+    const s = since < 0.16 ? 1 + (0.16 - since) * 0.5 : 1;
+    ctx.drawImage(body, t.x - 50 * s, t.y - 50 * s + idle, 100 * s, 100 * s);
+
+    aimTower(t, 9);
+    const recoil = since < 0.25 ? Math.sin((since / 0.25) * Math.PI) * 6 : 0;
+    const px = t.x - Math.cos(t.aim) * recoil;
+    const py = t.y - 17 + idle - Math.sin(t.aim) * recoil;
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(t.aim);
+    if (Math.cos(t.aim) < 0) ctx.scale(1, -1);
+    ctx.drawImage(barrel, -70, -70, 140, 140);
+    ctx.restore();
+}
+
 function drawSwordfish(t, idle, since) {
     const base = sprites.towers.swordfish_base;
     const fish = sprites.towers.swordfish_fish;
@@ -1018,13 +1272,7 @@ function drawSwordfish(t, idle, since) {
     }
     ctx.drawImage(base, t.x - 50, t.y - 50, 100, 100);
 
-    const dt = Math.min(0.05, animTime - (t.aimT === undefined ? animTime : t.aimT));
-    t.aimT = animTime;
-    if (t.aim === undefined) t.aim = -0.8;
-    let goal = t.aim;
-    if (t.target && t.target.health > 0) goal = Math.atan2(t.target.y - t.y, t.target.x - t.x);
-    let diff = Math.atan2(Math.sin(goal - t.aim), Math.cos(goal - t.aim));
-    t.aim += diff * Math.min(1, dt * 12);
+    aimTower(t, 12);
 
     const recoil = since < 0.2 ? Math.sin((since / 0.2) * Math.PI) * 7 : 0;      // geriye doğru çekilir
     const px = t.x + 4 - Math.cos(t.aim) * recoil;
@@ -1208,7 +1456,7 @@ function renderTowerMarket() {
         const name = (currentMap.towerNames && currentMap.towerNames[type]) || def.name;
         btn.innerHTML = `
             <div class="tower-icon-box"><img src="${SPRITE_FILES.towers[type]}" alt="${name}"></div>
-            <div class="tower-info"><strong>${name} <span class="hotkey">${idx + 1}</span></strong>
+            <div class="tower-info"><strong>${name}</strong>
                 <div class="tower-cost"><span class="cost-val"></span> Enerji</div>
             </div>`;
         btn.addEventListener('dragstart', () => {
@@ -1262,11 +1510,11 @@ function towerAt(p) {
 function tryBuild(type, spot) {
     const cost = world.towerCost(type);
     if (!spot) {
-        addLog('Kule sadece yeşil alanlara yerleştirilebilir!');
+        notify('Kule sadece yeşil alanlara yerleştirilebilir.', '#ffd0d0');
         return false;
     }
     if (world.money < cost) {
-        addLog('Yetersiz enerji!');
+        notify('Yetersiz enerji.', '#ffd0d0');
         addFloater({ x: spot.x, y: spot.y - 40, text: `${cost} Enerji gerek`, color: '#ff8a8a', life: 1.2, maxLife: 1.2, important: true });
         return false;
     }
@@ -1343,12 +1591,9 @@ document.addEventListener('keydown', (e) => {
 // ------------------------------------------------------------------ kule penceresi
 
 function statLine(t) {
-    if (t.support) {
-        return `Etki alanı: ${t.range}   Hasar: +%${Math.round(t.supDmg * 100)}   Atış hızı: +%${Math.round(t.supRate * 100)}`;
-    }
     let line = `Hasar: ${t.dmg}   Menzil: ${t.range}   Atış Aralığı: ${t.rate.toFixed(2)} sn`;
     if (t.aoe) line += `   Alan: ${t.aoe}`;
-    if (t.auraDmg > 0) line += `\nDestek bonusu: hasar +%${Math.round(t.auraDmg * 100)} · hız +%${Math.round(t.auraRate * 100)}`;
+    if (t.dark) line += '\nKaranlıkta: menzil kısaldı. Fener Balığı\'nın ışığına al.';
     return line;
 }
 
@@ -1360,9 +1605,7 @@ function openTowerModal(tower) {
     if (tower.level < Core.MAX_LEVEL) {
         const next = Object.assign(Object.create(Core.Tower.prototype), tower, { level: tower.level + 1 });
         next.derive();
-        stats += tower.support
-            ? `\nSonraki: Hasar +%${Math.round(next.supDmg * 100)} · Hız +%${Math.round(next.supRate * 100)} · Alan ${next.range}`
-            : `\nSonraki: Hasar ${next.dmg} · Menzil ${next.range} · ${next.rate.toFixed(2)} sn`;
+        stats += `\nSonraki: Hasar ${next.dmg} · Menzil ${next.range} · ${next.rate.toFixed(2)} sn`;
     }
     document.getElementById('towerModalStats').innerText = stats;
     document.getElementById('towerModalPerk').innerText = tower.perk();
@@ -1511,10 +1754,10 @@ function startNextWave() {
     if (!world) return;
     if (world.result) return;
     if (world.wave >= world.totalWaves) {
-        addLog('Tüm dalgalar başladı!');
+        notify('Tüm dalgalar başladı.');
         return;
     }
-    if (!world.startWave()) addLog('Önceki dalganın düşmanları hâlâ doğuyor, biraz bekleyin.');
+    if (!world.startWave()) notify('Önceki dalganın düşmanları hâlâ doğuyor, biraz bekleyin.', '#ffd0d0');
     updateUI();
 }
 
@@ -1532,6 +1775,7 @@ function backToMenuFromMapSelect() {
 }
 
 function stopGame() {
+    if (world) logEnd();
     cancelAnimationFrame(rafId);
     world = null;
     document.getElementById('towerModal').classList.add('hidden');
@@ -1615,6 +1859,8 @@ function showEnd() {
         document.getElementById('winStats').innerText = statsText;
         document.getElementById('winScreen').classList.remove('hidden');
         addLog(`TEBRİKLER! Oyunu kazandınız! Kalan Can: ${hp}`);
+        addLog(buildReport());
+        flushLog();
     } else {
         document.getElementById('finalWaveLose').innerText = world.endless ? `${world.wave} (sonsuz mod)` : `${world.wave}/${world.totalWaves}`;
         if (world.endless) {
@@ -1626,38 +1872,8 @@ function showEnd() {
         document.getElementById('loseStats').innerText = statsText;
         document.getElementById('loseScreen').classList.remove('hidden');
         addLog('Oyunu kaybettiniz!');
-    }
-}
-
-function downloadLog() {
-    try {
-        let txt = '=== SU ALTI SAVUNMA - SİMÜLASYON GÜNLÜĞÜ ===\n';
-        txt += `Simülasyon Başladı. Harita: '${currentMap.name}' (${Core.DIFFICULTY[difficulty].label}). Başlangıç Can: ${world ? world.maxHealth : '-'}.\n`;
-        txt += '================================================\n\n';
-        txt += logs.join('\n');
-        txt += '\n\n================================================\n';
-        txt += 'SON DURUM RAPORU\n';
-        txt += '================================================\n';
-        if (world) {
-            txt += `Kalan Can: ${Math.max(0, Math.ceil(world.health))}\n`;
-            txt += `Kalan Enerji: ${world.money}\n`;
-            txt += `Ulaşılan Dalga: ${world.wave}/${world.totalWaves}\n`;
-            txt += `Toplam Kule: ${world.towers.length}\n`;
-            txt += `Yok Edilen Düşman: ${world.stats.kills}\n`;
-            txt += `Tarih: ${new Date().toLocaleString()}\n`;
-            if (world.result === 'win') txt += '\nSON: Tüm dalgalar temizlendi. OYUN KAZANILDI!\n';
-            else if (world.result === 'lose') txt += '\nSON: Üs düştü. OYUN KAYBEDİLDİ!\n';
-        }
-
-        if (window.javaBridge && window.javaBridge.saveLog) {
-            window.javaBridge.saveLog(txt);
-        } else {
-            console.error('JavaBridge bulunamadı!');
-            alert('Java bağlantısı kurulamadı! Log kaydedilemedi.');
-        }
-    } catch (error) {
-        console.error('İndirme hatası:', error);
-        if (world) addLog('Günlük kaydedilemedi! Hata: ' + error.message);
+        addLog(buildReport());
+        flushLog();
     }
 }
 

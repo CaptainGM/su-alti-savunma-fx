@@ -16,9 +16,9 @@ Gerçek oynanıştan bir kare — dalga yönetimi, kule marketi ve savaş günl�
   - Yılan Balığı: alan şoku, zırh deler, havayı vuramaz
   - Deniz Anası: yavaşlatır
   - Kılıç Balığı: çok uzun menzilli keskin nişancı, hedefe dönerek nişan alır, patronlara %50 fazla hasar
-  - Fener Balığı: destek kulesi, yakınındaki kulelere hasar ve atış hızı verir
-  - Balon Balığı: havan, hedefin gideceği yere atar, kümelere alan hasarı
-- **Düşmanlar:** Köpek Balığı, Istakoz (zırhlı), Vatoz (uçan), Yavru Köpek Balığı (hızlı sürü) ve 4 çeşit patron: Kral Köpek Balığı, Dev Kral Yengeç (çok zırhlı), Manta İmparatoru (uçan), Yavru Anası (yarı canda yavru saçar)
+  - Fener Balığı: dengeli bir kule; karanlık haritada (Derin Çukur) çevresini aydınlatır, ışığındaki kuleler menzil kaybetmez
+  - Balon Balığı: havan, sırtındaki namlu düşmana döner, hedefin gideceği yere atar, kümelere alan hasarı
+- **Düşmanlar:** Köpek Balığı, Istakoz (zırhlı), Vatoz (uçan), Yavru Köpek Balığı (hızlı sürü) ve 4 çeşit patron: Kral Köpek Balığı, Dev Kral Yengeç (çok zırhlı), Manta İmparatoru (uçan), Yavru Anası (yarı canda yavru saçar). Patronlar yüksek canlıdır ve aralıklarla yakınlarındaki bir kuleyi **yutar**: kule, patron ölene kadar kilitli kalır. Patron gelirken ekranda uyarı, can çubuğu ve kalp atışı sesi vardır
 - Kule fiyatı aynı türden her kuleyle %12 artar, kule başına 5 seviye vardır (3. ve 5. seviyede yetenek açılır)
 - **Altın halkalı** yerler yüksek zemindir: menzil %20 artar
 - Kule başına hedef önceliği: İlk / Son / En Güçlü / En Yakın
@@ -36,11 +36,15 @@ Gerçek oynanıştan bir kare — dalga yönetimi, kule marketi ve savaş günl�
 | Üs canı | 130 | 100 | 85 |
 | Satış iadesi | %60 | %50 | %40 |
 
-- Kısayollar: `Boşluk` dalga başlat, `P` duraklat, `F` hız, `1-5` kule seç, `F11` tam ekran, `Esc` geri
+- Kısayollar: `Boşluk` dalga başlat, `P` duraklat, `F` hız, `1-6` kule seç, `F11` tam ekran, `Esc` geri
+
+## Oyun günlüğü
+
+Savaş günlüğü arayüzde gösterilmez. Her oyun için `loglar/<harita>_<tarih>.txt` dosyası açılır (ör. `loglar/Mercan-Kanali_2026-10-01_18-45-49.txt`) ve inşa, yükseltme, isabet, öldürme, patron saldırısı gibi olaylar oyun sürerken bu dosyaya akar; oyun bitince özet rapor eklenir. `loglar/` klasörü git'e girmez.
 
 ## Ayarlar
 
-Ana menüden ya da oyun içindeki **Ayarlar** düğmesinden: efekt sesi ve sessiz mod, tam ekran, pencere boyutu (1280x720'den 2K'ya), görüntü kalitesi, ortam efektleri ve hasar yazılarını kapatma. Ayarlar ve harita rekorları `~/.su-alti-savunma/kayit.json` dosyasına yazılır.
+Ana menüden ya da oyun içindeki **Ayarlar** düğmesinden: efekt sesi ve sessiz mod, tam ekran, pencere boyutu (1280x720'den 2K'ya), görüntü kalitesi, ortam efektleri ve hasar yazılarını kapatma. Ayarlar ve harita rekorları `~/.su-alti-savunma/kayit.json` dosyasına yazılır. Ses sürgüsü 0-100 arasıdır; tüm seslerin genel düzeyi `SoundBank.MASTER_DB` ile birlikte kısılıp açılabilir.
 
 ## Haritalar
 
@@ -55,8 +59,8 @@ Her haritanın yolu farklı olduğu gibi kendine özel bir kuralı da var. Kural
 | Atlantis Harabeleri | mermer basamaklar | 3 taş koruyucu baş her 10 sn düşmanlara vurup sersemletir |
 | Buz Koyu | iki kanal ortada çapraz geçer | kar fırtınası (önceden uyarır): 9 sn boyunca kule menzilleri %25 kısalır |
 | Girdap | spiral | yolun ikinci yarısında düşmanlar girdaba çekilip hızlanır |
-| Volkanik Bacalar | üç sütunlu dikey zigzag | lav patlamaları (önceden uyarır): düşmanı yakar, yakındaki kuleleri 2,5 sn susturur |
-| Derin Çukur | ikiye ayrılıp birleşir, 12 dalga | karanlık: Fener Balığı'nın ışığı dışındaki kulelerin menzili %15 kısalır |
+| Volkanik Bacalar | üç sütunlu dikey zigzag | lav patlamaları (önceden uyarır): düşmanı yakar, yakındaki kuleleri 5 sn susturur (kilit simgesi çıkar). Bazen lav doğrudan bir kuleye düşer ve onu yok eder; uyarı gelince kuleyi satarak kurtarabilirsin |
+| Derin Çukur | ikiye ayrılıp birleşir, 12 dalga | karanlık: Fener Balığı'nın ışığı dışındaki kulelerin menzili %15 kısalır, ışığın dışı görünür biçimde kararır |
 
 ## Mimari
 
@@ -82,7 +86,7 @@ flowchart LR
 
 ## Ses
 
-Sesler dosyadan değil kodla üretilir (`SoundBank.java`): alçak "tok" vuruş, filtrelenmiş gürültü ve ton katmanları. `SoundPlayer` tek bir ses hattı üzerinde yazılımsal bir mikserle çalar. Sesler tepe değerine göre değil insan kulağına göre (A-ağırlıklı) ses düzeyine normalize edilir ve hafif doygunluk uygulanır; böylece alçak sesler kulaklıkta da duyulur. Her sesin düzeyi `SoundBank` içindeki `LEVEL` tablosundan ayarlanır, ayarlardaki ses çubuğu %150'ye kadar çıkar. Patron geldiğinde uyarı sesi, ekranda kırmızı titreşim, patron ayaktayken hızlanan kalp atışı ve ölünce ekran sarsıntısı vardır.
+Sesler dosyadan değil kodla üretilir (`SoundBank.java`): alçak "tok" vuruş, filtrelenmiş gürültü ve ton katmanları. `SoundPlayer` tek bir ses hattı üzerinde yazılımsal bir mikserle çalar. Sesler tepe değerine göre değil insan kulağına göre (A-ağırlıklı) ses düzeyine normalize edilir ve hafif doygunluk uygulanır; böylece alçak sesler kulaklıkta da duyulur. Her sesin düzeyi `SoundBank` içindeki `LEVEL` tablosundan ayarlanır, ayarlardaki ses çubuğu bunun üzerine uygulanır. Patron geldiğinde uyarı sesi, ekranda kırmızı titreşim, patron ayaktayken hızlanan kalp atışı ve ölünce ekran sarsıntısı vardır.
 
 Tüm sesleri WAV olarak yazmak ve düzeylerini görmek için:
 
