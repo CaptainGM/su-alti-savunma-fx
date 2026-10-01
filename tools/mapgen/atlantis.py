@@ -95,11 +95,7 @@ def build(out_path):
     ew = PL.edge_weights(1.0, 0.25)
     sh_ = (5, 8, 6, 0.38, (0.0, 0.1, 0.12))
 
-    for _ in range(2):
-        p = C.scatter_points(rng, 1, avoid | wide, 150, weights=ew)
-        if p:
-            sc.stamp(AT.temple_base(rng, rng.uniform(130, 160)), p[0][0], p[0][1], shadow=(8, 12, 8, 0.4, (0, 0.1, 0.12)))
-            PL.disk(avoid, p[0][0], p[0][1], 100)
+    # (yüz kabartmalı iki kare tapınak tabanı kaldırıldı: koruyucu başlarla karışıyordu)
     # koruyucu başlar: oyunda periyodik olarak düşmanlara vurur, altlarında soluk bir rün çemberi var
     for gx, gy in S.ATLANTIS_GUARDIANS:
         d = np.sqrt((xx - gx) ** 2 + (yy - gy) ** 2)
