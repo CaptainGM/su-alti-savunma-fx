@@ -71,7 +71,7 @@ def build(out_path):
     sc.blend(MUD_EDGE, outline * 0.8)
 
     # --- kule zeminleri: ahşap platform / kütük tabanı
-    PL.spot_pads(sc, rng, SPOTS, '#7a5a34', '#4d3820', high_base='#a8803a')
+    # kule yerlerinin altına zemin çizilmiyor: oyunda yeşil/altın halkalar zaten yerleri gösteriyor, sade görünüm için
 
     # --- nesneler
     land1 = C.logic(land) > 0.6

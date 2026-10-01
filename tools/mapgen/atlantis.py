@@ -79,7 +79,7 @@ def build(out_path):
     sc.blend(rgb('#2a2418'), edge * inside)
 
     # --- kule zeminleri
-    PL.spot_pads(sc, rng, SPOTS, '#c9d6cc', '#a89462', high_base='#e0c878')
+    # kule yerlerinin altına zemin çizilmiyor: oyunda yeşil/altın halkalar zaten yerleri gösteriyor, sade görünüm için
 
     # --- nesneler
     plaza1 = C.logic(plaza) > 0.5

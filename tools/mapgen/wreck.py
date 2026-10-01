@@ -116,7 +116,7 @@ def build(out_path):
     paint_planks(sc, dc, rng, smooth, len(S.WRECK_TAIL), hw)
 
     # --- kule zeminleri
-    PL.spot_pads(sc, rng, SPOTS, '#8a9b95', '#a6b4ae', high_base='#8d8272')
+    # kule yerlerinin altına zemin çizilmiyor: oyunda yeşil/altın halkalar zaten yerleri gösteriyor, sade görünüm için
 
     # --- nesneler
     avoid = dc1 < hw + 28

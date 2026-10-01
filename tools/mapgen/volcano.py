@@ -70,10 +70,7 @@ def build(out_path):
     PL.path_pebbles(sc, rng, dc, hw, rgb('#6e625d'), count=80, size=(1.4, 3.4))
 
     # --- kule zeminleri (turuncu ışıklı)
-    PL.spot_pads(sc, rng, SPOTS, '#52464b', '#8a7a80', high_base='#7a4a34')
-    for x, y, kind in SPOTS:
-        d = np.sqrt((xx - x) ** 2 + (yy - y) ** 2)
-        sc.add(LAVA if kind != 'high' else LAVA_HI, np.exp(-((d - 52) / 5.0) ** 2) * 0.28)
+    # kule yerlerinin altına zemin çizilmiyor: oyunda yeşil/altın halkalar zaten yerleri gösteriyor, sade görünüm için
 
     # --- nesneler
     avoid = (dc1 < hw + 30) | (C.logic(pool) > 0.3)
@@ -85,10 +82,6 @@ def build(out_path):
     wide |= dc1 < hw + 50
     ew = PL.edge_weights(1.0, 0.4)
 
-    cone, cglow = VP.crater_cone(rng, 105)
-    glow_stamp(sc, cone, cglow, 108, 770, LAVA, 0.8, 16)
-    PL.disk(avoid, 108, 770, 130)
-    PL.disk(wide, 108, 770, 150)
 
     # bacalar + duman
     vents = C.scatter_points(rng, 10, avoid | wide, 100, weights=ew)
