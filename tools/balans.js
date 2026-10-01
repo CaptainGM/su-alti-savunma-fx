@@ -1,9 +1,10 @@
 // Denge simülasyonu: oyunu tarayıcısız oynatan basit botlar.
 //   node tools/balans.js              -> tüm haritalar, normal zorluk
 //   node tools/balans.js mercan hard  -> tek harita, tek zorluk
+//   node tools/balans.js "" all       -> tüm haritalar, üç zorluk
 //   HPSCALE=1.4 node tools/balans.js yosun  -> haritanın hpScale değerini denemek için
 //
-// "spam" her yere ahtapot dikip yükselten oyuncuyu, "karisik" ise türleri dengeli kullanan oyuncuyu temsil eder.
+// "spam" her yere tek tür kule dikip yükselten oyuncuyu, "karisik" ise türleri dengeli kullanan oyuncuyu temsil eder.
 // Amaç: spam stratejisi karışık stratejiden belirgin şekilde kötü sonuç versin.
 const path = require('path');
 const web = path.join(__dirname, '..', 'src', 'main', 'resources', 'web', 'js');
@@ -26,13 +27,27 @@ function rankedSpots(world) {
     return world.spots.slice().sort((a, b) => coverage(world, b, 200) - coverage(world, a, 200));
 }
 
+// destek kulesi için: yakınında en çok kule olan boş yer
+function bestSupportSpot(world, free) {
+    let best = null;
+    let bestN = -1;
+    for (const s of free) {
+        const n = world.towers.filter(t => !t.support && Math.hypot(t.x - s.x, t.y - s.y) <= 190).length;
+        if (n > bestN) { bestN = n; best = s; }
+    }
+    return best;
+}
+
+const PREFERENCE = ['jellyfish', 'octopus', 'swordfish', 'eel', 'puffer', 'octopus', 'angler'];
+
 const BOTS = {
-    // her yere ahtapot, yer bitince yükselt
+    // her yere tek tür (ahtapot varsa o), yer bitince yükselt
     spam(world) {
+        const type = world.available.includes('octopus') ? 'octopus' : world.available[0];
         const spots = rankedSpots(world);
         for (;;) {
             const free = spots.find(s => !s.tower);
-            if (free && world.money >= world.towerCost('octopus')) { world.placeTower('octopus', free); continue; }
+            if (free && world.money >= world.towerCost(type)) { world.placeTower(type, free); continue; }
             if (!free) {
                 const up = world.towers.filter(t => t.upgradeCost() !== null && world.money >= t.upgradeCost())
                     .sort((a, b) => a.level - b.level)[0];
@@ -42,19 +57,21 @@ const BOTS = {
         }
     },
 
-    // ahtapot : yılan balığı : deniz anası ~ 3:2:1, 6. kuleden sonra yükseltmeye ağırlık
+    // haritadaki türleri tercih sırasıyla döngüyle kullanır, 7 kuleden sonra yükseltmeye ağırlık verir
     karisik(world) {
         const spots = rankedSpots(world);
-        const order = ['jellyfish', 'octopus', 'eel', 'octopus', 'eel', 'octopus'];
+        const order = PREFERENCE.filter(t => world.available.includes(t));
         for (;;) {
-            const free = spots.find(s => !s.tower);
+            const frees = spots.filter(s => !s.tower);
+            const free = frees[0];
             const n = world.towers.length;
             const type = order[n % order.length];
-            if (free && n < 7 && world.money >= world.towerCost(type)) { world.placeTower(type, free); continue; }
+            const spot = type === 'angler' ? bestSupportSpot(world, frees) : free;
             const ups = world.towers.filter(t => t.upgradeCost() !== null && world.money >= t.upgradeCost())
-                .sort((a, b) => a.level - b.level || b.id - a.id);
+                .sort((a, b) => (a.support - b.support) || a.level - b.level || b.id - a.id);
+            if (spot && n < 7 && world.money >= world.towerCost(type)) { world.placeTower(type, spot); continue; }
             if (n >= 6 && ups.length) { world.upgradeTower(ups[0]); continue; }
-            if (free && world.money >= world.towerCost(type)) { world.placeTower(type, free); continue; }
+            if (spot && world.money >= world.towerCost(type)) { world.placeTower(type, spot); continue; }
             break;
         }
     },
@@ -87,7 +104,7 @@ function play(map, botName, diff, seed) {
 
 const [mapArg, diffArg] = process.argv.slice(2);
 const maps = MAPS.filter(m => !mapArg || m.id === mapArg).map(m => (process.env.HPSCALE ? Object.assign({}, m, { hpScale: +process.env.HPSCALE }) : m));
-const diffs = diffArg ? [diffArg] : ['normal'];
+const diffs = diffArg === 'all' ? ['easy', 'normal', 'hard'] : [diffArg || 'normal'];
 const SEEDS = [11, 23, 37];
 
 console.log('harita'.padEnd(10), 'zorluk'.padEnd(7), 'bot'.padEnd(8), 'kazanma', 'ort.can', 'ort.dalga', 'kule', 'enerji', 'sure');

@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFilter
 ASSETS = os.path.join(os.path.dirname(__file__), '..', 'src', 'main', 'resources', 'web', 'assets')
 
 
-def shift_hue(img, hue_shift, sat_mul=1.0, val_mul=1.0, only_blue=True):
+def shift_hue(img, hue_shift, sat_mul=1.0, val_mul=1.0, only_blue=True, sat_min=0.25):
     """Mavi tonlu pikselleri başka bir renge kaydırır, gözleri ve dişleri (sarı/beyaz/kırmızı) korur."""
     arr = np.asarray(img.convert('RGBA')).astype(np.float32) / 255.0
     rgb = arr[..., :3]
@@ -32,8 +32,8 @@ def shift_hue(img, hue_shift, sat_mul=1.0, val_mul=1.0, only_blue=True):
     v = mx
 
     # sadece mavi/camgöbeği aralığındaki, yeterince doygun pikseller
-    blue = (h > 0.45) & (h < 0.72) & (s > 0.25)
-    sel = blue if only_blue else np.ones_like(blue)
+    blue = (h > 0.45) & (h < 0.72) & (s > sat_min)
+    sel = blue if only_blue else (s > sat_min)
     h2 = np.where(sel, (h + hue_shift) % 1.0, h)
     s2 = np.where(sel, np.clip(s * sat_mul, 0, 1), s)
     v2 = np.where(sel, np.clip(v * val_mul, 0, 1), v)
