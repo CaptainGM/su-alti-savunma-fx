@@ -38,7 +38,7 @@
             waves: 10,
             pathStyle: 'rail',
             flipSprites: true,
-            ambient: { motes: 28, bubbles: 7, moteColor: '230,255,255' },
+            ambient: { motes: 28, bubbles: 7, moteColor: '230,255,255', fish: { schools: 2, colors: ['#ffd36b', '#ff9d6b'], alpha: 0.8 } },
             paths: [[
                 { x: 830, y: 30 }, { x: 890, y: 90 }, { x: 930, y: 120 }, { x: 750, y: 145 },
                 { x: 650, y: 180 }, { x: 600, y: 250 }, { x: 700, y: 320 }, { x: 750, y: 360 },
@@ -76,7 +76,7 @@
             pathStyle: 'flow',
             flowColor: '120,80,30',
             flipSprites: true,
-            ambient: { motes: 30, bubbles: 10, moteColor: '230,255,230', caustics: 0.10, rays: { count: 5, color: '210,255,200', alpha: 0.09 }, vignette: 0.16 },
+            ambient: { motes: 30, bubbles: 10, moteColor: '230,255,230', fish: { schools: 3, colors: ['#ffb347', '#ffe066', '#ff8a65'], alpha: 0.85 }, caustics: 0.10, rays: { count: 5, color: '210,255,200', alpha: 0.09 }, vignette: 0.16 },
             paths: [
             [
                 { x: -30, y: 150 }, { x: 200, y: 175 }, { x: 430, y: 130 }, { x: 690, y: 150 },
@@ -110,7 +110,7 @@
             pathStyle: 'flow',
             flowColor: '255,235,190',
             flipSprites: true,
-            ambient: { motes: 18, bubbles: 8, moteColor: '255,250,230', caustics: 0.16, rays: { count: 4, color: '255,250,210', alpha: 0.10 }, vignette: 0.12 },
+            ambient: { motes: 18, bubbles: 8, moteColor: '255,250,230', fish: { schools: 2, colors: ['#ffd166', '#ff9f68'], alpha: 0.85 }, caustics: 0.16, rays: { count: 4, color: '255,250,210', alpha: 0.10 }, vignette: 0.12 },
             paths: [
             [
                 { x: -30, y: 55 }, { x: 190, y: 150 }, { x: 300, y: 285 }, { x: 420, y: 400 },
@@ -147,7 +147,7 @@
             pathStyle: 'flow',
             flowColor: '30,110,170',
             flipSprites: true,
-            ambient: { motes: 22, bubbles: 14, moteColor: '210,240,255', caustics: 0.07, vignette: 0.22 },
+            ambient: { motes: 22, bubbles: 14, moteColor: '210,240,255', fish: { schools: 2, colors: ['#ffd9a0', '#bfe9ff'], alpha: 0.7 }, caustics: 0.07, vignette: 0.22 },
             paths: [
             [
                 { x: 760, y: -30 }, { x: 850, y: 100 }, { x: 915, y: 269 }, { x: 940, y: 477 },
@@ -184,7 +184,7 @@
             pathStyle: 'flow',
             flowColor: '90,240,255',
             flipSprites: true,
-            ambient: { motes: 46, bubbles: 8, moteColor: '120,255,255', vignette: 0.30 },
+            ambient: { motes: 46, bubbles: 8, moteColor: '120,255,255', fish: { schools: 3, colors: ['#35f0ff', '#ff4fd8', '#a8ff6a'], alpha: 0.55 }, vignette: 0.30 },
             paths: [
             [
                 { x: -30, y: 80 }, { x: 260, y: 70 }, { x: 520, y: 110 }, { x: 560, y: 215 },

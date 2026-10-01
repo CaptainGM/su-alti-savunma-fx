@@ -210,7 +210,23 @@ function spawnBubbles(x, y, n) {
 
 function buildAmbient(map) {
     const a = map.ambient || {};
-    const out = { motes: [], rays: [], bubbles: [] };
+    const out = { motes: [], rays: [], bubbles: [], fish: [] };
+    if (a.fish) {
+        const schools = a.fish.schools || 2;
+        for (let sIdx = 0; sIdx < schools; sIdx++) {
+            const dir = Math.random() < 0.5 ? 1 : -1;
+            const y0 = 80 + Math.random() * (H - 160);
+            const x0 = Math.random() * W;
+            const col = a.fish.colors[sIdx % a.fish.colors.length];
+            const n = 5 + Math.floor(Math.random() * 4);
+            for (let i = 0; i < n; i++) {
+                out.fish.push({
+                    x: x0 - dir * i * (14 + Math.random() * 16), y: y0 + (Math.random() - 0.5) * 60,
+                    dir, sp: 38 + Math.random() * 14 + sIdx * 6, size: 9 + Math.random() * 5, ph: Math.random() * 6.28, col,
+                });
+            }
+        }
+    }
     for (let i = 0; i < (a.motes || 0); i++) {
         out.motes.push({ x: Math.random() * W, y: Math.random() * H, r: 0.8 + Math.random() * 1.8, ph: Math.random() * 6.28, sp: 6 + Math.random() * 14 });
     }
@@ -392,6 +408,8 @@ function drawAmbientBack() {
         ctx.restore();
     }
 
+    if (out_fish_guard()) drawFish(a);
+
     if (a.caustics && ready(sprites.caustics)) {
         if (!sprites.causticsPattern) sprites.causticsPattern = ctx.createPattern(sprites.caustics, 'repeat');
         ctx.save();
@@ -407,6 +425,39 @@ function drawAmbientBack() {
         });
         ctx.restore();
     }
+}
+
+function out_fish_guard() {
+    return ambient && ambient.fish && ambient.fish.length > 0;
+}
+
+function drawFish(a) {
+    ambient.fish.forEach(f => {
+        f.x += f.dir * f.sp * 0.016;
+        if (f.dir > 0 && f.x > W + 40) f.x = -40;
+        if (f.dir < 0 && f.x < -40) f.x = W + 40;
+        const wob = Math.sin(animTime * 5 + f.ph);
+        const y = f.y + Math.sin(animTime * 0.9 + f.ph) * 10;
+        ctx.save();
+        ctx.translate(f.x, y);
+        ctx.scale(f.dir, 1);
+        ctx.globalAlpha = a.fish.alpha || 0.8;
+        ctx.fillStyle = f.col;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, f.size, f.size * 0.5, 0, 0, 6.2832);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-f.size * 0.8, 0);
+        ctx.lineTo(-f.size * 1.6, -f.size * 0.55 + wob * 2);
+        ctx.lineTo(-f.size * 1.6, f.size * 0.55 + wob * 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.beginPath();
+        ctx.arc(f.size * 0.5, -f.size * 0.1, f.size * 0.13, 0, 6.2832);
+        ctx.fill();
+        ctx.restore();
+    });
 }
 
 function drawAmbientFront() {
