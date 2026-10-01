@@ -15,7 +15,7 @@ MAPS = {
     'wreck': [S.WRECK_LANE_L, S.WRECK_LANE_R],
     'vortex': [S.VORTEX_PATH],
     'abyss': [S.ABYSS_LEFT, S.ABYSS_RIGHT],
-    'ice': [S.ICE_PATH],
+    'ice': [S.ICE_L, S.ICE_R],
     'volcano': [S.VOLCANO_PATH],
     'atlantis': [S.ATLANTIS_PATH],
     'mangrove': [S.MANGROVE_LEFT, S.MANGROVE_MID, S.MANGROVE_RIGHT],

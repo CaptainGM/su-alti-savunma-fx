@@ -1,4 +1,4 @@
-"""Buz Koyu: koyu su kanalı, beyaz buz plakaları, buzdağları ve penguenler. Yol kendini ortada keser (X)."""
+"""Buz Koyu: koyu su kanalı, beyaz buz plakaları, buzdağları ve penguenler. İki kanal ortada çapraz geçer (X)."""
 import numpy as np
 
 import common as C
@@ -9,16 +9,17 @@ import specs as S
 from common import H, K, W, rgb, smoothstep
 
 SPOTS = [
-    (770, 434, 'normal'), (1094, 506, 'high'), (410, 482, 'normal'), (1022, 326, 'normal'), (182, 254, 'high'),
-    (170, 734, 'high'), (722, 602, 'normal'), (626, 338, 'normal'), (566, 626, 'normal'), (890, 398, 'normal'),
-    (1142, 386, 'normal'), (974, 554, 'normal'),
+    (675, 350, 'normal'), (495, 446, 'normal'), (855, 446, 'normal'), (675, 556, 'normal'),
+    (560, 625, 'normal'), (790, 625, 'normal'), (242, 290, 'normal'), (1108, 290, 'normal'),
+    (170, 62, 'high'), (1180, 62, 'high'), (340, 800, 'normal'), (1010, 800, 'normal'),
+    (182, 746, 'high'), (1168, 746, 'high'),
 ]
 ICE_EDGE = rgb('#16456a')
 
 
 def build(out_path):
     rng = np.random.default_rng(5505)
-    dc, smooth = C.centerline_dist([S.ICE_PATH])
+    dc, smooth = C.centerline_dist([S.ICE_L, S.ICE_R])
     dc1 = C.logic(dc)
     hw = 42
     yy, xx = C.grid()
@@ -40,7 +41,7 @@ def build(out_path):
     d = dc - (hw + wob * 7)
     chan = smoothstep(0.7, -0.7, d)
     crack_line = smoothstep(0.68, 0.82, C.ridged(H, W, 20, rng, 3))
-    pools = smoothstep(0.745, 0.76, C.fbm(H, W, 60, rng, 3)) * smoothstep(60, 110, dc)
+    pools = np.zeros_like(dc)   # dağınık gölcükler yol gibi okunuyordu, kaldırıldı
     crack_line = crack_line * (~keep_hi)
     pools = pools * (~keep_hi)
     ice = np.clip((1 - chan) * (1 - crack_line * 0.95) * (1 - pools), 0, 1)

@@ -55,12 +55,9 @@ ABYSS_LEFT = ABYSS_HEAD + sx([(400, 290), (260, 420), (250, 570), (380, 700)]) +
 ABYSS_RIGHT = ABYSS_HEAD + sx([(720, 290), (860, 420), (870, 570), (740, 700)]) + ABYSS_TAIL
 
 # ---------------------------------------------------------------- Buz Koyu
-# Yol kendini ortada keser (sekiz / X biçimi): merkezdeki kuleler iki kolu birden vurur.
-ICE_PATH = [
-    (-40, 110), (200, 170), (420, 300), (640, 450), (860, 580), (1050, 690), (1230, 640), (1290, 480),
-    (1200, 320), (1040, 220), (860, 250), (740, 350), (640, 450), (520, 560), (390, 690), (240, 790),
-    (80, 880), (30, 945),
-]
+# Birbirine simetrik iki kanal ortada çapraz geçer, her biri dönmeden düz devam edip ekranın altından çıkar.
+ICE_L = [(-40, 70), (230, 190), (480, 330), (675, 450), (870, 570), (1030, 700), (1120, 830), (1160, 945)]
+ICE_R = [(1390, 70), (1120, 190), (870, 330), (675, 450), (480, 570), (320, 700), (230, 830), (190, 945)]
 
 # ---------------------------------------------------------------- Volkanik Bacalar
 # Üç sütunlu dikey zigzag: yukarıdan aşağı, aşağıdan yukarı, tekrar aşağı.
@@ -85,3 +82,7 @@ MANGROVE_TAIL = [(800, 710), (900, 770), (1020, 830), (1100, 945)]
 MANGROVE_LEFT = MANGROVE_HEAD + [(430, 400), (370, 520), (430, 640), (560, 730), (690, 745)] + MANGROVE_TAIL
 MANGROVE_MID = MANGROVE_HEAD + [(610, 380), (640, 500), (690, 610), (750, 680)] + MANGROVE_TAIL
 MANGROVE_RIGHT = MANGROVE_HEAD + [(800, 300), (980, 370), (1030, 520), (930, 640), (860, 690)] + MANGROVE_TAIL
+
+# Atlantis koruyucu başları (oyundaki periyodik darbe merkezleri) ve Batık Gemi hazine sandığı
+ATLANTIS_GUARDIANS = [(246, 198), (582, 414), (918, 642)]
+BATIK_TREASURE = (X(905), 852)
