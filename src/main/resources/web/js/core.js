@@ -160,9 +160,11 @@
 
         if (has('boss')) {
             const kind = map.boss || 'shark';
-            if (n === total) {
+            // sonsuz modda döngü: her 'total' dalgada bir patron, ortalarında ara patron
+            const m = n % total;
+            if (m === 0) {
                 items.push({ type: 'boss', kind, gap: 3, hpMul: 1 });
-            } else if (total >= 8 && n === Math.floor(total / 2)) {
+            } else if (total >= 8 && m === Math.floor(total / 2)) {
                 items.push({ type: 'boss', kind, gap: 3, hpMul: 0.45, mini: true });
             }
         }
@@ -215,7 +217,8 @@
             this.splits = bk && bk.splits && !this.mini ? bk.splits : 0;
             this.size = st.size * (this.mini ? 0.75 : 1);
             // hpScale ilk dalgada 1'dir, son dalgada haritanın değerine ulaşır: erken oyun herkes için yumuşak kalır
-            const mapRamp = 1 + ((world.map.hpScale || 1) - 1) * (waveNo - 1) / Math.max(1, world.totalWaves - 1);
+            const base = totalWavesOf(world.map);
+            const mapRamp = 1 + ((world.map.hpScale || 1) - 1) * Math.min(1, (waveNo - 1) / Math.max(1, base - 1));
             this.maxHealth = Math.round(st.hp * (bk ? bk.hp : 1) * hpMul * waveHpScale(waveNo) * diff.hp * mapRamp);
             this.health = this.maxHealth;
             this.speed = st.speed * (bk ? bk.speed : 1) * (world.map.speedScale || 1) * diff.speed * (1 + 0.012 * (waveNo - 1));
@@ -419,6 +422,7 @@
             this.paths = mapPaths(map).map(buildPath);
             this.spots = map.buildSpots.map(s => ({ x: s.x, y: s.y, kind: s.kind || 'normal', tower: null }));
             this.totalWaves = totalWavesOf(map);
+            this.endless = false;
             this.available = map.towers || Object.keys(TOWER_TYPES);
 
             this.health = this.diff.health;
@@ -517,6 +521,16 @@
         }
 
         // ---- dalga yönetimi
+
+        // kazandıktan sonra dalgalar bitmeden devam: patronlar döngüyle gelir, düşmanlar güçlenmeye devam eder
+        goEndless() {
+            if (this.result !== 'win') return false;
+            this.endless = true;
+            this.totalWaves = 9999;
+            this.result = null;
+            this.unclearedWaves = [];
+            return true;
+        }
 
         canStartWave() {
             return !this.result && this.wave < this.totalWaves && this.queue.length === 0;

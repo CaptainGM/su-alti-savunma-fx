@@ -347,7 +347,7 @@ function updateFx(dt) {
 function draw() {
     ctx.setTransform(res, 0, 0, res, 0, 0);
     if (ready(sprites.bg)) {
-        ctx.drawImage(sprites.bg, 0, 0, W, H);
+        drawBackground();
     } else {
         ctx.fillStyle = '#001d3d';
         ctx.fillRect(0, 0, W, H);
@@ -370,6 +370,24 @@ function draw() {
         ctx.fillText('DURAKLANDI', W / 2, H / 2);
         ctx.textAlign = 'left';
     }
+}
+
+// Büyük arka plan her karede küçültülmesin: tuval boyutunda bir kez çizilir, sonra birebir kopyalanır
+let bgCache = null;
+let bgCacheKey = '';
+function drawBackground() {
+    const key = `${sprites.bg.src}|${canvas.width}x${canvas.height}`;
+    if (!bgCache || bgCacheKey !== key) {
+        bgCache = document.createElement('canvas');
+        bgCache.width = canvas.width;
+        bgCache.height = canvas.height;
+        bgCache.getContext('2d').drawImage(sprites.bg, 0, 0, bgCache.width, bgCache.height);
+        bgCacheKey = key;
+    }
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(bgCache, 0, 0);
+    ctx.restore();
 }
 
 function drawAmbientBack() {
@@ -1005,7 +1023,7 @@ function updateUI() {
     const hp = Math.max(0, Math.ceil(world.health));
     setText('healthValue', hp);
     setText('moneyValue', world.money);
-    setText('waveValue', `${world.wave}/${world.totalWaves}`);
+    setText('waveValue', world.endless ? `${world.wave} (sonsuz)` : `${world.wave}/${world.totalWaves}`);
     const bar = document.getElementById('healthBar');
     const pct = Math.round(100 * hp / world.maxHealth);
     if (uiCache.hpPct !== pct) {
@@ -1016,7 +1034,7 @@ function updateUI() {
 
     const btn = document.getElementById('waveButton');
     const can = world.canStartWave();
-    const text = world.wave >= world.totalWaves ? 'SON DALGA GELDİ' : `DALGA ${world.wave + 1} BAŞLAT`;
+    const text = world.wave >= world.totalWaves && !world.endless ? 'SON DALGA GELDİ' : `DALGA ${world.wave + 1} BAŞLAT`;
     if (uiCache.waveBtn !== text + can) {
         uiCache.waveBtn = text + can;
         btn.innerText = text;
@@ -1146,11 +1164,21 @@ function renderMapSelectScreen() {
             <div class="map-card-text">
                 <div class="map-card-name">${m.name}</div>
                 <div class="map-card-desc">${m.desc}</div>
-                <div class="map-card-meta">Zorluk ${'●'.repeat(m.stars)}${'○'.repeat(5 - m.stars)} · ${Core.totalWavesOf(m)} dalga</div>
+                <div class="map-card-meta">${(records[m.id + ':endless'] || {}).wave ? 'Sonsuz rekor: ' + records[m.id + ':endless'].wave + ' · ' : ''}Zorluk ${'●'.repeat(m.stars)}${'○'.repeat(5 - m.stars)} · ${Core.totalWavesOf(m)} dalga</div>
             </div>`;
         card.onclick = () => selectMap(i);
         grid.appendChild(card);
     });
+}
+
+function startEndless() {
+    if (!world || !world.goEndless()) return;
+    document.getElementById('winScreen').classList.add('hidden');
+    endShown = false;
+    endDelay = 0;
+    addLog('Sonsuz mod başladı! Düşmanlar güçlenmeye devam edecek, her turda bir patron gelir.');
+    uiCache = {};
+    updateUI();
 }
 
 function showEnd() {
@@ -1170,7 +1198,12 @@ function showEnd() {
         document.getElementById('winScreen').classList.remove('hidden');
         addLog(`TEBRİKLER! Oyunu kazandınız! Kalan Can: ${hp}`);
     } else {
-        document.getElementById('finalWaveLose').innerText = `${world.wave}/${world.totalWaves}`;
+        document.getElementById('finalWaveLose').innerText = world.endless ? `${world.wave} (sonsuz mod)` : `${world.wave}/${world.totalWaves}`;
+        if (world.endless) {
+            const key = currentMap.id + ':endless';
+            const best = Settings.records()[key];
+            if (!best || best.wave < world.wave) Settings.setRecord(key, { wave: world.wave });
+        }
         document.getElementById('finalMoneyLose').innerText = world.money;
         document.getElementById('loseStats').innerText = statsText;
         document.getElementById('loseScreen').classList.remove('hidden');

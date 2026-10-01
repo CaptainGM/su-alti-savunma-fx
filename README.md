@@ -10,25 +10,51 @@ Gerçek oynanıştan bir kare — dalga yönetimi, kule marketi ve savaş günl�
 
 ## Oynanış
 
-- **Kuleler:** Ahtapot (hızlı, havayı da vurur, zırhlıya zayıf), Yılan Balığı (alan şoku, zırh deler, havayı vuramaz), Deniz Anası (yavaşlatır)
-- **Düşmanlar:** Köpek Balığı, Istakoz (zırhlı), Vatoz (uçan), Yavru Köpek Balığı (hızlı sürü), Kral Köpek Balığı (patron)
+- **9 harita**, her birinin yolu ve atmosferi farklı (aşağıdaki tabloya bak)
+- **6 kule türü**, her harita bunlardan 4-6 tanesini sunar:
+  - Ahtapot: hızlı, havayı da vurur, zırhlıya zayıf
+  - Yılan Balığı: alan şoku, zırh deler, havayı vuramaz
+  - Deniz Anası: yavaşlatır
+  - Kılıç Balığı: çok uzun menzilli keskin nişancı, patronlara %50 fazla hasar
+  - Fener Balığı: destek kulesi, yakınındaki kulelere hasar ve atış hızı verir
+  - Balon Balığı: havan, hedefin gideceği yere atar, kümelere alan hasarı
+- **Düşmanlar:** Köpek Balığı, Istakoz (zırhlı), Vatoz (uçan), Yavru Köpek Balığı (hızlı sürü) ve 4 çeşit patron: Kral Köpek Balığı, Dev Kral Yengeç (çok zırhlı), Manta İmparatoru (uçan), Yavru Anası (yarı canda yavru saçar)
 - Kule fiyatı aynı türden her kuleyle %12 artar, kule başına 5 seviye vardır (3. ve 5. seviyede yetenek açılır)
 - **Altın halkalı** yerler yüksek zemindir: menzil %20 artar
-- Her kuleye hedef önceliği seçilebilir (İlk / Son / En Güçlü / En Yakın)
-- Dalga bonusu, sıradaki dalga önizlemesi, duraklat ve 2x hız
-- Zorluk: Kolay / Normal / Zor, her harita için 1-3 yıldız kaydı
-- Kısayollar: `Boşluk` dalga başlat, `P` duraklat, `F` hız, `1-2-3` kule seç, `Esc` geri
+- Kule başına hedef önceliği: İlk / Son / En Güçlü / En Yakın
+- Dalga bonusu, sıradaki dalga önizlemesi, duraklat, 2x hız
+- **Sonsuz mod:** haritayı kazanınca devam edilebilir, patronlar döngüyle gelir, rekor kaydedilir
+- Zorluk seçimi (harita ekranında altında neyin değiştiği yazar):
+
+| | Kolay | Normal | Zor |
+|---|---|---|---|
+| Düşman canı | -%20 | standart | +%12 |
+| Düşman hızı | -%5 | standart | +%4 |
+| Başlangıç enerjisi | +%30 | standart | -%8 |
+| Öldürme ödülü | +%10 | standart | -%5 |
+| Dalga bonusu | +%20 | standart | -%10 |
+| Üs canı | 130 | 100 | 85 |
+| Satış iadesi | %60 | %50 | %40 |
+
+- Kısayollar: `Boşluk` dalga başlat, `P` duraklat, `F` hız, `1-5` kule seç, `F11` tam ekran, `Esc` geri
+
+## Ayarlar
+
+Ana menüden ya da oyun içindeki **Ayarlar** düğmesinden: efekt sesi ve sessiz mod, tam ekran, pencere boyutu (1280x720'den 2K'ya), görüntü kalitesi, ortam efektleri ve hasar yazılarını kapatma. Ayarlar ve harita rekorları `~/.su-alti-savunma/kayit.json` dosyasına yazılır.
 
 ## Haritalar
 
 | Harita | Yol | Not |
 |---|---|---|
 | Mercan Kanalı | tek, S dönüşlü | başlangıç haritası |
-| Yosun Ormanı | tek, uzun yılan | iki sıra arasındaki yerler iki yolu birden vurur |
-| Batık Gemi Mezarlığı | iki girişli, ortada birleşir | tahta iskele yolu |
+| Yosun Ormanı | tek, uzun yılan | iki sıra arasındaki yerler yolun iki katını da vurur |
+| Mangrov Deltası | nehir üçe ayrılır, sonra birleşir | bataklık, ateş böcekleri |
+| Batık Gemi Mezarlığı | iki girişli, ortada birleşir | tahta iskele, gemi enkazları |
+| Atlantis Harabeleri | mermer basamaklar | altın şeritli yol, sütunlar |
+| Buz Koyu | kendini kesen çarpı biçimli kanal | kar yağar, penguenler; ortadaki kuleler iki kolu birden vurur |
 | Girdap | spiral | hızlı sürüler, uzun yol |
-| Derin Çukur | ikiye ayrılıp birleşir | ortadaki adadan iki kol da vurulur, 12 dalga |
-| Yıldız Filosu, Kum Krallığı | tek | eski haritalar, 3 düşman türüyle |
+| Volkanik Bacalar | üç sütunlu dikey zigzag | lav, kıvılcımlar |
+| Derin Çukur | ikiye ayrılıp birleşir, 12 dalga | karanlık, ışıklı canlılar, en zoru |
 
 ## Mimari
 
@@ -38,16 +64,18 @@ flowchart LR
     WV --> UI["game.js (çizim, arayüz)"]
     UI --> CORE["core.js (oyun kuralları)"]
     UI --> MAPS["maps.js (harita verisi)"]
+    UI --> SET["settings.js (ayarlar, rekorlar)"]
     UI <--> BR["Java-JS köprüsü (alert)"]
     BR --> SND[SoundPlayer]
     BR --> LOG[LogWriter]
+    BR --> SAVE[SaveStore]
 ```
 
-- `core.js` DOM'a dokunmaz: düşmanlar, kuleler, dalga planı, ekonomi. Aynı dosya Node'da denge testi için de kullanılır
+- `core.js` DOM'a dokunmaz: düşmanlar, kuleler, dalga planı, ekonomi. Aynı dosya Node'da denge ve birim testleri için de kullanılır
 - `game.js` çizimi, efektleri, sesi ve arayüzü yönetir; `core.js`'den gelen olaylara tepki verir
-- `maps.js` yeni harita eklemek için tek yerdir (yol, kule yerleri, zorluk, ortam efektleri)
-- Java tarafı pencereyi açar, sesi çalar (`SoundPlayer`) ve günlüğü diske yazar (`LogWriter`)
-- `model/` paketindeki sınıflar (`Tower`, `Enemy`, `WaveManager`...) nesne yönelimli tasarımın Java karşılığıdır ancak şu an çalışan oyun döngüsüne bağlı değildir; oyun kuralları JS tarafındadır
+- `maps.js` yeni harita eklemek için tek yerdir (yol, kule yerleri, hangi kuleler, patron türü, zorluk, ortam efektleri)
+- Java tarafı pencereyi açar, tam ekranı ve pencere boyutunu yönetir, sesi çalar (`SoundPlayer`), günlüğü (`LogWriter`) ve ayar/rekor dosyasını (`SaveStore`) yazar
+- `model/` paketindeki sınıflar (`Tower`, `Enemy`, `WaveManager`...) nesne yönelimli tasarımın Java karşılığıdır ancak şu an çalışan oyun döngüsüne bağlı değildir; oyun kuralları JS tarafındadır ve model katmanından çok daha kapsamlıdır
 - JavaFX `WebView` WebGL ve Web Audio desteklemez; bu yüzden 3B (Three.js) kullanılamıyor, çizim 2B Canvas ile yapılıyor. Ayrıca `globalCompositeOperation = 'lighter'` bu WebView'da tuvali sildiği için kullanılmıyor
 
 ## Teknoloji
@@ -67,13 +95,16 @@ Windows'ta `start.bat` ile de çalıştırılabilir. Geliştirirken `-Dsavunma.h
 ## Araçlar
 
 ```bash
+node tools/test_core.js              # oyun çekirdeği denetimleri
 node tools/balans.js                 # botlarla denge simülasyonu (tüm haritalar)
 node tools/balans.js cukur hard      # tek harita ve zorluk
-python tools/mapgen/build.py         # yeni sualtı harita arka planlarını yeniden üretir
-python tools/mapgen/export_js.py     # yol ve kule yerlerini maps.js için yazdırır
-python tools/sprite_varyant.py       # yavru ve kral köpek balığı sprite'larını üretir
+node tools/balans.js "" all          # üç zorluk birden
+python tools/mapgen/build.py         # harita arka planlarını ve önizlemelerini yeniden üretir
+python tools/mapgen/export_js.py --write   # yol ve kule yerlerini maps.js'e yazar
+python tools/sprites/build.py        # yeni kule, mermi ve patron sprite'larını üretir
+python tools/sprites/logo.py         # logo ve uygulama simgesi
 ```
 
-Harita arka planları `tools/mapgen` altındaki Python betikleriyle üretilir (numpy, scipy, Pillow gerekir).
+Harita arka planları ve yeni sprite'lar `tools` altındaki Python betikleriyle üretilir (numpy, scipy, Pillow gerekir); arka planlar 2700x1800 çözünürlüktedir.
 Kendi çizdiğiniz ya da bir görsel üreticiyle oluşturduğunuz bir arka planı kullanmak için `maps.js`'e yeni bir
-harita nesnesi eklemeniz ve `paths` ile `buildSpots` koordinatlarını (1100x900 tuvale göre) yazmanız yeterlidir.
+harita nesnesi eklemeniz ve `paths` ile `buildSpots` koordinatlarını (1350x900 tuvale göre) yazmanız yeterlidir.
