@@ -143,6 +143,15 @@ public class App extends Application {
             }
         }.start();
 
+        // pencere kapanırken yarım kalan oyun kaydedilsin
+        primaryStage.setOnCloseRequest(ev -> {
+            try {
+                webView.getEngine().executeScript("window.saveBeforeExit && window.saveBeforeExit()");
+            } catch (RuntimeException e) {
+                // sayfa hazır değilse kaydedilecek bir şey yoktur
+            }
+        });
+
         primaryStage.setTitle(TITLE);
         addIcons(primaryStage);
         primaryStage.setScene(scene);
