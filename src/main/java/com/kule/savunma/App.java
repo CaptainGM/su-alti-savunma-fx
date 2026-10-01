@@ -1,5 +1,6 @@
 package com.kule.savunma;
 
+import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.concurrent.Worker;
@@ -19,12 +20,18 @@ public class App extends Application {
 
     private final SaveStore saveStore = new SaveStore();
     private Stage stage;
+    private WebView webViewRef;
+    private volatile boolean loopOn;
+    private boolean pageReady;
 
     @Override
     public void start(Stage primaryStage) {
         this.stage = primaryStage;
-        SoundPlayer.init();
+        if (!Boolean.getBoolean("savunma.nosound")) {
+            SoundPlayer.init();
+        }
         WebView webView = new WebView();
+        this.webViewRef = webView;
         LogWriter logWriter = new LogWriter();
 
         webView.getEngine().getLoadWorker().stateProperty().addListener((observable, oldValue, newValue) -> {
@@ -54,6 +61,9 @@ public class App extends Application {
                                 "saveData: function(json) {" +
                                 "   alert('JAVA_SAVE_DATA:' + json);" +
                                 "}," +
+                                "setLoop: function(on) {" +
+                                "   alert('JAVA_LOOP:' + on);" +
+                                "}," +
                                 "setFullscreen: function(on) {" +
                                 "   alert('JAVA_FULLSCREEN:' + on);" +
                                 "}," +
@@ -63,6 +73,9 @@ public class App extends Application {
                                 "};" +
                                 "console.log('JavaBridge baslatildi');");
 
+                // WebView'ın kendi animasyon döngüsü 60 FPS'e takılıyor; kareleri JavaFX zamanlayıcısı sürer
+                webView.getEngine().executeScript("window.javaDriven = true;");
+                pageReady = true;
                 webView.getEngine().setOnAlert(event -> handleBridgeMessage(event.getData(), logWriter));
 
                 // kayıtlı ayarlar ve rekorlar varsa oyuna ilet
@@ -93,6 +106,42 @@ public class App extends Application {
         double width = Math.min(1760, screen.getWidth() * 0.95);
         double height = Math.min(990, screen.getHeight() * 0.95);
         Scene scene = new Scene(root, width, height);
+
+        final boolean perf = Boolean.getBoolean("savunma.perf");
+        new AnimationTimer() {
+            private long statStart;
+            private int pulses;
+            private int calls;
+            private long scriptNanos;
+
+            @Override
+            public void handle(long now) {
+                pulses++;
+                if (loopOn && pageReady) {
+                    long t0 = perf ? System.nanoTime() : 0;
+                    try {
+                        webViewRef.getEngine().executeScript("window.javaFrame(" + (now / 1_000_000.0) + ")");
+                    } catch (RuntimeException e) {
+                        // sayfa yeniden yüklenirken oluşan geçici hata
+                    }
+                    if (perf) {
+                        calls++;
+                        scriptNanos += System.nanoTime() - t0;
+                    }
+                }
+                if (perf && now - statStart > 2_000_000_000L) {
+                    if (statStart != 0) {
+                        double sec = (now - statStart) / 1e9;
+                        System.out.printf("PERF> %.0f darbe/sn, %.0f kare cagrisi/sn, script ortalama %.2f ms%n",
+                                pulses / sec, calls / sec, calls == 0 ? 0 : scriptNanos / 1e6 / calls);
+                    }
+                    statStart = now;
+                    pulses = 0;
+                    calls = 0;
+                    scriptNanos = 0;
+                }
+            }
+        }.start();
 
         primaryStage.setTitle(TITLE);
         addIcons(primaryStage);
@@ -128,6 +177,8 @@ public class App extends Application {
             System.out.println("Uygulama kapatiliyor...");
             Platform.exit();
             System.exit(0);
+        } else if (data.startsWith("JAVA_LOOP:")) {
+            loopOn = Boolean.parseBoolean(data.substring("JAVA_LOOP:".length()));
         } else if (data.startsWith("JAVA_SFX:")) {
             String[] parts = data.substring("JAVA_SFX:".length()).split(",");
             SoundPlayer.playSfx(parts[0], Double.parseDouble(parts[1]));

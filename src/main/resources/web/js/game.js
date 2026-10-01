@@ -56,6 +56,31 @@ function loadImage(src) {
 }
 const ready = img => img && img.complete && img.naturalWidth > 0;
 
+// JavaFX WebView'da 500 pikselik bir resmi her karede 80 piksele küçültmek çok pahalı (kare başına ~0,6 ms).
+// Bu yüzden her sprite, çizileceği boyuta bir kez küçültülüp küçük bir tuvale kaydedilir ve oradan çizilir.
+const spriteCache = new Map();
+function fit(img, nominal) {
+    if (!ready(img)) return img;
+    const px = Math.max(8, Math.round(nominal * res));
+    const key = img.src + '|' + px;
+    let c = spriteCache.get(key);
+    if (!c) {
+        c = document.createElement('canvas');
+        c.width = c.height = px;
+        const g = c.getContext('2d');
+        g.imageSmoothingEnabled = true;
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(img, 0, 0, px, px);
+        spriteCache.set(key, c);
+    }
+    return c;
+}
+function clearSpriteCache() {
+    spriteCache.clear();
+    if (typeof darkSpriteCache !== 'undefined') darkSpriteCache.clear();
+    if (typeof spotCache !== 'undefined') spotCache.clear();
+}
+
 let sprites = null;
 function loadSprites(map) {
     sprites = { bg: loadImage(map.bg), towers: {}, enemies: {}, projectiles: {} };
@@ -88,9 +113,11 @@ let draggedType = null;
 let animTime = 0;
 let lastFrame = 0;
 let rafId = 0;
+let frameDue = 0;
+const perf = { frames: 0, since: 0, fps: 0, drawMs: 0, drawAcc: 0 };
 let endDelay = 0;
 let endShown = false;
-let fx = { floaters: [], rings: [], bubbles: [], flash: 0, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [] };
+let fx = { floaters: [], rings: [], bubbles: [], flash: 0, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [], meteors: [], chomps: [] };
 let zoneBands = [];
 let ambient = null;
 let res = 1;
@@ -192,14 +219,8 @@ function onWorldEvent(type, d) {
             if (d.type === 'eruption') {
                 sfx('rumble');
                 d.points.forEach(p => fx.warns.push({ x: p.x, y: p.y, r: p.r, life: d.time, max: d.time }));
-                if (d.bomb) {
-                    fx.warns.push({ x: d.bomb.x, y: d.bomb.y, r: d.bomb.r + 12, life: d.time, max: d.time, bomb: true, towerId: d.bomb.towerId });
-                    notify('Lav bir kuleye düşüyor! Kaybetmek istemiyorsan kuleyi sat.', '#ff9a6a');
-                    fx.alert = { text: 'LAV KULEYE DÜŞÜYOR', life: d.time + 0.4, max: d.time + 0.4 };
-                } else {
-                    addLog('Yanardağ homurdanıyor! Lav patlaması geliyor.');
-                    fx.alert = { text: 'LAV PATLAMASI', life: 1.8, max: 1.8 };
-                }
+                addLog('Yanardağ homurdanıyor! Lav patlaması geliyor.');
+                fx.alert = { text: 'LAV PATLAMASI', life: 1.8, max: 1.8 };
             } else if (d.type === 'blizzard') {
                 sfx('wind');
                 addLog('Kar fırtınası yaklaşıyor!');
@@ -227,40 +248,38 @@ function onWorldEvent(type, d) {
             d.tower.stunMax = d.time;
             addLog(`${label(d.tower)} aşırı ısındı, ${d.time} sn ateş edemez.`);
             break;
-        case 'towerDestroyed':
-            sfx('eruption');
-            fx.shake = Math.max(fx.shake || 0, 0.8);
-            fx.rings.push({ x: d.tower.x, y: d.tower.y, r: 10, max: 120, life: 0.7, maxLife: 0.7, color: '255,110,30', fill: true });
-            for (let i = 0; i < 34; i++) {
-                const a = Math.random() * 6.2832;
-                const sp = 80 + Math.random() * 240;
-                fx.sparks.push({ x: d.tower.x, y: d.tower.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 70, life: 0.6 + Math.random() * 0.8, max: 1.4, r: 2 + Math.random() * 4, c: Math.random() < 0.5 ? '255,150,40' : '70,40,30' });
-            }
-            if (selectedTower === d.tower) closeTowerModal();
-            renderTowerList();
-            notify(`${d.tower.name} lav yüzünden yok oldu!`, '#ff9a6a');
+        case 'meteor':
+            sfx('meteor');
+            fx.meteors.push({ x: d.x, y: d.y, life: d.time, max: d.time });
             break;
+        case 'towerDestroyed': {
+            const tw = d.tower;
+            if (selectedTower === tw) closeTowerModal();
+            renderTowerList();
+            if (d.cause === 'patron') {
+                // yeme animasyonu çizimde (drawChomps); çene kapandığında ses ve parçalar çıkar
+                fx.chomps.push({ x: tw.x, y: tw.y, type: tw.type, life: 1.15, max: 1.15, snapped: false });
+                const by = d.by;
+                notify(`${by ? by.name : 'Patron'} ${by && by.fury ? by.fury.verb : 'yuttu'}: ${tw.name} yok oldu!`, '#ff8a9a');
+            } else {
+                sfx('eruption');
+                fx.shake = Math.max(fx.shake || 0, 0.8);
+                fx.rings.push({ x: tw.x, y: tw.y, r: 10, max: 120, life: 0.7, maxLife: 0.7, color: '255,110,30', fill: true });
+                for (let i = 0; i < 34; i++) {
+                    const a = Math.random() * 6.2832;
+                    const sp = 80 + Math.random() * 240;
+                    fx.sparks.push({ x: tw.x, y: tw.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 70, life: 0.6 + Math.random() * 0.8, max: 1.4, r: 2 + Math.random() * 4, c: Math.random() < 0.5 ? '255,150,40' : '70,40,30' });
+                }
+                notify(`${tw.name} lav kayasıyla yok oldu!`, '#ff9a6a');
+            }
+            break;
+        }
         case 'bossFury':
             sfx('roar');
             fx.shake = Math.max(fx.shake || 0, 0.45);
             fx.furies.push({ boss: d.enemy, towers: d.towers, life: d.time, max: d.time });
             fx.alert = { text: 'PATRON SALDIRIYOR', life: d.time + 0.3, max: d.time + 0.3 };
-            addLog(`${d.enemy.name} öfkelendi ve ${d.towers.length} kuleyi hedef aldı.`);
-            break;
-        case 'towerDevoured':
-            sfx('splash', 0);
-            fx.shake = Math.max(fx.shake || 0, 0.6);
-            fx.rings.push({ x: d.tower.x, y: d.tower.y, r: 10, max: 90, life: 0.5, maxLife: 0.5, color: '210,40,70', fill: true });
-            for (let i = 0; i < 22; i++) {
-                const a = Math.random() * 6.2832;
-                const sp = 60 + Math.random() * 200;
-                fx.sparks.push({ x: d.tower.x, y: d.tower.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40, life: 0.5 + Math.random() * 0.6, max: 1.1, r: 2 + Math.random() * 3, c: '200,30,60' });
-            }
-            notify(`${d.enemy.name} ${d.verb}: ${d.tower.name} savaş dışı kaldı! Patronu öldürünce geri gelir.`, '#ff8a9a');
-            break;
-        case 'towerFreed':
-            sfx('upgrade', 0, 0.5);
-            addLog(`${label(d.tower)} yeniden savaşa döndü.`);
+            addLog(`${d.enemy.name} öfkelendi ve ${d.towers.map(t => t.name).join(', ')} kulesini hedef aldı.`);
             break;
         case 'guardianWarn': {
             const gi = nearestGuardian(d.x, d.y);
@@ -361,6 +380,17 @@ function onWorldEvent(type, d) {
             fx.flash = 1;
             addFloater({ x: d.enemy.x, y: d.enemy.y - 20, text: '-' + d.enemy.damage, color: '#ff5a64', life: 1.2, maxLife: 1.2 });
             break;
+        case 'adapt': {
+            const names = Object.entries(d.adapt).map(([t, r]) => `${towerTypeName(t)} −%${Math.round(r * 100)}`);
+            uiCache.preview = null;
+            if (names.length) {
+                notify(`Düşmanlar alışıyor: ${names.join(', ')} hasarı. Kule türlerini çeşitlendir!`, '#ffd27a');
+                sfx('click');
+            } else {
+                addLog('Düşmanlar alışmayı bıraktı.');
+            }
+            break;
+        }
         case 'waveClear':
             addLog(`Dalga temizlendi! Dalga bonusu: +${d.bonus} Enerji. Toplam Enerji: ${world.money}.`);
             sfx('wave_clear');
@@ -437,8 +467,8 @@ function selectMap(mapIndex) {
     W = (currentMap.size && currentMap.size.w) || 1350;
     H = (currentMap.size && currentMap.size.h) || 900;
     loadSprites(currentMap);
-    document.getElementById('canvasBackdrop').style.backgroundImage =
-        `linear-gradient(rgba(0,6,16,0.55), rgba(0,6,16,0.55)), url('${currentMap.thumb || currentMap.bg}')`;
+    // tuvalin arkasında resim yok: WebView her karede altındaki resmi de yeniden çiziyor ve FPS'i 60'a düşürüyordu
+    document.getElementById('canvasContainer').style.background = currentMap.tint || '#02101c';
 
     ['menuScreen', 'mapSelectScreen', 'winScreen', 'loseScreen', 'towerModal'].forEach(id =>
         document.getElementById(id).classList.add('hidden'));
@@ -447,7 +477,7 @@ function selectMap(mapIndex) {
     if (world) logEnd();
     world = new Core.World(currentMap, { difficulty, seed: Date.now() & 0x7fffffff, onEvent: onWorldEvent });
     ambient = buildAmbient(currentMap);
-    fx = { floaters: [], rings: [], bubbles: [], flash: 0, tension: 0, shake: 0, alert: null, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [] };
+    fx = { floaters: [], rings: [], bubbles: [], flash: 0, tension: 0, shake: 0, alert: null, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [], meteors: [], chomps: [] };
     paused = false;
     speedMultiplier = 1;
     selectedTower = null;
@@ -472,7 +502,8 @@ function selectMap(mapIndex) {
 
     cancelAnimationFrame(rafId);
     lastFrame = 0;
-    rafId = requestAnimationFrame(gameLoop);
+    frameDue = 0;
+    startLoop();
 }
 
 function showBanner() {
@@ -497,17 +528,52 @@ function fitCanvas() {
     canvas.width = Math.round(W * res);
     canvas.height = Math.round(H * res);
     ctx.setTransform(res, 0, 0, res, 0, 0);
+    clearSpriteCache();
 }
 window.addEventListener('resize', () => { if (world) fitCanvas(); });
 
 // ------------------------------------------------------------------ ana döngü
 
-function gameLoop(ts) {
+// Oyun döngüsü. JavaFX WebView'ın kendi requestAnimationFrame'i 60'ta kilitli olduğu için, Java varsa kareleri
+// Java'nın zamanlayıcısı sürer (window.javaFrame); Java yoksa (tarayıcıda test) requestAnimationFrame kullanılır.
+// Hedef FPS ayarı her iki durumda da uygulanır.
+function startLoop() {
+    if (window.javaDriven) bridgeLoop(true);
+    else rafId = requestAnimationFrame(gameLoop);
+}
+
+function stopLoop() {
+    cancelAnimationFrame(rafId);
+    if (window.javaDriven) bridgeLoop(false);
+}
+
+function bridgeLoop(on) {
+    try { if (window.javaBridge && window.javaBridge.setLoop) window.javaBridge.setLoop(on); } catch (e) { /* yoksay */ }
+}
+
+window.javaFrame = function (ms) { gameLoop(ms, true); };
+
+function gameLoop(ts, fromJava) {
     if (!world) return;
+    if (!fromJava) {
+        // Java bayrağı sayfa yüklendikten sonra gelebilir: o durumda döngüyü Java'ya devret
+        if (window.javaDriven) { bridgeLoop(true); return; }
+        rafId = requestAnimationFrame(gameLoop);
+    }
+
+    // sabit hızlı FPS sınırlayıcı
+    const target = Settings.get().fps;
+    if (target > 0) {
+        const interval = 1000 / target;
+        if (ts < frameDue - 0.6) return;
+        frameDue = (ts - frameDue > interval * 2) ? ts + interval : frameDue + interval;
+    }
+
     if (!lastFrame) lastFrame = ts;
     let dt = (ts - lastFrame) / 1000;
     lastFrame = ts;
     if (dt > 0.1) dt = 0.1;
+    if (dt <= 0) return;
     animTime += dt;
 
     if (!paused) {
@@ -520,9 +586,20 @@ function gameLoop(ts) {
         endDelay -= dt;
         if (endDelay <= 0) { endShown = true; showEnd(); }
     }
+    const t0 = performance.now();
     draw();
+    perf.drawAcc += performance.now() - t0;
     updateUI();
-    rafId = requestAnimationFrame(gameLoop);
+
+    perf.frames++;
+    const now = performance.now();
+    if (now - perf.since >= 500) {
+        perf.fps = Math.round(perf.frames * 1000 / (now - perf.since));
+        perf.drawMs = perf.drawAcc / perf.frames;
+        perf.frames = 0;
+        perf.drawAcc = 0;
+        perf.since = now;
+    }
 }
 
 function updateFx(dt) {
@@ -538,6 +615,10 @@ function updateFx(dt) {
     fx.furies = fx.furies.filter(f => f.life > 0 && f.boss.health > 0);
     fx.warns.forEach(w => { w.life -= dt; });
     fx.warns = fx.warns.filter(w => w.life > 0);
+    fx.meteors.forEach(m => { m.life -= dt; });
+    fx.meteors = fx.meteors.filter(m => m.life > 0);
+    fx.chomps.forEach(c => { c.life -= dt; });
+    fx.chomps = fx.chomps.filter(c => c.life > 0);
     fx.sparks.forEach(p => { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 260 * dt; p.vx *= 0.985; });
     fx.sparks = fx.sparks.filter(p => p.life > 0);
     for (let i = 0; i < fx.guardGlow.length; i++) fx.guardGlow[i] = Math.max(0, (fx.guardGlow[i] || 0) - dt * 1.1);
@@ -568,6 +649,8 @@ function draw() {
     drawSpots();
     drawEntities();
     drawMechanics();
+    drawChomps();
+    drawMeteors();
     if (fancy) drawAmbientFront();
     drawFx();
     drawHud();
@@ -583,16 +666,64 @@ function draw() {
     }
 }
 
-// Büyük arka plan her karede küçültülmesin: tuval boyutunda bir kez çizilir, sonra birebir kopyalanır
+// Büyük arka plan her karede küçültülmesin: tuval boyutunda bir kez çizilir, sonra birebir kopyalanır.
+// Karanlık haritada (Derin Çukur) ışıksız bölgelerin kararması da bu önbelleğe pişirilir. Böylece her karede
+// pahalı bir `clip` işlemi yapılmaz ve üst üste binen fenerlerin ışığı doğru birleşir (union).
 let bgCache = null;
 let bgCacheKey = '';
+
+function darknessMech() { return (currentMap.mechanics || []).find(m => m.type === 'darkness'); }
+function activeLights() { return darknessMech() ? world.towers.filter(t => t.type === 'angler') : []; }
+
+function lightSignature() {
+    return activeLights().map(t => `${Math.round(t.x)},${Math.round(t.y)},${Math.round(world.lightRadius(t))}`).join(';');
+}
+
+function bakeDarkness(target) {
+    const lights = activeLights().map(t => ({ x: t.x, y: t.y, r: world.lightRadius(t) }));
+    const dm = darknessMech();
+    const strength = (dm && dm.strength) || 0.64;
+    const cw = Math.ceil(W / 2);
+    const ch = Math.ceil(H / 2);
+    const small = document.createElement('canvas');
+    small.width = cw;
+    small.height = ch;
+    const g = small.getContext('2d');
+    const data = g.createImageData(cw, ch);
+    const px = data.data;
+    for (let j = 0; j < ch; j++) {
+        const y = (j + 0.5) * 2;
+        for (let i = 0; i < cw; i++) {
+            const x = (i + 0.5) * 2;
+            let best = -1e9;                                      // en yakın ışığın kenarına olan işaretli mesafe
+            for (let k = 0; k < lights.length; k++) {
+                const L = lights[k];
+                const v = L.r - Math.hypot(x - L.x, y - L.y);
+                if (v > best) best = v;
+            }
+            const lit = lights.length ? Math.max(0, Math.min(1, best / 3 + 0.5)) : 0;
+            const o = (j * cw + i) * 4;
+            px[o] = 0;
+            px[o + 1] = 2;
+            px[o + 2] = 10;
+            px[o + 3] = Math.round(255 * strength * (1 - lit));
+        }
+    }
+    g.putImageData(data, 0, 0);
+    const tg = target.getContext('2d');
+    tg.imageSmoothingEnabled = true;
+    tg.drawImage(small, 0, 0, target.width, target.height);
+}
+
 function drawBackground() {
-    const key = `${sprites.bg.src}|${canvas.width}x${canvas.height}`;
+    const key = `${sprites.bg.src}|${canvas.width}x${canvas.height}|${lightSignature()}`;
     if (!bgCache || bgCacheKey !== key) {
-        bgCache = document.createElement('canvas');
+        if (!bgCache) bgCache = document.createElement('canvas');
         bgCache.width = canvas.width;
         bgCache.height = canvas.height;
         bgCache.getContext('2d').drawImage(sprites.bg, 0, 0, bgCache.width, bgCache.height);
+        bakeRays(bgCache.getContext('2d'));
+        if (darknessMech()) bakeDarkness(bgCache);
         bgCacheKey = key;
     }
     ctx.save();
@@ -601,46 +732,84 @@ function drawBackground() {
     ctx.restore();
 }
 
+// ışığın dışındaki varlıklar için karartma: sprite'ın karanlık siluetini yarı saydam üstüne bindirir
+const darkSpriteCache = new Map();
+function darkOf(c) {
+    let d = darkSpriteCache.get(c);
+    if (!d) {
+        d = document.createElement('canvas');
+        d.width = c.width;
+        d.height = c.height;
+        const g = d.getContext('2d');
+        g.drawImage(c, 0, 0);
+        g.globalCompositeOperation = 'source-atop';
+        g.fillStyle = 'rgb(0,2,10)';
+        g.fillRect(0, 0, d.width, d.height);
+        darkSpriteCache.set(c, d);
+    }
+    return d;
+}
+
+function inLight(x, y) {
+    if (!darknessMech()) return true;
+    for (const t of world.towers) {
+        if (t.type === 'angler' && Math.hypot(t.x - x, t.y - y) <= world.lightRadius(t)) return true;
+    }
+    return false;
+}
+
+// 0 (aydınlık) .. 1 (karanlık), yumuşak geçişli
+function darkAmount(obj, lit) {
+    const target = lit ? 0 : 1;
+    const dt = Math.min(0.05, animTime - (obj.darkT === undefined ? animTime : obj.darkT));
+    obj.darkT = animTime;
+    obj.darkAmt = (obj.darkAmt === undefined ? target : obj.darkAmt) + (target - (obj.darkAmt === undefined ? target : obj.darkAmt)) * Math.min(1, dt * 10);
+    return obj.darkAmt;
+}
+
+// çizilen sprite'ın aynı yerine karanlık siluetini bindir
+function dimmed(src, amt, x, y, w, h) {
+    if (amt < 0.03) return;
+    ctx.globalAlpha = 0.62 * amt;
+    ctx.drawImage(darkOf(src), x, y, w, h);
+    ctx.globalAlpha = 1;
+}
+
+// Işık huzmeleri hareketsizdir ve arka plana bir kez pişirilir (her karede çizmek FPS'i yarıya düşürüyordu)
+function bakeRays(g) {
+    const a = currentMap.ambient;
+    if (!a || !a.rays || !ambient || !ambient.rays.length) return;
+    g.save();
+    g.scale(res, res);
+    ambient.rays.forEach(r => {
+        const x0 = r.x;
+        const gr = g.createLinearGradient(x0, 0, x0 + 260, H);
+        gr.addColorStop(0, `rgba(${a.rays.color},${a.rays.alpha * 0.85})`);
+        gr.addColorStop(1, `rgba(${a.rays.color},0)`);
+        g.fillStyle = gr;
+        g.beginPath();
+        g.moveTo(x0, 0);
+        g.lineTo(x0 + r.w, 0);
+        g.lineTo(x0 + r.w + 300, H);
+        g.lineTo(x0 + 220, H);
+        g.closePath();
+        g.fill();
+    });
+    g.restore();
+}
+
+// Sudaki ışık ağı: tek katman, yavaşça kayar
 function drawAmbientBack() {
     const a = currentMap.ambient;
-    if (!a) return;
-
-    if (a.rays && ambient.rays.length) {
-        // not: JavaFX WebKit'te globalCompositeOperation = 'lighter' tuvali siliyor, bu yüzden normal alfa kullanılır
-        ctx.save();
-        ambient.rays.forEach(r => {
-            const sway = Math.sin(animTime * r.sp + r.ph);
-            const x0 = r.x + sway * 40;
-            const g = ctx.createLinearGradient(x0, 0, x0 + 260, H);
-            g.addColorStop(0, `rgba(${a.rays.color},${a.rays.alpha * (0.7 + 0.3 * sway)})`);
-            g.addColorStop(1, `rgba(${a.rays.color},0)`);
-            ctx.fillStyle = g;
-            ctx.beginPath();
-            ctx.moveTo(x0, 0);
-            ctx.lineTo(x0 + r.w, 0);
-            ctx.lineTo(x0 + r.w + 300, H);
-            ctx.lineTo(x0 + 220, H);
-            ctx.closePath();
-            ctx.fill();
-        });
-        ctx.restore();
-    }
-
-    if (a.caustics && ready(sprites.caustics)) {
-        if (!sprites.causticsPattern) sprites.causticsPattern = ctx.createPattern(sprites.caustics, 'repeat');
-        ctx.save();
-        const layers = [{ s: 1.0, ox: 14, oy: 9, al: a.caustics }, { s: 1.6, ox: -9, oy: 12, al: a.caustics * 0.8 }];
-        layers.forEach(l => {
-            ctx.globalAlpha = l.al;
-            ctx.save();
-            ctx.scale(l.s, l.s);
-            ctx.translate((animTime * l.ox) % 512, (animTime * l.oy) % 512);
-            ctx.fillStyle = sprites.causticsPattern;
-            ctx.fillRect(-512, -512, W / l.s + 1024, H / l.s + 1024);
-            ctx.restore();
-        });
-        ctx.restore();
-    }
+    if (!a || !a.caustics || !ready(sprites.caustics)) return;
+    if (!sprites.causticsPattern) sprites.causticsPattern = ctx.createPattern(sprites.caustics, 'repeat');
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, a.caustics * 1.5);
+    ctx.scale(1.3, 1.3);
+    ctx.translate((animTime * 12) % 512, (animTime * 9) % 512);
+    ctx.fillStyle = sprites.causticsPattern;
+    ctx.fillRect(-512, -512, W / 1.3 + 1024, H / 1.3 + 1024);
+    ctx.restore();
 }
 
 function drawAmbientFront() {
@@ -729,16 +898,132 @@ function drawZones() {
     ctx.restore();
 }
 
+// patronun çenesi: iki yarım elips ve birbirine geçen dişler; gap, çenelerin merkezden uzaklığı
+function drawJaws(x, y, gap, alpha) {
+    const R = 54;
+    const n = 7;
+    const sp = (2 * R) / n;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    for (const dir of [-1, 1]) {
+        ctx.save();
+        ctx.translate(x, y + dir * gap);
+        if (dir < 0) ctx.scale(1, -1);                 // üst çene alt çenenin aynasıdır
+        ctx.fillStyle = '#7a1630';
+        ctx.strokeStyle = '#2e0610';
+        ctx.lineWidth = 3;
+        // yarım elips yerine bezier: WebView'ın yol çizicisi başlangıç noktasız yay yollarında hata veriyor
+        ctx.beginPath();
+        ctx.moveTo(-R, 0);
+        ctx.bezierCurveTo(-R, R * 0.8, R, R * 0.8, R, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#f6f1e4';
+        ctx.strokeStyle = '#8a7f6a';
+        ctx.lineWidth = 1.2;
+        for (let i = 0; i < n; i++) {
+            const tx = (i - (n - 1) / 2) * sp + (dir < 0 ? sp / 2 : 0);
+            if (Math.abs(tx) > R * 0.86) continue;
+            ctx.beginPath();
+            ctx.moveTo(tx - sp * 0.38, 1);
+            ctx.lineTo(tx + sp * 0.38, 1);
+            ctx.lineTo(tx, -17);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+    ctx.restore();
+}
+
+// kule yeniliyor: çene hızla kapanır, kule yutulur, parçalar saçılır
+function drawChomps() {
+    fx.chomps.forEach(c => {
+        const k = 1 - c.life / c.max;
+        const closeAt = 0.26;
+        if (k < closeAt + 0.1) {
+            // yutulan kule: çene kapanırken küçülür
+            const img = sprites.towers[c.type];
+            const shrink = k < closeAt ? 1 : Math.max(0, 1 - (k - closeAt) / 0.1);
+            if (ready(img) && shrink > 0.02) {
+                const sz = 100 * (0.35 + 0.65 * shrink);
+                ctx.globalAlpha = shrink;
+                ctx.drawImage(fit(img, 100), c.x - sz / 2, c.y - sz / 2, sz, sz);
+                ctx.globalAlpha = 1;
+            }
+        }
+        if (k >= closeAt && !c.snapped) {
+            c.snapped = true;
+            sfx('chomp');
+            fx.shake = Math.max(fx.shake || 0, 0.85);
+            fx.rings.push({ x: c.x, y: c.y, r: 10, max: 100, life: 0.5, maxLife: 0.5, color: '230,50,80', fill: true });
+            for (let i = 0; i < 26; i++) {
+                const a = Math.random() * 6.2832;
+                const sp = 70 + Math.random() * 230;
+                fx.sparks.push({ x: c.x, y: c.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 50, life: 0.5 + Math.random() * 0.7, max: 1.2, r: 2 + Math.random() * 3.5, c: i % 3 ? '210,40,70' : '240,236,220' });
+            }
+        }
+        let gap;
+        if (k < closeAt) {
+            const e = k / closeAt;
+            gap = 52 * (1 - e * e);                           // hızlanarak kapanır
+        } else {
+            gap = 3 * Math.abs(Math.sin((k - closeAt) * 26)) * Math.max(0, 1 - (k - closeAt) / 0.5);   // çiğneme
+        }
+        const alpha = k < 0.7 ? 0.95 : Math.max(0, 0.95 * (1 - (k - 0.7) / 0.3));
+        drawJaws(c.x, c.y + 6, gap, alpha);
+    });
+}
+
+// lav kayası: sağ üstten düşer, hedefte büyüyen bir gölge vardır
+function drawMeteors() {
+    fx.meteors.forEach(m => {
+        const k = 1 - m.life / m.max;
+        ctx.fillStyle = `rgba(30,0,0,${0.12 + 0.28 * k})`;
+        ctx.beginPath();
+        ctx.ellipse(m.x, m.y + 30, 18 + 34 * k, 8 + 12 * k, 0, 0, 6.2832);
+        ctx.fill();
+        const dist = (1 - k * k) * 560;
+        const dx = 0.447;
+        const dy = -0.894;
+        const px = m.x + dx * dist;
+        const py = m.y + dy * dist;
+        for (let i = 9; i >= 1; i--) {
+            ctx.fillStyle = `rgba(255,${Math.round(80 + i * 12)},40,${0.5 - i * 0.045})`;
+            ctx.beginPath();
+            ctx.arc(px + dx * i * 17, py + dy * i * 17, 19 - i * 1.6, 0, 6.2832);
+            ctx.fill();
+        }
+        ctx.fillStyle = 'rgba(255,120,30,0.28)';
+        ctx.beginPath();
+        ctx.arc(px, py, 34, 0, 6.2832);
+        ctx.fill();
+        ctx.fillStyle = '#5a2412';
+        ctx.strokeStyle = '#ff9a3a';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(px, py, 23, 0, 6.2832);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#ffe3a0';
+        ctx.beginPath();
+        ctx.arc(px - 5, py - 4, 9, 0, 6.2832);
+        ctx.fill();
+    });
+}
+
 function drawMechanics() {
     const mech = currentMap.mechanics || [];
 
-    // patron saldırısı: hedeflenen kulelere kırmızı çizgi ve halka
+    // patron saldırısı: hedeflenen kulenin üstünde çene açılır ve yaklaşır (sonra drawChomps kapatır)
     fx.furies.forEach(f => {
         const k = 1 - f.life / f.max;
         f.towers.forEach(t => {
             if (!world.towers.includes(t)) return;
-            ctx.strokeStyle = `rgba(255,50,80,${0.4 + 0.5 * Math.sin(animTime * 18) ** 2})`;
-            ctx.lineWidth = 3;
+            ctx.strokeStyle = `rgba(255,50,80,${0.25 + 0.3 * Math.sin(animTime * 18) ** 2})`;
+            ctx.lineWidth = 2;
             ctx.setLineDash([12, 9]);
             ctx.lineDashOffset = -animTime * 120;
             ctx.beginPath();
@@ -746,10 +1031,7 @@ function drawMechanics() {
             ctx.lineTo(t.x, t.y);
             ctx.stroke();
             ctx.setLineDash([]);
-            ctx.lineWidth = 4;
-            ctx.beginPath();
-            ctx.arc(t.x, t.y, 60 - 18 * k, 0, 6.2832);
-            ctx.stroke();
+            drawJaws(t.x, t.y + 6, 78 - 26 * k + Math.sin(animTime * 20) * 1.5 * k, Math.min(1, k * 3) * 0.92);
         });
     });
 
@@ -775,32 +1057,6 @@ function drawMechanics() {
 
     // lav patlaması uyarıları
     fx.warns.forEach(w => {
-        if (w.bomb) {
-            const kk = 1 - w.life / w.max;
-            const pu = 0.5 + 0.5 * Math.sin(animTime * 16);
-            ctx.fillStyle = `rgba(255,40,20,${0.22 + 0.2 * pu})`;
-            ctx.beginPath();
-            ctx.arc(w.x, w.y, w.r, 0, 6.2832);
-            ctx.fill();
-            ctx.strokeStyle = `rgba(255,${Math.round(60 + 120 * pu)},40,1)`;
-            ctx.lineWidth = 4;
-            ctx.beginPath();
-            ctx.arc(w.x, w.y, w.r, 0, 6.2832);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(w.x - w.r, w.y); ctx.lineTo(w.x + w.r, w.y);
-            ctx.moveTo(w.x, w.y - w.r); ctx.lineTo(w.x, w.y + w.r);
-            ctx.stroke();
-            ctx.textAlign = 'center';
-            ctx.font = 'bold 22px sans-serif';
-            ctx.lineWidth = 4;
-            ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-            ctx.strokeText('SAT! ' + Math.ceil(w.life), w.x, w.y - w.r - 12);
-            ctx.fillStyle = '#ffd9a8';
-            ctx.fillText('SAT! ' + Math.ceil(w.life), w.x, w.y - w.r - 12);
-            ctx.textAlign = 'left';
-            return;
-        }
         const k = 1 - w.life / w.max;
         const pulse = 0.5 + 0.5 * Math.sin(animTime * 14);
         ctx.fillStyle = `rgba(255,80,20,${0.14 + 0.16 * k + 0.08 * pulse})`;
@@ -863,34 +1119,6 @@ function drawMechanics() {
         ctx.textAlign = 'left';
     }
 
-    // karanlık: Fener Balığı ışığının dışı kararır
-    if (mech.some(m => m.type === 'darkness')) {
-        const lights = world.towers.filter(t => t.type === 'angler');
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, 0, W, H);
-        lights.forEach(t => {
-            const lr = world.lightRadius(t);
-            ctx.moveTo(t.x + lr, t.y);
-            ctx.arc(t.x, t.y, lr, 0, 6.2832, true);
-        });
-        ctx.clip('evenodd');
-        ctx.fillStyle = 'rgba(0,2,10,0.62)';
-        ctx.fillRect(0, 0, W, H);
-        ctx.restore();
-        // ışığın içi yalnızca çok hafif aydınlanır (kesik çizgi yok)
-        lights.forEach(t => {
-            const lr = world.lightRadius(t);
-            const g = ctx.createRadialGradient(t.x, t.y, lr * 0.2, t.x, t.y, lr);
-            g.addColorStop(0, 'rgba(255,240,180,0.05)');
-            g.addColorStop(1, 'rgba(255,240,180,0.02)');
-            ctx.fillStyle = g;
-            ctx.beginPath();
-            ctx.arc(t.x, t.y, lr, 0, 6.2832);
-            ctx.fill();
-        });
-    }
-
     // kar fırtınası
     if (world.stormActive) {
         ctx.fillStyle = 'rgba(205,228,248,0.20)';
@@ -909,7 +1137,21 @@ function drawMechanics() {
 }
 
 // ekranın üstünde kısa durum şeridi (kar fırtınası)
+function drawFpsCounter() {
+    if (!Settings.get().showFps) return;
+    ctx.save();
+    ctx.font = 'bold 15px monospace';
+    const txt = `${perf.fps} FPS · çizim ${perf.drawMs.toFixed(1)} ms`;
+    const w = ctx.measureText(txt).width + 16;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(W - w - 8, 8, w, 26);
+    ctx.fillStyle = perf.fps >= 110 ? '#7dffa8' : perf.fps >= 55 ? '#ffe27a' : '#ff8a8a';
+    ctx.fillText(txt, W - w, 27);
+    ctx.restore();
+}
+
 function drawHud() {
+    drawFpsCounter();
     drawBossBar();
     drawToasts();
     drawBlizzardStrip();
@@ -983,44 +1225,77 @@ function drawBlizzardStrip() {
     ctx.restore();
 }
 
+// Boş kule yerleri her karede yeniden çizilmez: her tür bir kez küçük bir tuvale çizilir (haritada 20+ yer var, doğrudan çizim
+// WebView'da kare süresini ikiye katlıyordu). Yalnızca üzerine gelinen yer canlı çizilir.
+const spotCache = new Map();
+
+function drawSpotShape(g, high, calm, full) {
+    const rgb = high ? '255,205,70' : '0,255,136';
+    g.fillStyle = `rgba(${rgb},${full ? 0.5 : 0.2 * calm})`;
+    g.strokeStyle = full ? `rgb(${rgb})` : `rgba(${rgb},${0.6 * calm})`;
+    g.lineWidth = full ? 3 : 2;
+    g.beginPath();
+    g.arc(0, 0, Core.BUILD_SPOT_RADIUS, 0, 6.2832);
+    g.fill();
+    g.stroke();
+    if (!full && calm >= 1) {
+        g.strokeStyle = `rgba(${rgb},0.4)`;
+        g.lineWidth = 1;
+        g.beginPath();
+        g.moveTo(-15, 0);
+        g.lineTo(15, 0);
+        g.moveTo(0, -15);
+        g.lineTo(0, 15);
+        g.stroke();
+    }
+    if (high) {
+        g.strokeStyle = `rgba(255,215,90,${0.5 * calm})`;
+        g.lineWidth = 2;
+        g.setLineDash([5, 7]);
+        g.beginPath();
+        g.arc(0, 0, Core.BUILD_SPOT_RADIUS + 6, 0, 6.2832);
+        g.stroke();
+        g.setLineDash([]);
+    }
+}
+
+function spotSprite(high, building) {
+    const key = `${high ? 1 : 0}${building ? 1 : 0}|${res}`;
+    let c = spotCache.get(key);
+    if (!c) {
+        const R = Core.BUILD_SPOT_RADIUS + 10;
+        c = document.createElement('canvas');
+        c.width = c.height = Math.ceil(R * 2 * res);
+        const g = c.getContext('2d');
+        g.scale(res, res);
+        g.translate(R, R);
+        drawSpotShape(g, high, building ? 1 : 0.45, false);
+        spotCache.set(key, c);
+    }
+    return c;
+}
+
 function drawSpots() {
     const pulse = 0.5 + 0.5 * Math.sin(animTime * 2.2);
+    // kule seçili ya da sürükleniyorsa yerler belirgin, değilse sönük (haritada çok yer var, göz yormasın)
+    const building = !!(draggedType || armedType);
+    const R = Core.BUILD_SPOT_RADIUS + 10;
+    ctx.globalAlpha = 0.88 + pulse * 0.12;
     for (const spot of world.spots) {
-        if (spot.tower) continue;
-        const hovered = hoverSpot === spot;
-        const high = spot.kind === 'high';
-        const rgb = high ? '255,205,70' : '0,255,136';
+        if (spot.tower || hoverSpot === spot) continue;
+        ctx.drawImage(spotSprite(spot.kind === 'high', building), spot.x - R, spot.y - R, R * 2, R * 2);
+    }
+    ctx.globalAlpha = 1;
 
-        ctx.fillStyle = `rgba(${rgb},${hovered ? 0.5 : 0.18 + pulse * 0.05})`;
-        ctx.strokeStyle = hovered ? `rgb(${rgb})` : `rgba(${rgb},0.6)`;
-        ctx.lineWidth = hovered ? 3 : 2;
-        ctx.beginPath();
-        ctx.arc(spot.x, spot.y, Core.BUILD_SPOT_RADIUS, 0, 6.2832);
-        ctx.fill();
-        ctx.stroke();
-
-        if (!hovered) {
-            ctx.strokeStyle = `rgba(${rgb},0.4)`;
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(spot.x - 15, spot.y);
-            ctx.lineTo(spot.x + 15, spot.y);
-            ctx.moveTo(spot.x, spot.y - 15);
-            ctx.lineTo(spot.x, spot.y + 15);
-            ctx.stroke();
-        }
-        if (high) {
-            ctx.strokeStyle = `rgba(255,215,90,${0.35 + pulse * 0.25})`;
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 7]);
-            ctx.beginPath();
-            ctx.arc(spot.x, spot.y, Core.BUILD_SPOT_RADIUS + 6, 0, 6.2832);
-            ctx.stroke();
-            ctx.setLineDash([]);
-        }
-        if (hovered && (draggedType || armedType)) {
+    const spot = hoverSpot;
+    if (spot && !spot.tower) {
+        ctx.save();
+        ctx.translate(spot.x, spot.y);
+        drawSpotShape(ctx, spot.kind === 'high', 1, true);
+        ctx.restore();
+        if (draggedType || armedType) {
             const type = draggedType || armedType;
-            const range = Core.TOWER_TYPES[type].range * (high ? Core.HIGH_GROUND_RANGE : 1);
+            const range = Core.TOWER_TYPES[type].range * (spot.kind === 'high' ? Core.HIGH_GROUND_RANGE : 1);
             ctx.strokeStyle = 'rgba(255,255,255,0.45)';
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -1070,7 +1345,9 @@ function drawEnemy(e) {
     ctx.translate(e.x, e.y + bob);
     if (currentMap.flipSprites && e.dirX > 0) ctx.scale(-1, 1);
     if (ready(img)) {
-        ctx.drawImage(img, -size / 2, -size / 2, size, size);
+        const spr = fit(img, e.size);
+        ctx.drawImage(spr, -size / 2, -size / 2, size, size);
+        if (darknessMech()) dimmed(spr, darkAmount(e, inLight(e.x, e.y)), -size / 2, -size / 2, size, size);
     } else {
         ctx.fillStyle = '#c33';
         ctx.beginPath();
@@ -1147,33 +1424,26 @@ function drawTower(t) {
     } else {
         const img = sprites.towers[t.type];
         const s = 100 * recoil;
-        if (ready(img)) ctx.drawImage(img, t.x - s / 2, t.y - s / 2 + idle, s, s);
-        else {
+        if (ready(img)) {
+            const spr = fit(img, 100);
+            ctx.drawImage(spr, t.x - s / 2, t.y - s / 2 + idle, s, s);
+            if (t.dark || t.darkAmt > 0.03) dimmed(spr, darkAmount(t, !t.dark), t.x - s / 2, t.y - s / 2 + idle, s, s);
+        } else {
             ctx.fillStyle = 'blue';
             ctx.fillRect(t.x - 25, t.y - 25, 50, 50);
         }
     }
 
-    // lav bombasının hedefi olan kule
-    const bombed = fx.warns.find(w => w.bomb && w.towerId === t.id);
-    if (bombed) {
-        const k = 0.5 + 0.5 * Math.sin(animTime * 16);
-        ctx.strokeStyle = `rgba(255,70,30,${0.6 + 0.4 * k})`;
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.arc(t.x, t.y, 52 + 4 * k, 0, 6.2832);
-        ctx.stroke();
-    }
-
-    // susturulmuş (lav) ya da yutulmuş (patron) kule: kilit simgesi
-    if (t.stun > 0 || t.devoured) {
-        ctx.fillStyle = t.devoured ? 'rgba(40,0,10,0.50)' : 'rgba(30,6,0,0.40)';
+    // lav ile susturulmuş kule: kilit simgesi
+    if (t.stun > 0) {
+        ctx.fillStyle = 'rgba(30,6,0,0.40)';
         ctx.beginPath();
         ctx.arc(t.x, t.y, 46, 0, 6.2832);
         ctx.fill();
-        const frac = t.devoured ? 1 : Math.max(0, t.stun / (t.stunMax || 5));
-        drawLock(t.x, t.y - 66, t.devoured ? '#e0304e' : '#ff9a3a', frac, t.devoured ? null : Math.ceil(t.stun));
+        drawLock(t.x, t.y - 66, '#ff9a3a', Math.max(0, t.stun / (t.stunMax || 5)), Math.ceil(t.stun));
     }
+
+    if (t.level > 1) drawLevelBar(t.x, t.y + 52, t.level);
 
     if (selected) {
         ctx.beginPath();
@@ -1185,6 +1455,25 @@ function drawTower(t) {
 }
 
 // Kılıç balığı: kaide sabit, balık hedefe doğru yumuşakça döner ve ateş edince geri tepme yapar
+// kulenin seviyesi: ilk dilim temel renk, yükseltilen her dilim ek renk
+const LEVEL_BASE = '#35c8ff';
+const LEVEL_UP = '#ffc83d';
+
+function drawLevelBar(x, y, level) {
+    const w = 9;
+    const gap = 2;
+    const total = Core.MAX_LEVEL * w + (Core.MAX_LEVEL - 1) * gap;
+    const x0 = x - total / 2;
+    ctx.save();
+    ctx.fillStyle = 'rgba(4,10,18,0.7)';
+    ctx.fillRect(x0 - 2, y - 2, total + 4, 8);
+    for (let i = 0; i < Core.MAX_LEVEL; i++) {
+        ctx.fillStyle = i >= level ? 'rgba(255,255,255,0.14)' : (i === 0 ? LEVEL_BASE : LEVEL_UP);
+        ctx.fillRect(x0 + i * (w + gap), y, w, 4);
+    }
+    ctx.restore();
+}
+
 // kilit simgesi: arkada kalan süreyi gösteren halka ve altında saniye
 function drawLock(x, y, color, frac, secs) {
     ctx.save();
@@ -1244,11 +1533,13 @@ function drawPuffer(t, idle, since) {
     const barrel = sprites.towers.puffer_barrel;
     if (!ready(body) || !ready(barrel)) {
         const icon = sprites.towers.puffer;
-        if (ready(icon)) ctx.drawImage(icon, t.x - 50, t.y - 50 + idle, 100, 100);
+        if (ready(icon)) ctx.drawImage(fit(icon, 100), t.x - 50, t.y - 50 + idle, 100, 100);
         return;
     }
     const s = since < 0.16 ? 1 + (0.16 - since) * 0.5 : 1;
-    ctx.drawImage(body, t.x - 50 * s, t.y - 50 * s + idle, 100 * s, 100 * s);
+    const bodyFit = fit(body, 100);
+    ctx.drawImage(bodyFit, t.x - 50 * s, t.y - 50 * s + idle, 100 * s, 100 * s);
+    if (t.dark || t.darkAmt > 0.03) dimmed(bodyFit, darkAmount(t, !t.dark), t.x - 50 * s, t.y - 50 * s + idle, 100 * s, 100 * s);
 
     aimTower(t, 9);
     const recoil = since < 0.25 ? Math.sin((since / 0.25) * Math.PI) * 6 : 0;
@@ -1258,7 +1549,7 @@ function drawPuffer(t, idle, since) {
     ctx.translate(px, py);
     ctx.rotate(t.aim);
     if (Math.cos(t.aim) < 0) ctx.scale(1, -1);
-    ctx.drawImage(barrel, -70, -70, 140, 140);
+    ctx.drawImage(fit(barrel, 140), -70, -70, 140, 140);
     ctx.restore();
 }
 
@@ -1267,10 +1558,12 @@ function drawSwordfish(t, idle, since) {
     const fish = sprites.towers.swordfish_fish;
     if (!ready(base) || !ready(fish)) {
         const icon = sprites.towers.swordfish;
-        if (ready(icon)) ctx.drawImage(icon, t.x - 50, t.y - 50 + idle, 100, 100);
+        if (ready(icon)) ctx.drawImage(fit(icon, 100), t.x - 50, t.y - 50 + idle, 100, 100);
         return;
     }
-    ctx.drawImage(base, t.x - 50, t.y - 50, 100, 100);
+    const baseFit = fit(base, 100);
+    ctx.drawImage(baseFit, t.x - 50, t.y - 50, 100, 100);
+    if (t.dark || t.darkAmt > 0.03) dimmed(baseFit, darkAmount(t, !t.dark), t.x - 50, t.y - 50, 100, 100);
 
     aimTower(t, 12);
 
@@ -1281,7 +1574,7 @@ function drawSwordfish(t, idle, since) {
     ctx.translate(px, py);
     ctx.rotate(t.aim);
     if (Math.cos(t.aim) < 0) ctx.scale(1, -1);     // sola bakarken baş aşağı dönmesin
-    ctx.drawImage(fish, -60, -60, 120, 120);
+    ctx.drawImage(fit(fish, 120), -60, -60, 120, 120);
     ctx.restore();
 
     // ateş anında kılıç ucunda parlama
@@ -1310,7 +1603,7 @@ function drawProjectile(p) {
         ctx.translate(p.x, p.y - lift);
         ctx.rotate(animTime * 6);
         const sz = 30 + Math.sin(Math.PI * f) * 8;
-        if (ready(img)) ctx.drawImage(img, -sz / 2, -sz / 2, sz, sz);
+        if (ready(img)) ctx.drawImage(fit(img, 40), -sz / 2, -sz / 2, sz, sz);
         else {
             ctx.fillStyle = '#f5a742';
             ctx.beginPath();
@@ -1330,7 +1623,7 @@ function drawProjectile(p) {
         g.addColorStop(1, 'rgba(230,252,255,0.95)');
         ctx.fillStyle = g;
         ctx.fillRect(-46, -2.5, 56, 5);
-        if (ready(img)) ctx.drawImage(img, -22, -22, 56, 56);
+        if (ready(img)) ctx.drawImage(fit(img, 56), -22, -22, 56, 56);
         ctx.restore();
         return;
     }
@@ -1339,9 +1632,10 @@ function drawProjectile(p) {
         ctx.translate(p.x, p.y);
         ctx.rotate(animTime * 9);
         ctx.globalAlpha = 0.28;
-        ctx.drawImage(img, -12 - Math.cos(p.angle) * 12, -12 - Math.sin(p.angle) * 12, 24, 24);
+        const small = fit(img, 30);
+        ctx.drawImage(small, -12 - Math.cos(p.angle) * 12, -12 - Math.sin(p.angle) * 12, 24, 24);
         ctx.globalAlpha = 1;
-        ctx.drawImage(img, -15, -15, 30, 30);
+        ctx.drawImage(small, -15, -15, 30, 30);
         ctx.restore();
     } else {
         ctx.fillStyle = 'yellow';
@@ -1365,7 +1659,7 @@ function drawFx() {
         const radius = r.r + (r.max - r.r) * k;
         ctx.globalAlpha = 1 - k;
         if (r.aoeImg && ready(sprites.projectiles.eel)) {
-            ctx.drawImage(sprites.projectiles.eel, r.x - radius, r.y - radius, radius * 2, radius * 2);
+            ctx.drawImage(fit(sprites.projectiles.eel, 130), r.x - radius, r.y - radius, radius * 2, radius * 2);
         }
         if (r.fill) {
             ctx.fillStyle = `rgba(${r.color},0.22)`;
@@ -1590,24 +1884,65 @@ document.addEventListener('keydown', (e) => {
 
 // ------------------------------------------------------------------ kule penceresi
 
-function statLine(t) {
-    let line = `Hasar: ${t.dmg}   Menzil: ${t.range}   Atış Aralığı: ${t.rate.toFixed(2)} sn`;
-    if (t.aoe) line += `   Alan: ${t.aoe}`;
-    if (t.dark) line += '\nKaranlıkta: menzil kısaldı. Fener Balığı\'nın ışığına al.';
-    return line;
+// Çubukların uzunluğu, tüm kule türlerinin 5. seviyedeki en yüksek değerine göre ölçeklenir:
+// böylece farklı kuleler birbiriyle karşılaştırılabilir.
+let statMaxCache = null;
+function statMax() {
+    if (statMaxCache) return statMaxCache;
+    const fake = { map: {}, rangeMul: 1, darkMul: 1 };
+    const m = { dmg: 1, range: 1, speed: 1, aoe: 1 };
+    Object.keys(Core.TOWER_TYPES).forEach(type => {
+        const t = new Core.Tower(fake, type, { x: 0, y: 0, kind: 'high' }, 0);
+        t.level = Core.MAX_LEVEL;
+        t.derive();
+        m.dmg = Math.max(m.dmg, t.dmg * t.shots);
+        m.range = Math.max(m.range, t.range);
+        m.speed = Math.max(m.speed, 1 / t.rate);
+        m.aoe = Math.max(m.aoe, t.aoe);
+    });
+    statMaxCache = m;
+    return m;
+}
+
+function statBarHtml(label, cur, next, max, tip) {
+    const base = Math.min(100, (cur / max) * 100);
+    const gain = next != null ? Math.max(0, Math.min(100 - base, ((next - cur) / max) * 100)) : 0;
+    return `<div class="stat-row" title="${tip}"><span class="stat-name">${label}</span>` +
+        `<div class="stat-bar"><i class="base" style="width:${base.toFixed(1)}%"></i><i class="gain" style="width:${gain.toFixed(1)}%"></i></div></div>`;
+}
+
+function levelBarHtml(level, withNext) {
+    let h = '<div class="stat-row"><span class="stat-name">Seviye</span><div class="lv-bar">';
+    for (let i = 1; i <= Core.MAX_LEVEL; i++) {
+        const cls = i > level ? (withNext && i === level + 1 ? 'next' : 'off') : (i === 1 ? 'base' : 'up');
+        h += `<i class="${cls}"></i>`;
+    }
+    return h + '</div></div>';
+}
+
+function towerBarsHtml(t) {
+    const mx = statMax();
+    let n = null;
+    if (t.level < Core.MAX_LEVEL) {
+        n = Object.assign(Object.create(Core.Tower.prototype), t, { level: t.level + 1 });
+        n.derive();
+    }
+    const val = (a, b, f) => (b != null && b !== a ? `${f(a)} → ${f(b)}` : f(a));
+    const dps = x => x.dmg * x.shots;
+    let h = levelBarHtml(t.level, !!n);
+    h += statBarHtml('Hasar', dps(t), n ? dps(n) : null, mx.dmg, `Hasar: ${val(dps(t), n && dps(n), v => v)}`);
+    h += statBarHtml('Menzil', t.range, n ? n.range : null, mx.range, `Menzil: ${val(t.range, n && n.range, v => v)}`);
+    h += statBarHtml('Atış hızı', 1 / t.rate, n ? 1 / n.rate : null, mx.speed, `Atış aralığı: ${val(t.rate, n && n.rate, v => v.toFixed(2) + ' sn')}`);
+    if (t.aoe) h += statBarHtml('Alan', t.aoe, n ? n.aoe : null, mx.aoe, `Alan yarıçapı: ${val(t.aoe, n && n.aoe, v => v)}`);
+    if (t.dark) h += '<p class="stat-warn">Karanlıkta: menzil kısaldı. Fener Balığı\'nın ışığına al.</p>';
+    return h;
 }
 
 function openTowerModal(tower) {
     selectedTower = tower;
-    document.getElementById('towerModalName').innerText = `${tower.name} (Seviye ${tower.level}/${Core.MAX_LEVEL})`;
+    document.getElementById('towerModalName').innerText = tower.name;
 
-    let stats = statLine(tower);
-    if (tower.level < Core.MAX_LEVEL) {
-        const next = Object.assign(Object.create(Core.Tower.prototype), tower, { level: tower.level + 1 });
-        next.derive();
-        stats += `\nSonraki: Hasar ${next.dmg} · Menzil ${next.range} · ${next.rate.toFixed(2)} sn`;
-    }
-    document.getElementById('towerModalStats').innerText = stats;
+    document.getElementById('towerModalStats').innerHTML = towerBarsHtml(tower);
     document.getElementById('towerModalPerk').innerText = tower.perk();
     document.getElementById('modeBtn').innerText = 'Hedef: ' + MODE_LABEL[tower.mode];
 
@@ -1663,7 +1998,18 @@ function renderTowerList() {
     world.towers.forEach(t => {
         const row = document.createElement('div');
         row.className = 'tower-list-row' + (selectedTower === t ? ' selected' : '');
-        row.innerText = `${t.name} · Lv${t.level}/${Core.MAX_LEVEL} (ID${pad3(t.id)})`;
+        const name = document.createElement('span');
+        name.className = 'row-name';
+        name.innerText = t.name;
+        const bar = document.createElement('span');
+        bar.className = 'lv-bar mini';
+        for (let i = 1; i <= Core.MAX_LEVEL; i++) {
+            const seg = document.createElement('i');
+            seg.className = i > t.level ? 'off' : (i === 1 ? 'base' : 'up');
+            bar.appendChild(seg);
+        }
+        row.appendChild(name);
+        row.appendChild(bar);
         row.onclick = () => openTowerModal(t);
         container.appendChild(row);
     });
@@ -1702,7 +2048,7 @@ function updateUI() {
         btn.disabled = !can;
     }
 
-    const key = world.wave + ':' + world.towers.length;
+    const key = world.wave + ':' + world.towers.length + ':' + JSON.stringify(world.adapt);
     if (uiCache.preview !== key) {
         uiCache.preview = key;
         renderWavePreview();
@@ -1723,6 +2069,10 @@ function updateUI() {
     }
 }
 
+function towerTypeName(type) {
+    return (currentMap.towerNames && currentMap.towerNames[type]) || Core.TOWER_TYPES[type].name;
+}
+
 function renderWavePreview() {
     const box = document.getElementById('wavePreview');
     const next = world.previewNext();
@@ -1735,7 +2085,10 @@ function renderWavePreview() {
         const name = typeName(type);
         return `<span class="chip" title="${name}"><img src="${img}" alt="">×${count}</span>`;
     }).join('');
-    box.innerHTML = `<div class="preview-title">Sıradaki: Dalga ${next.wave}</div><div class="chips">${chips}</div>`;
+    const advice = world.waveAdvice(next.wave).map(l => `<div class="advice">${l}</div>`).join('');
+    const adapt = Object.entries(world.adapt).map(([t, r]) => `${towerTypeName(t)} −%${Math.round(r * 100)}`);
+    const adaptHtml = adapt.length ? `<div class="adapt-line" title="Bir kuleye çok yaslanırsan düşmanlar ona alışır">Alışma: ${adapt.join(', ')}</div>` : '';
+    box.innerHTML = `<div class="preview-title">Sıradaki: Dalga ${next.wave}</div><div class="chips">${chips}</div>${advice}${adaptHtml}`;
 }
 
 function togglePause() {
@@ -1746,7 +2099,8 @@ function togglePause() {
 
 function toggleSpeed() {
     if (!world) return;
-    speedMultiplier = speedMultiplier === 1 ? 2 : 1;
+    const order = [1, 2, 0.5];
+    speedMultiplier = order[(order.indexOf(speedMultiplier) + 1) % order.length];
     document.getElementById('speedButton').innerText = `HIZ: ${speedMultiplier}x`;
 }
 
@@ -1776,7 +2130,7 @@ function backToMenuFromMapSelect() {
 
 function stopGame() {
     if (world) logEnd();
-    cancelAnimationFrame(rafId);
+    stopLoop();
     world = null;
     document.getElementById('towerModal').classList.add('hidden');
     document.getElementById('gameScreen').classList.add('hidden');

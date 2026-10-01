@@ -16,17 +16,20 @@
             <p><b>Amaç:</b> Düşmanlar yolun başından girip sonuna ulaşırsa üssün canı azalır. Tüm dalgaları bitirmeden canın tükenmesin.</p>
             <p><b>Kule kurmak:</b> Sağ paneldeki bir kuleyi haritadaki <b>yeşil alana</b> sürükle, ya da kuleye tıklayıp sonra alana tıkla. Altın halkalı yerler yüksek zemindir (+%20 menzil).</p>
             <p><b>Kuleyi geliştirmek:</b> Kuleye tıkla; yükselt, sat ya da hedef önceliğini değiştir (İlk / Son / En Güçlü / En Yakın). Kuleler 5 seviyedir, 3. ve 5. seviyede yeni yetenek açılır.</p>
-            <p><b>Fiyatlar:</b> Aynı türden her yeni kule bir öncekinden %12 pahalıdır, o yüzden tek tür kuleyle yığılmak işe yaramaz. Türleri karıştır.</p>
-            <p><b>Patronlar:</b> Belirli dalgalarda güçlü bir patron gelir. Patron zaman zaman yakınındaki bir kuleyi <b>yutar</b>; yutulan kule patron ölene kadar ateş edemez.</p>
-            <p><b>Harita kuralları:</b> Her haritanın kendine özel bir kuralı vardır (haritanın başında ve sağ üst kutuda yazar). Lav kuleye düşecekse uyarı çıkar, kuleyi satmayı unutma.</p>
-            <p class="help-keys">Kısayollar: Boşluk dalga başlat · P duraklat · F hız · 1-6 kule seç · F11 tam ekran · Esc geri</p>
+            <p><b>Strateji:</b> Rastgele kule dizmek kazandırmaz. Sağ üstteki kutu sıradaki dalganın içeriğini ve hangi kulelerin işe yarayacağını söyler: <b>zırhlılara</b> Ahtapot çok az hasar verir (zırh deler: Yılan, Kılıç, Fener Balığı), <b>uçanları</b> Yılan ve Balon Balığı vuramaz, <b>sürüyü</b> alan hasarı eritir, patronlara Kılıç Balığı %50 fazla vurur.</p>
+            <p><b>Eşleşme:</b> Deniz Anası'nın yavaşlattığı düşman her kuleden %20 fazla hasar alır. Uzak ve yüksek (altın halkalı) yerler yalnızca uzun menzilli kulelere uyar.</p>
+            <p><b>Alışma:</b> Hasarın yarısından fazlasını tek bir türe yaptırırsan düşmanlar ona alışır ve o kuleden %30'a kadar az hasar alır. Kutuda turuncu uyarı çıkar; türleri karıştır.</p>
+            <p><b>Fiyatlar:</b> Aynı türden her yeni kule bir öncekinden %12 pahalıdır. Yükseltme çoğu zaman yeni kuleden verimlidir; çubuklar mevcut gücü (mavi) ve yükseltmeyle gelecek kazancı (sarı) gösterir.</p>
+            <p><b>Patronlar:</b> Belirli dalgalarda güçlü bir patron gelir. Patron zaman zaman en yüksek seviyeli yakın kuleni önce çenesini açarak hedef alır, sonra <b>yer</b>: kule yok olur, para iadesi yoktur. Patronu menzil dışında yavaşlatıp önce öldürmek gerekir.</p>
+            <p><b>Harita kuralları:</b> Her haritanın kendine özel bir kuralı vardır (haritanın başında ve sağ üst kutuda yazar). Volkanda gökten düşen lav kayası uyarısız bir kuleyi yok edebilir.</p>
+            <p class="help-keys">Kısayollar: Boşluk dalga başlat · P duraklat · F hız (1x, 2x, 0,5x) · 1-6 kule seç · F11 tam ekran · Esc geri</p>
         </div>
         <button class="close-btn" onclick="toggleInfo()">ANLAŞILDI</button>
     </div>
 
     <div id="towerModal" class="hidden">
         <h3 id="towerModalName" style="color:#00ff88; font-size:1.6em; margin-bottom:12px;">Kule</h3>
-        <p id="towerModalStats" style="font-size:1.05em; color:#ddd; margin-bottom:6px;"></p>
+        <div id="towerModalStats"></div>
         <p id="towerModalPerk" style="font-size:0.9em; color:#9ab; margin-bottom:14px;"></p>
         <button class="btn" id="modeBtn" onclick="cycleTargetMode()"
             style="background:#26384a; box-shadow:none; font-size:1em; padding:10px; margin-bottom:10px;">Hedef: İlk</button>
@@ -79,6 +82,17 @@
                         <option value="low">Düşük (yavaş bilgisayarlar için)</option>
                     </select>
                 </label>
+                <label class="set-row">Hedef FPS
+                    <select id="setFps">
+                        <option value="60">60</option>
+                        <option value="120">120</option>
+                        <option value="144">144</option>
+                        <option value="240">240</option>
+                        <option value="360">360</option>
+                        <option value="0">Sınırsız</option>
+                    </select>
+                </label>
+                <label class="set-row"><span>FPS sayacını göster</span><input type="checkbox" id="setShowFps"></label>
                 <label class="set-row"><span>Ortam efektleri <small>(kabarcık, ışık huzmesi, parçacıklar)</small></span><input type="checkbox" id="setEffects"></label>
                 <label class="set-row"><span>Kazanç ve hasar yazıları</span><input type="checkbox" id="setFloaters"></label>
             </div>
@@ -101,7 +115,6 @@
     <div id="gameScreen" class="screen hidden">
         <div class="game-layout">
             <div class="canvas-container" id="canvasContainer">
-                <div id="canvasBackdrop"></div>
                 <canvas id="gameCanvas" width="1350" height="900"></canvas>
                 <button id="backToMapSelectBtn" onclick="quitToMapSelect()" title="Harita Seçimine Dön (Esc)">← Haritalar</button>
                 <button id="settingsBtn" onclick="openSettings()" title="Ayarlar">⚙ Ayarlar</button>
