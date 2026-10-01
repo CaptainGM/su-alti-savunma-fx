@@ -1,6 +1,7 @@
 // Harita verileri. Yeni harita eklemek için diziye bir nesne eklemek yeterli.
 //
 //   thumb        : harita kartındaki küçük önizleme
+//   tint         : tuvalin kenarlarındaki boşluğun rengi (otomatik, arka plan resminin koyu ortalaması)
 //   bg           : arka plan resmi. Tuval haritanın 'size' değeriyle (varsayılan 1350x900) eşleşmeli
 //   paths        : yol(lar). Her yol kontrol noktası listesidir, düşmanlar ilk noktadan doğar, son noktada üsse varır.
 //                  Birden fazla yol verilirse düşmanlar sırayla bunlara dağılır.
@@ -24,7 +25,7 @@
             name: 'Mercan Kanalı',
             desc: 'Sualtı · Klasik S dönüşü',
             stars: 1,
-            hpScale: 0.9,
+            hpScale: 0.96,
             speedScale: 1,
             startMoney: 200,
             waves: 10,
@@ -35,6 +36,7 @@
             flipSprites: true,
             bg: 'assets/game_bg.jpg',
             thumb: 'assets/maps/thumbs/mercan.jpg',
+            tint: '#153b43',
             ambient: { motes: 28, bubbles: 7, moteColor: '230,255,255' },
             paths: [
                 [
@@ -52,6 +54,8 @@
                 { x: 307, y: 750 }, { x: 736, y: 700 }, { x: 491, y: 850 },
                 { x: 752, y: 74 }, { x: 1221, y: 210 }, { x: 1091, y: 509 },
                 { x: 966, y: 585 }, { x: 477, y: 425 }, { x: 864, y: 756 },
+                { x: 295, y: 249, kind: 'high' }, { x: 115, y: 411, kind: 'high' }, { x: 430, y: 78, kind: 'high' },
+                { x: 79, y: 771, kind: 'high' },
             ],
         },
         {
@@ -61,7 +65,7 @@
             name: 'Yosun Ormanı',
             desc: 'Sualtı · Uzun, kıvrımlı yosun yolu',
             stars: 2,
-            hpScale: 1.9,
+            hpScale: 1.71,
             speedScale: 1,
             startMoney: 200,
             waves: 10,
@@ -72,6 +76,7 @@
             flipSprites: true,
             bg: 'assets/maps/yosun.jpg',
             thumb: 'assets/maps/thumbs/yosun.jpg',
+            tint: '#223b30',
             ambient: { motes: 30, bubbles: 10, moteColor: '230,255,230', caustics: 0.10, rays: { count: 5, color: '210,255,200', alpha: 0.09 }, vignette: 0.16 },
             // geo:begin yosun
             paths: [
@@ -88,6 +93,10 @@
                 { x: 798, y: 290 }, { x: 945, y: 302 }, { x: 1092, y: 314, kind: 'high' },
                 { x: 297, y: 578 }, { x: 444, y: 566 }, { x: 606, y: 578 },
                 { x: 798, y: 542 }, { x: 945, y: 566 }, { x: 960, y: 782, kind: 'high' },
+                { x: 1276, y: 645 }, { x: 70, y: 816, kind: 'high' }, { x: 1276, y: 87, kind: 'high' },
+                { x: 439, y: 825 }, { x: 700, y: 816 }, { x: 70, y: 492 },
+                { x: 997, y: 78 }, { x: 250, y: 78 }, { x: 1276, y: 429 },
+                { x: 1123, y: 546 }, { x: 250, y: 798 }, { x: 133, y: 654 },
             ],
             // geo:end yosun
         },
@@ -98,7 +107,7 @@
             name: 'Mangrov Deltası',
             desc: 'Bataklık · Üçe ayrılan nehir',
             stars: 2,
-            hpScale: 0.75,
+            hpScale: 0.67,
             speedScale: 1.0,
             startMoney: 220,
             waves: 10,
@@ -109,6 +118,7 @@
             flipSprites: true,
             bg: 'assets/maps/mangrov.jpg',
             thumb: 'assets/maps/thumbs/mangrov.jpg',
+            tint: '#1f2614',
             ambient: { motes: 40, bubbles: 4, moteColor: '232,255,122', caustics: 0.06, vignette: 0.28 },
             // geo:begin mangrov
             paths: [
@@ -135,6 +145,10 @@
                 { x: 806, y: 386 }, { x: 1094, y: 746 }, { x: 530, y: 434 },
                 { x: 878, y: 566 }, { x: 842, y: 830 }, { x: 278, y: 290 },
                 { x: 158, y: 242, kind: 'high' }, { x: 482, y: 122 }, { x: 1160, y: 560, kind: 'high' },
+                { x: 97, y: 771, kind: 'high' }, { x: 1186, y: 87, kind: 'high' }, { x: 853, y: 78, kind: 'high' },
+                { x: 376, y: 780 }, { x: 232, y: 546 }, { x: 997, y: 258 },
+                { x: 1276, y: 330, kind: 'high' }, { x: 277, y: 78 }, { x: 673, y: 195 },
+                { x: 619, y: 825 }, { x: 1276, y: 825, kind: 'high' }, { x: 1114, y: 393 },
             ],
             // geo:end mangrov
         },
@@ -145,7 +159,7 @@
             name: 'Batık Gemi Mezarlığı',
             desc: 'Sualtı · İki girişli tahta iskele',
             stars: 3,
-            hpScale: 1.05,
+            hpScale: 0.9,
             speedScale: 1,
             startMoney: 220,
             waves: 10,
@@ -156,6 +170,7 @@
             flipSprites: true,
             bg: 'assets/maps/batik.jpg',
             thumb: 'assets/maps/thumbs/batik.jpg',
+            tint: '#3b4334',
             ambient: { motes: 18, bubbles: 8, moteColor: '255,250,230', caustics: 0.16, rays: { count: 4, color: '255,250,210', alpha: 0.10 }, vignette: 0.12 },
             // geo:begin batik
             paths: [
@@ -175,6 +190,10 @@
                 { x: 680, y: 374 }, { x: 724, y: 830 }, { x: 518, y: 506 },
                 { x: 488, y: 626 }, { x: 901, y: 710 }, { x: 592, y: 782 },
                 { x: 886, y: 482 }, { x: 1033, y: 758, kind: 'high' }, { x: 827, y: 314 },
+                { x: 475, y: 87, kind: 'high' }, { x: 205, y: 501, kind: 'high' }, { x: 295, y: 825, kind: 'high' },
+                { x: 1132, y: 528, kind: 'high' }, { x: 952, y: 78 }, { x: 1276, y: 726, kind: 'high' },
+                { x: 727, y: 78, kind: 'high' }, { x: 358, y: 411 }, { x: 277, y: 78 },
+                { x: 547, y: 249 },
             ],
             treasure: { x: 1111, y: 852 },
             // geo:end batik
@@ -186,7 +205,7 @@
             name: 'Atlantis Harabeleri',
             desc: 'Sualtı · Mermer basamaklar',
             stars: 3,
-            hpScale: 2.1,
+            hpScale: 1.95,
             speedScale: 1.0,
             startMoney: 220,
             waves: 10,
@@ -197,6 +216,7 @@
             flipSprites: true,
             bg: 'assets/maps/atlantis.jpg',
             thumb: 'assets/maps/thumbs/atlantis.jpg',
+            tint: '#2b4542',
             ambient: { motes: 26, bubbles: 8, moteColor: '255,232,150', caustics: 0.14, rays: { count: 5, color: '255,236,170', alpha: 0.11 }, vignette: 0.2 },
             // geo:begin atlantis
             paths: [
@@ -213,6 +233,10 @@
                 { x: 746, y: 446 }, { x: 1250, y: 686, kind: 'high' }, { x: 410, y: 230 },
                 { x: 818, y: 650 }, { x: 566, y: 518 }, { x: 902, y: 746 },
                 { x: 242, y: 302 }, { x: 878, y: 470 }, { x: 542, y: 254 },
+                { x: 1177, y: 285, kind: 'high' }, { x: 241, y: 672, kind: 'high' }, { x: 862, y: 87, kind: 'high' },
+                { x: 493, y: 780, kind: 'high' }, { x: 655, y: 708 }, { x: 97, y: 465, kind: 'high' },
+                { x: 1069, y: 465 }, { x: 313, y: 465 }, { x: 502, y: 78, kind: 'high' },
+                { x: 763, y: 258 },
             ],
             guardians: [{ x: 246, y: 198 }, { x: 582, y: 414 }, { x: 918, y: 642 }],
             // geo:end atlantis
@@ -224,7 +248,7 @@
             name: 'Buz Koyu',
             desc: 'Kutup · Çarpı biçimli kanal',
             stars: 3,
-            hpScale: 0.4,
+            hpScale: 0.55,
             speedScale: 1.0,
             startMoney: 220,
             waves: 10,
@@ -235,6 +259,7 @@
             flipSprites: true,
             bg: 'assets/maps/buz.jpg',
             thumb: 'assets/maps/thumbs/buz.jpg',
+            tint: '#46535b',
             ambient: { motes: 90, moteColor: '240,250,255', moteDir: 'down', moteSize: 1.3, bubbles: 0, caustics: 0.10, vignette: 0.24, vignetteColor: '8,28,58' },
             // geo:begin buz
             paths: [
@@ -252,7 +277,11 @@
                 { x: 675, y: 556 }, { x: 560, y: 625 }, { x: 790, y: 625 },
                 { x: 242, y: 290 }, { x: 1108, y: 290 }, { x: 170, y: 62, kind: 'high' },
                 { x: 1180, y: 62, kind: 'high' }, { x: 340, y: 800 }, { x: 1010, y: 800 },
-                { x: 182, y: 746, kind: 'high' }, { x: 1168, y: 746, kind: 'high' },
+                { x: 182, y: 746, kind: 'high' }, { x: 1168, y: 746, kind: 'high' }, { x: 862, y: 87, kind: 'high' },
+                { x: 484, y: 114, kind: 'high' }, { x: 268, y: 528 }, { x: 1114, y: 519, kind: 'high' },
+                { x: 1276, y: 222 }, { x: 520, y: 807, kind: 'high' }, { x: 70, y: 429, kind: 'high' },
+                { x: 826, y: 258 }, { x: 70, y: 222 }, { x: 826, y: 807, kind: 'high' },
+                { x: 646, y: 177, kind: 'high' },
             ],
             // geo:end buz
         },
@@ -263,7 +292,7 @@
             name: 'Girdap',
             desc: 'Sualtı · Spiral akıntı, uzun yol',
             stars: 4,
-            hpScale: 1.8,
+            hpScale: 1.58,
             speedScale: 1.12,
             startMoney: 200,
             waves: 10,
@@ -274,6 +303,7 @@
             flipSprites: true,
             bg: 'assets/maps/girdap.jpg',
             thumb: 'assets/maps/thumbs/girdap.jpg',
+            tint: '#243d4d',
             ambient: { motes: 22, bubbles: 14, moteColor: '210,240,255', caustics: 0.07, vignette: 0.22 },
             // geo:begin girdap
             paths: [
@@ -292,18 +322,21 @@
                 { x: 930, y: 182 }, { x: 768, y: 698 }, { x: 415, y: 518 },
                 { x: 768, y: 350 }, { x: 1033, y: 362 }, { x: 930, y: 638 },
                 { x: 827, y: 470 }, { x: 798, y: 110 }, { x: 1195, y: 182, kind: 'high' },
-                { x: 1254, y: 422, kind: 'high' }, { x: 1136, y: 698, kind: 'high' },
+                { x: 1254, y: 422, kind: 'high' }, { x: 1136, y: 698, kind: 'high' }, { x: 70, y: 825, kind: 'high' },
+                { x: 70, y: 132, kind: 'high' }, { x: 88, y: 465, kind: 'high' }, { x: 520, y: 78 },
+                { x: 340, y: 825 }, { x: 232, y: 294 }, { x: 205, y: 654 },
+                { x: 358, y: 159 }, { x: 988, y: 825 },
             ],
             // geo:end girdap
         },
         {
             id: 'volkan',
-            rule: 'Lav patlamaları: düşmanları yakar, yakındaki kuleleri 5 sn susturur. Bazen lav doğrudan bir kuleye düşer ve onu yok eder, uyarı gelince kuleyi sat!',
-            mechanics: [{ type: 'eruption', interval: 16, first: 11, warn: 2.0, radius: 105, count: 2, pct: 0.22, stun: 5, bombChance: 0.3 }],
+            rule: 'Lav patlamaları: düşmanları yakar, yakındaki kuleleri 5 sn susturur. Zaman zaman gökten bir lav kayası düşüp rastgele bir kuleyi yok eder',
+            mechanics: [{ type: 'eruption', interval: 16, first: 11, warn: 2.0, radius: 105, count: 2, pct: 0.22, stun: 5, bombChance: 0.14, fall: 0.8 }],
             name: 'Volkanik Bacalar',
             desc: 'Yanardağ · Üç sütunlu zigzag',
             stars: 4,
-            hpScale: 1.6,
+            hpScale: 1.3,
             speedScale: 1.0,
             startMoney: 230,
             waves: 10,
@@ -314,6 +347,7 @@
             flipSprites: true,
             bg: 'assets/maps/volkan.jpg',
             thumb: 'assets/maps/thumbs/volkan.jpg',
+            tint: '#1e1311',
             ambient: { motes: 70, moteColor: '255,150,70', bubbles: 0, vignette: 0.42, vignetteColor: '40,6,0' },
             // geo:begin volkan
             paths: [
@@ -331,6 +365,11 @@
                 { x: 1250, y: 170, kind: 'high' }, { x: 410, y: 350 }, { x: 986, y: 470, kind: 'high' },
                 { x: 410, y: 506 }, { x: 962, y: 338 }, { x: 698, y: 386 },
                 { x: 698, y: 530 }, { x: 698, y: 662 }, { x: 962, y: 206 },
+                { x: 70, y: 87, kind: 'high' }, { x: 70, y: 825, kind: 'high' }, { x: 1276, y: 816, kind: 'high' },
+                { x: 79, y: 429, kind: 'high' }, { x: 1276, y: 492, kind: 'high' }, { x: 448, y: 78 },
+                { x: 160, y: 627 }, { x: 205, y: 249 }, { x: 781, y: 825 },
+                { x: 1168, y: 654 }, { x: 601, y: 825 }, { x: 1078, y: 78 },
+                { x: 250, y: 825 },
             ],
             // geo:end volkan
         },
@@ -341,7 +380,7 @@
             name: 'Derin Çukur',
             desc: 'Sualtı · Karanlık kaya adası',
             stars: 5,
-            hpScale: 0.8,
+            hpScale: 0.88,
             speedScale: 1,
             startMoney: 320,
             waves: 12,
@@ -352,6 +391,7 @@
             flipSprites: true,
             bg: 'assets/maps/cukur.jpg',
             thumb: 'assets/maps/thumbs/cukur.jpg',
+            tint: '#09161e',
             ambient: { motes: 46, bubbles: 8, moteColor: '120,255,255', vignette: 0.30 },
             // geo:begin cukur
             paths: [
@@ -371,6 +411,10 @@
                 { x: 896, y: 590 }, { x: 687, y: 330 }, { x: 687, y: 640 },
                 { x: 312, y: 215 }, { x: 945, y: 215 }, { x: 153, y: 500, kind: 'high' },
                 { x: 1227, y: 500, kind: 'high' }, { x: 491, y: 820 }, { x: 896, y: 820 },
+                { x: 259, y: 726 }, { x: 1258, y: 825, kind: 'high' }, { x: 1267, y: 186, kind: 'high' },
+                { x: 70, y: 159 }, { x: 529, y: 177 }, { x: 1114, y: 330 },
+                { x: 826, y: 78 }, { x: 151, y: 321, kind: 'high' }, { x: 1096, y: 672 },
+                { x: 70, y: 825, kind: 'high' },
             ],
             // geo:end cukur
         },
