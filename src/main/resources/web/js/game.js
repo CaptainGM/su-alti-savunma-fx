@@ -1,577 +1,94 @@
-const SPRITES = {
-    towers: { octopus: new Image(), eel: new Image(), jellyfish: new Image() },
-    enemies: { standard: new Image(), armored: new Image(), flying: new Image() },
-    projectiles: { octopus: new Image(), jellyfish: new Image(), eel: new Image() },
-    bg: new Image()
+// Çizim, efekt, ses ve arayüz. Oyun kuralları js/core.js içindedir, haritalar js/maps.js içinde.
+'use strict';
+
+const W = 1100;
+const H = 900;
+const TOWER_ORDER = ['octopus', 'eel', 'jellyfish'];
+const TOWER_ROLE = {
+    octopus: 'Hızlı · havayı da vurur · zırha zayıf',
+    eel: 'Alan şoku · zırh deler · havayı vuramaz',
+    jellyfish: 'Yavaşlatır · destek kulesi',
 };
+const MODE_LABEL = { first: 'İlk', last: 'Son', strong: 'En Güçlü', close: 'En Yakın' };
 
-function applyMapSprites(map) {
-    SPRITES.towers.octopus.src = map.assets.towers.octopus;
-    SPRITES.towers.eel.src = map.assets.towers.eel;
-    SPRITES.towers.jellyfish.src = map.assets.towers.jellyfish;
-    SPRITES.enemies.standard.src = map.assets.enemies.standard;
-    SPRITES.enemies.armored.src = map.assets.enemies.armored;
-    SPRITES.enemies.flying.src = map.assets.enemies.flying;
-    SPRITES.projectiles.octopus.src = map.assets.projectiles.octopus;
-    SPRITES.projectiles.jellyfish.src = map.assets.projectiles.jellyfish;
-    SPRITES.projectiles.eel.src = map.assets.projectiles.eel;
-    SPRITES.bg.src = map.assets.bg;
+// ------------------------------------------------------------------ kayıtlar
+
+const memoryStore = {};
+function loadRecords() {
+    try {
+        const raw = window.localStorage.getItem('sas.records');
+        if (raw) return JSON.parse(raw);
+    } catch (e) { /* WebView'da localStorage kapalı olabilir */ }
+    return Object.assign({}, memoryStore);
 }
-
-const BUILD_SPOT_RADIUS = 55;
-const TOWER_COSTS = { octopus: 50, eel: 75, jellyfish: 70 };
-
-function catmullRom(p0, p1, p2, p3, t) {
-    const t2 = t * t;
-    const t3 = t2 * t;
-    return {
-        x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t +
-            (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
-            (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
-        y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t +
-            (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
-            (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)
-    };
+function saveRecords(rec) {
+    Object.assign(memoryStore, rec);
+    try { window.localStorage.setItem('sas.records', JSON.stringify(rec)); } catch (e) { /* yoksay */ }
 }
+let records = loadRecords();
+let difficulty = 'normal';
+try { difficulty = window.localStorage.getItem('sas.difficulty') || 'normal'; } catch (e) { /* yoksay */ }
+if (!Core.DIFFICULTY[difficulty]) difficulty = 'normal';
 
-function generateSmoothPath(points) {
-    const smoothPath = [];
-    const segments = points.length - 1;
-    const pointsPerSegment = 20;
+function starsFor(health, maxHealth) {
+    const f = health / maxHealth;
+    return f >= 0.8 ? 3 : f >= 0.4 ? 2 : 1;
+}
+function recordKey(map) { return map.id + ':' + difficulty; }
 
-    for (let i = 0; i < segments; i++) {
-        const p0 = points[Math.max(0, i - 1)];
-        const p1 = points[i];
-        const p2 = points[i + 1];
-        const p3 = points[Math.min(points.length - 1, i + 2)];
+// ------------------------------------------------------------------ görseller
 
-        for (let j = 0; j < pointsPerSegment; j++) {
-            const t = j / pointsPerSegment;
-            smoothPath.push(catmullRom(p0, p1, p2, p3, t));
-        }
+const imageCache = {};
+function loadImage(src) {
+    if (!src) return null;
+    if (!imageCache[src]) {
+        const img = new Image();
+        img.src = src;
+        imageCache[src] = img;
     }
+    return imageCache[src];
+}
+const ready = img => img && img.complete && img.naturalWidth > 0;
 
-    smoothPath.push(points[points.length - 1]);
-    return smoothPath;
+let sprites = null;
+function loadSprites(map) {
+    const a = map.assets;
+    sprites = { bg: loadImage(a.bg), towers: {}, enemies: {}, projectiles: {} };
+    Object.keys(a.towers).forEach(k => { sprites.towers[k] = loadImage(a.towers[k]); });
+    Object.keys(a.enemies).forEach(k => { sprites.enemies[k] = loadImage(a.enemies[k]); });
+    Object.keys(a.projectiles).forEach(k => { sprites.projectiles[k] = loadImage(a.projectiles[k]); });
+    sprites.caustics = map.ambient && map.ambient.caustics ? loadImage('assets/fx/caustics.png') : null;
+}
+function enemySprite(type) {
+    return sprites.enemies[type] || (type === 'boss' ? sprites.enemies.armored : sprites.enemies.standard);
 }
 
-const MAPS = [
-    {
-        name: "Harita 1: Mercan Kanalı",
-        desc: "Sualtı · Klasik S dönüşü",
-        speedScale: 1.00,
-        pathPoints: [
-            { x: 830, y: 30 }, { x: 890, y: 90 }, { x: 930, y: 120 }, { x: 750, y: 145 },
-            { x: 650, y: 180 }, { x: 600, y: 250 }, { x: 700, y: 320 }, { x: 750, y: 360 },
-            { x: 750, y: 410 }, { x: 650, y: 460 }, { x: 600, y: 480 }, { x: 550, y: 490 },
-            { x: 450, y: 520 }, { x: 380, y: 550 }, { x: 330, y: 600 }, { x: 340, y: 680 },
-            { x: 390, y: 720 }, { x: 480, y: 750 }, { x: 530, y: 800 }, { x: 580, y: 880 },
-        ],
-        buildSpots: [
-            { x: 800, y: 200 }, { x: 500, y: 200 }, { x: 450, y: 320 }, { x: 850, y: 380 },
-            { x: 550, y: 380 }, { x: 700, y: 500 }, { x: 280, y: 500 }, { x: 200, y: 620 },
-            { x: 480, y: 620 }, { x: 250, y: 750 }, { x: 600, y: 700 }, { x: 400, y: 850 },
-            { x: 613, y: 74 }, { x: 995, y: 210 }, { x: 889, y: 509 }, { x: 787, y: 585 },
-            { x: 389, y: 425 }, { x: 704, y: 756 },
-        ],
-        assets: {
-            bg: 'assets/game_bg.jpg',
-            towers: { octopus: 'assets/tower_octopus.png', eel: 'assets/tower_eel.png', jellyfish: 'assets/jellyfish.png' },
-            enemies: { standard: 'assets/enemy_shark.png', armored: 'assets/enemy_lobster.png', flying: 'assets/enemy_ray.png' },
-            projectiles: { octopus: 'assets/projectile_octopus.png', eel: 'assets/projectile_eel.png', jellyfish: 'assets/projectile_jellyfish.png' },
-        },
-        towerNames: { octopus: 'Ahtapot', eel: 'Yılan Balığı', jellyfish: 'Deniz Anası' },
-        enemyNames: { standard: 'Köpek Balığı', armored: 'Istakoz', flying: 'Vatoz' },
-    },
-    {
-        name: "Harita 2: Yıldız Filosu",
-        desc: "Uzay · Nairan filosunun savunma hattı",
-        speedScale: 1.04,
-        pathPoints: [
-            { x: 900, y: 460 }, { x: 827, y: 607 }, { x: 673, y: 682 }, { x: 506, y: 662 },
-            { x: 394, y: 566 }, { x: 375, y: 440 }, { x: 445, y: 337 }, { x: 567, y: 295 },
-            { x: 685, y: 322 }, { x: 752, y: 399 }, { x: 750, y: 487 }, { x: 691, y: 549 },
-            { x: 608, y: 565 }, { x: 539, y: 537 }, { x: 511, y: 486 }, { x: 524, y: 439 },
-        ],
-        buildSpots: [
-            { x: 1000, y: 506 }, { x: 202, y: 499 }, { x: 582, y: 185 }, { x: 543, y: 818 },
-            { x: 277, y: 265 }, { x: 780, y: 764 }, { x: 330, y: 709 }, { x: 582, y: 405 },
-            { x: 787, y: 261 }, { x: 903, y: 319 }, { x: 902, y: 727 }, { x: 274, y: 392 },
-            { x: 398, y: 236 }, { x: 441, y: 753 }, { x: 701, y: 176 },
-        ],
-        assets: {
-            bg: 'assets/bg_space.jpg',
-            towers: { octopus: 'assets/tower_dreadnought.png', eel: 'assets/tower_battlecruiser.png', jellyfish: 'assets/tower_frigate.png' },
-            enemies: { standard: 'assets/enemy_fighter.png', armored: 'assets/enemy_scout.png', flying: 'assets/enemy_torpedo.png' },
-            projectiles: { octopus: 'assets/projectile_dreadnought.png', eel: 'assets/projectile_battlecruiser.png', jellyfish: 'assets/projectile_frigate.png' },
-        },
-        towerNames: { octopus: 'Dretnot', eel: 'Muharebe Kruvazörü', jellyfish: 'Fırkateyn' },
-        enemyNames: { standard: 'Avcı Gemisi', armored: 'Keşif Gemisi', flying: 'Torpido Gemisi' },
-    },
-    {
-        name: "Harita 3: Kum Krallığı",
-        desc: "Çöl / Ortaçağ · Kanyon geçidi",
-        speedScale: 1.58,
-        pathPoints: [
-            { x: 480, y: 40 }, { x: 780, y: 90 }, { x: 800, y: 260 }, { x: 520, y: 300 },
-            { x: 280, y: 330 }, { x: 260, y: 480 }, { x: 520, y: 510 }, { x: 800, y: 540 },
-            { x: 800, y: 700 }, { x: 520, y: 730 }, { x: 280, y: 760 }, { x: 380, y: 870 },
-        ],
-        buildSpots: [
-            { x: 464, y: 149 }, { x: 816, y: 813 }, { x: 168, y: 787 }, { x: 967, y: 206 },
-            { x: 70, y: 385 }, { x: 541, y: 652 }, { x: 922, y: 519 }, { x: 442, y: 416 },
-            { x: 224, y: 168 }, { x: 703, y: 177 }, { x: 303, y: 607 }, { x: 719, y: 395 },
-            { x: 679, y: 833 }, { x: 142, y: 501 }, { x: 586, y: 404 },
-        ],
-        assets: {
-            bg: 'assets/bg_desert.jpg',
-            towers: { octopus: 'assets/tower_warrior.png', eel: 'assets/tower_necromancer.png', jellyfish: 'assets/tower_sorceress.png' },
-            enemies: { standard: 'assets/enemy_skeleton.png', armored: 'assets/enemy_goblin_berserker.png', flying: 'assets/enemy_goblin_slinger.png' },
-            projectiles: { octopus: 'assets/projectile_warrior.png', eel: 'assets/projectile_necromancer.png', jellyfish: 'assets/projectile_sorceress.png' },
-        },
-        towerNames: { octopus: 'Savaşçı', eel: 'Nekromanser', jellyfish: 'Büyücü' },
-        enemyNames: { standard: 'İskelet Asker', armored: 'Goblin Azgını', flying: 'Goblin Sapancı' },
-    },
-];
+// ------------------------------------------------------------------ durum
 
 let currentMapIndex = 0;
 let currentMap = MAPS[0];
-let PATH_CONTROL_POINTS = [];
-let BUILD_SPOTS = [];
-let GAME_PATH = [];
-let PATH_DISTANCES = [0];
-let totalPathLength = 0;
+let world = null;
+let logs = [];
+let paused = false;
+let speedMultiplier = 1;
+let selectedTower = null;
+let hoverSpot = null;
+let armedType = null;
+let draggedType = null;
+let animTime = 0;
+let lastFrame = 0;
+let rafId = 0;
+let endDelay = 0;
+let endShown = false;
+let fx = { floaters: [], rings: [], bubbles: [], flash: 0 };
+let ambient = null;
+let pathSamples = [];
+let res = 1;
 
-function loadMap(index) {
-    currentMapIndex = index;
-    currentMap = MAPS[index];
-    applyMapSprites(currentMap);
-    renderTowerMarket();
-    PATH_CONTROL_POINTS = currentMap.pathPoints;
-    BUILD_SPOTS = currentMap.buildSpots.map(s => ({ x: s.x, y: s.y, occupied: false }));
-    GAME_PATH = generateSmoothPath(PATH_CONTROL_POINTS);
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
 
-    PATH_DISTANCES = [0];
-    totalPathLength = 0;
-    for (let i = 1; i < GAME_PATH.length; i++) {
-        const dx = GAME_PATH[i].x - GAME_PATH[i - 1].x;
-        const dy = GAME_PATH[i].y - GAME_PATH[i - 1].y;
-        totalPathLength += Math.sqrt(dx * dx + dy * dy);
-        PATH_DISTANCES.push(totalPathLength);
-    }
-}
-
-loadMap(0);
-
-const CONFIG = {
-    SCREEN_WIDTH: 1100,
-    SCREEN_HEIGHT: 900,
-    START_HEALTH: 100,
-    START_MONEY: 200,
-    TOTAL_WAVES: 5,
-    SPAWN_INTERVAL: 1500
-};
-
-class GameState {
-    constructor() {
-        this.health = CONFIG.START_HEALTH;
-        this.money = CONFIG.START_MONEY;
-        this.currentWave = 0;
-        this.gameActive = false;
-        this.enemies = [];
-        this.towers = [];
-        this.projectiles = [];
-        this.particles = [];
-        this.waveEnemies = [];
-        this.spawnIndex = 0;
-        this.lastSpawnTime = 0;
-        this.logs = [];
-        this.nextEnemyId = 1;
-        this.nextTowerId = 1;
-        this.hoveredSpot = null;
-        this.selectedTower = null;
-        this.paused = false;
-        this.speedMultiplier = 1;
-    }
-}
-
-class GameObject {
-    constructor(x, y, id) {
-        this.x = x;
-        this.y = y;
-        this.id = id;
-    }
-    distanceTo(other) {
-        return Math.sqrt((this.x - other.x) ** 2 + (this.y - other.y) ** 2);
-    }
-}
-
-class Enemy extends GameObject {
-    constructor(type, x, y, id) {
-        super(x, y, id);
-        this.type = type;
-        this.pathIndex = 0;
-        this.distanceTraveled = 0;
-        this.isSlowed = false;
-        this.slowTime = 0;
-        this.angle = 0;
-
-        if (type === 'standard') {
-            this.speed = 50;
-            this.maxHealth = 50;
-            this.reward = 10;
-            this.damage = 5;
-            this.armor = 0;
-        } else if (type === 'armored') {
-            this.speed = 25;
-            this.maxHealth = 75;
-            this.reward = 20;
-            this.damage = 10;
-            this.armor = 75;
-        } else {
-            this.speed = 75;
-            this.maxHealth = 50;
-            this.reward = 15;
-            this.damage = 5;
-            this.armor = 0;
-        }
-        this.name = currentMap.enemyNames[type];
-
-        this.speed *= currentMap.speedScale;
-        this.originalSpeed = this.speed;
-        this.health = this.maxHealth;
-    }
-
-    update(dt) {
-        if (this.slowTime > 0) {
-            this.slowTime -= dt;
-            if (this.slowTime <= 0) {
-                this.speed = this.originalSpeed;
-                this.isSlowed = false;
-            }
-        }
-
-        this.distanceTraveled += this.speed * dt;
-
-        if (this.distanceTraveled >= totalPathLength) {
-            game.health = Math.max(0, game.health - this.damage);
-            addLog(`'${this.name}-ID${String(this.id).padStart(3, '0')}' üsse ulaştı. Oyuncu Canı: ${game.health} (-${this.damage}).`);
-            playBaseHitSound();
-            updateUI();
-            return true;
-        }
-
-        let segmentIndex = 0;
-        for (let i = 1; i < PATH_DISTANCES.length; i++) {
-            if (this.distanceTraveled <= PATH_DISTANCES[i]) {
-                segmentIndex = i - 1;
-                break;
-            }
-        }
-
-        const segmentStart = PATH_DISTANCES[segmentIndex];
-        const segmentEnd = PATH_DISTANCES[segmentIndex + 1];
-        const segmentLength = segmentEnd - segmentStart;
-        const segmentProgress = (this.distanceTraveled - segmentStart) / segmentLength;
-
-        const currentPoint = GAME_PATH[segmentIndex];
-        const nextPoint = GAME_PATH[segmentIndex + 1];
-
-        this.x = currentPoint.x + (nextPoint.x - currentPoint.x) * segmentProgress;
-        this.y = currentPoint.y + (nextPoint.y - currentPoint.y) * segmentProgress;
-
-        this.pathProgress = this.distanceTraveled / totalPathLength;
-
-        const dx = nextPoint.x - currentPoint.x;
-        const dy = nextPoint.y - currentPoint.y;
-        this.angle = Math.atan2(dy, dx);
-
-        return false;
-    }
-
-    draw(ctx) {
-        ctx.save();
-        ctx.translate(this.x, this.y);
-
-        let img = SPRITES.enemies[this.type];
-        if (img && img.complete) {
-            ctx.drawImage(img, -40, -40, 80, 80);
-        } else {
-            ctx.fillStyle = 'red';
-            ctx.beginPath();
-            ctx.arc(0, 0, 30, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        ctx.restore();
-
-        const healthPercent = Math.max(0, this.health / this.maxHealth);
-        ctx.fillStyle = 'black';
-        ctx.fillRect(this.x - 30, this.y - 50, 60, 8);
-        ctx.fillStyle = '#0f0';
-        ctx.fillRect(this.x - 30, this.y - 50, 60 * healthPercent, 8);
-
-        if (this.isSlowed) {
-            ctx.strokeStyle = '#3498db';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, 35, 0, Math.PI * 2);
-            ctx.stroke();
-        }
-    }
-
-    takeDamage(amount, towerType) {
-        if (towerType === 'octopus' && this.type === 'armored') amount *= 0.5;
-        let reduc = this.armor / (this.armor + 100);
-        const actualDamage = amount * (1 - reduc);
-        this.health -= actualDamage;
-
-        const isDead = this.health <= 0;
-        if (isDead) {
-            this.health = 0;
-        }
-
-        return { dead: isDead, dmg: actualDamage };
-    }
-
-    slowDown(factor, time) {
-        this.speed = this.originalSpeed * factor;
-        this.slowTime = time;
-        this.isSlowed = true;
-    }
-}
-
-class Tower extends GameObject {
-    constructor(type, x, y, id) {
-        super(x, y, id);
-        this.type = type;
-        this.lastFire = 0;
-        this.target = null;
-        this.level = 1;
-        this.spot = null;
-
-        if (type === 'octopus') {
-            this.range = 220;
-            this.dmg = 10;
-            this.rate = 1.0;
-            this.cost = 50;
-        } else if (type === 'eel') {
-            this.range = 180;
-            this.dmg = 20;
-            this.rate = 3.0;
-            this.cost = 75;
-            this.area = true;
-        } else {
-            this.range = 200;
-            this.dmg = 15;
-            this.rate = 2.0;
-            this.cost = 70;
-            this.slow = true;
-        }
-        this.name = currentMap.towerNames[type];
-
-        this.baseDmg = this.dmg;
-        this.baseRange = this.range;
-        this.baseRate = this.rate;
-        this.invested = this.cost;
-    }
-
-    getUpgradeCost() {
-        if (this.level >= 3) return null;
-        return Math.round(this.cost * 0.6 * this.level);
-    }
-
-    getSellRefund() {
-        return Math.round(this.invested * 0.5);
-    }
-
-    upgrade(cost) {
-        this.level++;
-        this.invested += cost;
-        this.dmg = Math.round(this.baseDmg * (1 + 0.35 * (this.level - 1)));
-        this.range = Math.round(this.baseRange * (1 + 0.08 * (this.level - 1)));
-        this.rate = +(this.baseRate * (1 - 0.12 * (this.level - 1))).toFixed(2);
-    }
-
-    update(dt, enemies) {
-        this.lastFire += dt;
-        let maxProgress = -1;
-        this.target = null;
-
-        for (const enemy of enemies) {
-            if (enemy.health <= 0) continue;
-            if (this.type === 'eel' && enemy.type === 'flying') continue;
-
-            const distance = this.distanceTo(enemy);
-            if (distance <= this.range && enemy.pathProgress > maxProgress) {
-                maxProgress = enemy.pathProgress;
-                this.target = enemy;
-            }
-        }
-
-        if (this.target && this.lastFire >= this.rate) {
-            this.fire();
-            this.lastFire = 0;
-        }
-    }
-
-    fire() {
-        playTowerFireSound(this.type);
-
-        if (this.area) {
-            game.particles.push(new AreaEffect(this.target.x, this.target.y));
-
-            game.enemies.forEach(e => {
-                if (this.target.distanceTo(e) < 50 && e.health > 0 && e.type !== 'flying') {
-                    let result = e.takeDamage(this.dmg, this.type);
-                    if (result.dead) {
-                        game.money += e.reward;
-                        addLog(`${e.name} yok edildi! Ödül: +${e.reward}`);
-                        playEnemyDeathSound();
-                    }
-                }
-            });
-        } else {
-            game.projectiles.push(new Projectile(this.x, this.y, this.target, this.type, this.dmg, this.slow));
-        }
-    }
-
-    draw(ctx, showRange) {
-        if (showRange) {
-            ctx.beginPath();
-            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-            ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
-            ctx.stroke();
-        }
-        let img = SPRITES.towers[this.type];
-        if (img && img.complete) ctx.drawImage(img, this.x - 50, this.y - 50, 100, 100);
-        else {
-            ctx.fillStyle = 'blue';
-            ctx.fillRect(this.x - 25, this.y - 25, 50, 50);
-        }
-
-        if (this.level > 1) {
-            ctx.fillStyle = '#ffcc00';
-            ctx.font = 'bold 16px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('Lv' + this.level, this.x, this.y + 62);
-            ctx.textAlign = 'left';
-        }
-
-        if (game.selectedTower === this) {
-            ctx.beginPath();
-            ctx.strokeStyle = '#00ff88';
-            ctx.lineWidth = 3;
-            ctx.arc(this.x, this.y, 55, 0, Math.PI * 2);
-            ctx.stroke();
-        }
-    }
-}
-
-class Projectile extends GameObject {
-    constructor(x, y, target, type, dmg, slow) {
-        super(x, y, null);
-        this.target = target;
-        this.type = type;
-        this.dmg = dmg;
-        this.slow = slow;
-        this.speed = 500;
-        this.active = true;
-    }
-
-    update(dt) {
-        if (!this.target || this.target.health <= 0) {
-            this.active = false;
-            return true;
-        }
-        const dist = this.distanceTo(this.target);
-        if (dist < 20) {
-            this.active = false;
-            let result = this.target.takeDamage(this.dmg, this.type);
-            const slowText = this.slow ? `, Yavaşlatma %50 (3 sn) uygulandı` : '';
-            addLog(`Mermi isabet: '${this.target.name}-ID${String(this.target.id).padStart(3, '0')}' Net Hasar: ${result.dmg.toFixed(1)}${slowText}. Kalan Can: ${this.target.health.toFixed(0)}/${this.target.maxHealth}`);
-            if (result.dead) {
-                game.money += this.target.reward;
-                addLog(`'${this.target.name}-ID${String(this.target.id).padStart(3, '0')}' öldü. Ödül +${this.target.reward}. Toplam Enerji: ${game.money}.`);
-                playEnemyDeathSound();
-            }
-            if (this.slow) this.target.slowDown(0.5, 3);
-            return true;
-        }
-        const angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
-        this.x += Math.cos(angle) * this.speed * dt;
-        this.y += Math.sin(angle) * this.speed * dt;
-        return false;
-    }
-
-    draw(ctx) {
-        let img = SPRITES.projectiles[this.type];
-        if (img && img.complete) ctx.drawImage(img, this.x - 15, this.y - 15, 30, 30);
-        else {
-            ctx.fillStyle = 'yellow';
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, 8, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
-}
-
-class Particle {
-    constructor(x, y, color) {
-        this.x = x;
-        this.y = y;
-        this.color = color;
-        this.life = 1.0;
-    }
-    update(dt) {
-        this.life -= dt * 2;
-        return this.life <= 0;
-    }
-    draw(ctx) {
-        ctx.globalAlpha = this.life;
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, 50 * (1 - this.life), 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-    }
-}
-
-class AreaEffect extends GameObject {
-    constructor(x, y) {
-        super(x, y, null);
-        this.life = 0.6;
-        this.maxLife = 0.6;
-        this.size = 100;
-        this.img = SPRITES.projectiles.eel;
-    }
-
-    update(dt) {
-        this.life -= dt;
-        return this.life <= 0;
-    }
-
-    draw(ctx) {
-        ctx.globalAlpha = this.life / this.maxLife;
-
-        if (this.img && this.img.complete) {
-            ctx.drawImage(this.img, this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
-        } else {
-            ctx.fillStyle = '#ffcc00';
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size / 3, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        ctx.globalAlpha = 1;
-    }
-}
-
-let game = new GameState();
-let canvas = document.getElementById('gameCanvas');
-let ctx = canvas.getContext('2d');
-let lastTime = 0;
-let draggedTowerType = null;
-let draggedTowerCost = 0;
+// ------------------------------------------------------------------ Java köprüsü
 
 function playTone(freq, duration, waveType, volume, freqEnd) {
     try {
@@ -579,222 +96,961 @@ function playTone(freq, duration, waveType, volume, freqEnd) {
             const durationMs = Math.round(duration * 1000);
             window.javaBridge.playTone(freq, freqEnd || freq, durationMs, waveType || 'sine', volume || 0.12);
         }
-    } catch (e) { /* ses koprusu hazir degilse sessizce yok say */ }
+    } catch (e) { /* ses köprüsü hazır değilse sessizce yok say */ }
 }
 
+const lastSfx = {};
+function sfx(name, minGapMs, play) {
+    const now = performance.now();
+    if (lastSfx[name] && now - lastSfx[name] < minGapMs) return;
+    lastSfx[name] = now;
+    play();
+}
 function playTowerFireSound(type) {
-    if (type === 'octopus') playTone(320, 0.12, 'sine', 0.10, 200);
-    else if (type === 'eel') playTone(160, 0.28, 'sawtooth', 0.09, 55);
-    else if (type === 'jellyfish') playTone(500, 0.16, 'triangle', 0.09, 750);
+    sfx('fire' + type, 70, () => {
+        if (type === 'octopus') playTone(320, 0.12, 'sine', 0.10, 200);
+        else if (type === 'eel') playTone(160, 0.28, 'sawtooth', 0.09, 55);
+        else if (type === 'jellyfish') playTone(500, 0.16, 'triangle', 0.09, 750);
+    });
+}
+function playEnemyDeathSound() { sfx('death', 60, () => playTone(140, 0.18, 'square', 0.07, 45)); }
+function playBaseHitSound() { sfx('base', 120, () => playTone(220, 0.35, 'sawtooth', 0.14, 90)); }
+function playWaveClearSound() {
+    playTone(523, 0.14, 'triangle', 0.10, 523);
+    setTimeout(() => playTone(784, 0.22, 'triangle', 0.10, 784), 140);
+}
+function playBossSound() { playTone(70, 0.7, 'sawtooth', 0.16, 40); }
+
+// ------------------------------------------------------------------ günlük
+
+const pad3 = id => String(id).padStart(3, '0');
+const label = o => `'${o.name}-ID${pad3(o.id)}'`;
+
+function addLog(msg) {
+    const stamp = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    logs.push(stamp);
+    const box = document.getElementById('gameLog');
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.innerText = stamp;
+    box.prepend(div);
+    while (box.childElementCount > 150) box.removeChild(box.lastChild);
+    box.scrollTop = 0;
 }
 
-function playEnemyDeathSound() {
-    playTone(140, 0.18, 'square', 0.07, 45);
+// ------------------------------------------------------------------ dünya olayları
+
+function onWorldEvent(type, d) {
+    switch (type) {
+        case 'build':
+            addLog(`Kullanıcı, (${Math.floor(d.tower.x)}, ${Math.floor(d.tower.y)}) konumuna '${d.tower.name}-ID${pad3(d.tower.id)}' inşa etti. Kalan Enerji: ${world.money}.`);
+            fx.rings.push({ x: d.tower.x, y: d.tower.y, r: 20, max: 70, life: 0.5, maxLife: 0.5, color: '120,255,200' });
+            break;
+        case 'upgrade':
+            addLog(`'${d.tower.name}-ID${pad3(d.tower.id)}' Seviye ${d.tower.level}'e yükseltildi. Kalan Enerji: ${world.money}.`);
+            fx.rings.push({ x: d.tower.x, y: d.tower.y, r: 25, max: 90, life: 0.6, maxLife: 0.6, color: '255,220,90' });
+            break;
+        case 'sell':
+            addLog(`'${d.tower.name}-ID${pad3(d.tower.id)}' satıldı. +${d.refund} Enerji. Kalan Enerji: ${world.money}.`);
+            break;
+        case 'waveStart': {
+            const info = Object.entries(d.counts).map(([t, c]) => `${currentMap.enemyNames[t] || t}: ${c}`).join(', ');
+            addLog(`=== DALGA ${d.wave} BAŞLADI === (${info}, Toplam: ${d.total})`);
+            if (d.counts.boss) playBossSound();
+            break;
+        }
+        case 'spawn':
+            addLog(`${d.enemy.name} haritaya girdi.`);
+            break;
+        case 'fire':
+            playTowerFireSound(d.tower.type);
+            break;
+        case 'aoe':
+            fx.rings.push({ x: d.x, y: d.y, r: 10, max: d.radius * 1.15, life: 0.45, maxLife: 0.45, color: '255,230,80', aoeImg: true });
+            break;
+        case 'hit': {
+            const slowText = d.slowed ? `, Yavaşlatma %${Math.round(d.tower.slow * 100)} (${d.tower.slowTime} sn) uygulandı` : '';
+            addLog(`${d.tower.aoe ? 'Şok alanı' : 'Mermi'} isabet: ${label(d.enemy)} Net Hasar: ${d.dmg.toFixed(1)}${slowText}. Kalan Can: ${d.enemy.health.toFixed(0)}/${d.enemy.maxHealth}`);
+            break;
+        }
+        case 'kill':
+            addLog(`${label(d.enemy)} öldü. Ödül +${d.reward}. Toplam Enerji: ${world.money}.`);
+            playEnemyDeathSound();
+            spawnBubbles(d.enemy.x, d.enemy.y, d.enemy.type === 'boss' ? 26 : 8);
+            fx.floaters.push({ x: d.enemy.x, y: d.enemy.y - 30, text: '+' + d.reward, color: '#ffd84a', life: 1.0, maxLife: 1.0 });
+            break;
+        case 'leak':
+            addLog(`${label(d.enemy)} üsse ulaştı. Oyuncu Canı: ${Math.max(0, Math.round(world.health))} (-${d.enemy.damage}).`);
+            playBaseHitSound();
+            fx.flash = 1;
+            fx.floaters.push({ x: d.enemy.x, y: d.enemy.y - 20, text: '-' + d.enemy.damage, color: '#ff5a64', life: 1.2, maxLife: 1.2 });
+            break;
+        case 'waveClear':
+            addLog(`Dalga temizlendi! Dalga bonusu: +${d.bonus} Enerji. Toplam Enerji: ${world.money}.`);
+            playWaveClearSound();
+            fx.floaters.push({ x: W / 2, y: 120, text: `Dalga temizlendi  +${d.bonus}`, color: '#7dffb0', life: 2.0, maxLife: 2.0, big: true });
+            break;
+        case 'end':
+            endDelay = 0.9;
+            break;
+    }
 }
 
-function playBaseHitSound() {
-    playTone(220, 0.35, 'sawtooth', 0.14, 90);
+function spawnBubbles(x, y, n) {
+    for (let i = 0; i < n; i++) {
+        fx.bubbles.push({
+            x: x + (Math.random() - 0.5) * 30, y: y + (Math.random() - 0.5) * 20,
+            vx: (Math.random() - 0.5) * 30, vy: -30 - Math.random() * 50,
+            r: 2 + Math.random() * 4, life: 0.7 + Math.random() * 0.5, maxLife: 1.2,
+        });
+    }
 }
+
+// ------------------------------------------------------------------ harita ve oyun başlatma
+
+function buildAmbient(map) {
+    const a = map.ambient || {};
+    const out = { motes: [], rays: [], bubbles: [] };
+    for (let i = 0; i < (a.motes || 0); i++) {
+        out.motes.push({ x: Math.random() * W, y: Math.random() * H, r: 0.8 + Math.random() * 1.8, ph: Math.random() * 6.28, sp: 6 + Math.random() * 14 });
+    }
+    for (let i = 0; i < (a.bubbles || 0); i++) {
+        out.bubbles.push({ x: Math.random() * W, y: Math.random() * H, r: 2 + Math.random() * 5, sp: 18 + Math.random() * 30, ph: Math.random() * 6.28 });
+    }
+    for (let i = 0; i < ((a.rays && a.rays.count) || 0); i++) {
+        out.rays.push({ x: (i + 0.5) / a.rays.count * W * 1.3 - 120, w: 70 + Math.random() * 110, ph: Math.random() * 6.28, sp: 0.15 + Math.random() * 0.2 });
+    }
+    return out;
+}
+
+function buildPathSamples(w) {
+    pathSamples = w.paths.map(p => {
+        const pts = [];
+        for (let d = 0; d <= p.length; d += 46) pts.push(d);
+        return { path: p, ds: pts };
+    });
+}
+function pointAtDistance(path, d) {
+    const dist = path.dist;
+    let lo = 0;
+    let hi = dist.length - 1;
+    while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1;
+        if (dist[mid] <= d) lo = mid; else hi = mid;
+    }
+    const a = path.points[lo];
+    const b = path.points[hi];
+    const len = dist[hi] - dist[lo] || 1;
+    const t = (d - dist[lo]) / len;
+    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, angle: Math.atan2(b.y - a.y, b.x - a.x) };
+}
+
+function selectMap(mapIndex) {
+    currentMapIndex = mapIndex;
+    currentMap = MAPS[mapIndex];
+    loadSprites(currentMap);
+
+    ['menuScreen', 'mapSelectScreen', 'winScreen', 'loseScreen', 'towerModal'].forEach(id =>
+        document.getElementById(id).classList.add('hidden'));
+    document.getElementById('gameScreen').classList.remove('hidden');
+
+    logs = [];
+    world = new Core.World(currentMap, { difficulty, seed: Date.now() & 0x7fffffff, onEvent: onWorldEvent });
+    buildPathSamples(world);
+    ambient = buildAmbient(currentMap);
+    fx = { floaters: [], rings: [], bubbles: [], flash: 0 };
+    paused = false;
+    speedMultiplier = 1;
+    selectedTower = null;
+    hoverSpot = null;
+    armedType = null;
+    draggedType = null;
+    endShown = false;
+    endDelay = 0;
+
+    document.getElementById('gameLog').innerHTML = '';
+    document.getElementById('pauseButton').innerText = 'DURAKLAT';
+    document.getElementById('speedButton').innerText = 'HIZ: 1x';
+
+    renderTowerMarket();
+    fitCanvas();
+    showBanner();
+    addLog(`Oyun başladı! (${currentMap.name} · ${Core.DIFFICULTY[difficulty].label}) Kulelerinizi yeşil alanlara yerleştirin ve dalgayı başlatın.`);
+    uiCache = {};
+    updateUI();
+    renderTowerList();
+
+    cancelAnimationFrame(rafId);
+    lastFrame = 0;
+    rafId = requestAnimationFrame(gameLoop);
+}
+
+function showBanner() {
+    const b = document.getElementById('mapBanner');
+    b.innerHTML = `<div class="banner-name">${currentMap.name}</div><div class="banner-sub">${world.totalWaves} dalga · ${Core.DIFFICULTY[difficulty].label}</div>`;
+    b.classList.remove('show');
+    void b.offsetWidth;
+    b.classList.add('show');
+}
+
+function fitCanvas() {
+    const box = document.getElementById('canvasContainer');
+    const cw = box.clientWidth || W;
+    const ch = box.clientHeight || H;
+    const scale = Math.min(cw / W, ch / H);
+    res = Math.max(0.75, Math.min(1.6, scale * (window.devicePixelRatio || 1)));
+    canvas.width = Math.round(W * res);
+    canvas.height = Math.round(H * res);
+    ctx.setTransform(res, 0, 0, res, 0, 0);
+}
+window.addEventListener('resize', () => { if (world) fitCanvas(); });
+
+// ------------------------------------------------------------------ ana döngü
+
+function gameLoop(ts) {
+    if (!world) return;
+    if (!lastFrame) lastFrame = ts;
+    let dt = (ts - lastFrame) / 1000;
+    lastFrame = ts;
+    if (dt > 0.1) dt = 0.1;
+    animTime += dt;
+
+    if (!paused) {
+        world.update(dt * speedMultiplier);
+        updateFx(dt * speedMultiplier);
+    }
+    if (world.result && !endShown) {
+        endDelay -= dt;
+        if (endDelay <= 0) { endShown = true; showEnd(); }
+    }
+    draw();
+    updateUI();
+    rafId = requestAnimationFrame(gameLoop);
+}
+
+function updateFx(dt) {
+    fx.floaters.forEach(f => { f.life -= dt; f.y -= 28 * dt; });
+    fx.floaters = fx.floaters.filter(f => f.life > 0);
+    fx.rings.forEach(r => { r.life -= dt; });
+    fx.rings = fx.rings.filter(r => r.life > 0);
+    fx.bubbles.forEach(b => { b.life -= dt; b.x += b.vx * dt; b.y += b.vy * dt; });
+    fx.bubbles = fx.bubbles.filter(b => b.life > 0);
+    fx.flash = Math.max(0, fx.flash - dt * 2.5);
+}
+
+// ------------------------------------------------------------------ çizim
+
+function draw() {
+    ctx.setTransform(res, 0, 0, res, 0, 0);
+    if (ready(sprites.bg)) {
+        ctx.drawImage(sprites.bg, 0, 0, W, H);
+    } else {
+        ctx.fillStyle = '#001d3d';
+        ctx.fillRect(0, 0, W, H);
+    }
+
+    drawAmbientBack();
+    drawPath();
+    drawSpots();
+    drawEntities();
+    drawAmbientFront();
+    drawFx();
+
+    if (paused) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 60px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('DURAKLANDI', W / 2, H / 2);
+        ctx.textAlign = 'left';
+    }
+}
+
+function drawAmbientBack() {
+    const a = currentMap.ambient;
+    if (!a) return;
+
+    if (a.rays && ambient.rays.length) {
+        // not: JavaFX WebKit'te globalCompositeOperation = 'lighter' tuvali siliyor, bu yüzden normal alfa kullanılır
+        ctx.save();
+        ambient.rays.forEach(r => {
+            const sway = Math.sin(animTime * r.sp + r.ph);
+            const x0 = r.x + sway * 40;
+            const g = ctx.createLinearGradient(x0, 0, x0 + 260, H);
+            g.addColorStop(0, `rgba(${a.rays.color},${a.rays.alpha * (0.7 + 0.3 * sway)})`);
+            g.addColorStop(1, `rgba(${a.rays.color},0)`);
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.moveTo(x0, 0);
+            ctx.lineTo(x0 + r.w, 0);
+            ctx.lineTo(x0 + r.w + 300, H);
+            ctx.lineTo(x0 + 220, H);
+            ctx.closePath();
+            ctx.fill();
+        });
+        ctx.restore();
+    }
+
+    if (a.caustics && ready(sprites.caustics)) {
+        if (!sprites.causticsPattern) sprites.causticsPattern = ctx.createPattern(sprites.caustics, 'repeat');
+        ctx.save();
+        const layers = [{ s: 1.0, ox: 14, oy: 9, al: a.caustics }, { s: 1.6, ox: -9, oy: 12, al: a.caustics * 0.8 }];
+        layers.forEach(l => {
+            ctx.globalAlpha = l.al;
+            ctx.save();
+            ctx.scale(l.s, l.s);
+            ctx.translate((animTime * l.ox) % 512, (animTime * l.oy) % 512);
+            ctx.fillStyle = sprites.causticsPattern;
+            ctx.fillRect(-512, -512, W / l.s + 1024, H / l.s + 1024);
+            ctx.restore();
+        });
+        ctx.restore();
+    }
+}
+
+function drawAmbientFront() {
+    const a = currentMap.ambient;
+    if (!a) return;
+
+    ambient.motes.forEach(m => {
+        m.y -= m.sp * 0.016;
+        m.x += Math.sin(animTime * 0.6 + m.ph) * 0.12;
+        if (m.y < -4) { m.y = H + 4; m.x = Math.random() * W; }
+        const tw = 0.35 + 0.35 * Math.sin(animTime * 1.7 + m.ph);
+        ctx.fillStyle = `rgba(${a.moteColor || '220,255,255'},${tw})`;
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, m.r, 0, 6.2832);
+        ctx.fill();
+    });
+
+    ctx.lineWidth = 1.2;
+    ambient.bubbles.forEach(b => {
+        b.y -= b.sp * 0.016;
+        const x = b.x + Math.sin(animTime * 1.2 + b.ph) * 8;
+        if (b.y < -10) { b.y = H + 10; b.x = Math.random() * W; }
+        ctx.strokeStyle = 'rgba(220,250,255,0.45)';
+        ctx.fillStyle = 'rgba(200,240,255,0.10)';
+        ctx.beginPath();
+        ctx.arc(x, b.y, b.r, 0, 6.2832);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.beginPath();
+        ctx.arc(x - b.r * 0.35, b.y - b.r * 0.35, b.r * 0.22, 0, 6.2832);
+        ctx.fill();
+    });
+
+    if (a.vignette) {
+        const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 0.95);
+        g.addColorStop(0, 'rgba(0,0,0,0)');
+        g.addColorStop(1, `rgba(${a.vignetteColor || '0,10,25'},${a.vignette})`);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+    }
+}
+
+function drawPath() {
+    const style = currentMap.pathStyle || 'flow';
+    if (style === 'none') return;
+
+    if (style === 'rail') {
+        world.paths.forEach(p => {
+            ctx.beginPath();
+            ctx.moveTo(p.points[0].x, p.points[0].y);
+            for (let i = 1; i < p.points.length; i++) ctx.lineTo(p.points[i].x, p.points[i].y);
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+            ctx.lineWidth = 11;
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(255, 210, 100, 0.95)';
+            ctx.lineWidth = 5;
+            ctx.setLineDash([12, 6]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        });
+        return;
+    }
+
+    // 'flow': yolun üstünde akan küçük oklar, çıkışta (üs) parlayan kapı
+    const col = currentMap.flowColor || '255,236,170';
+    pathSamples.forEach(ps => {
+        const off = (animTime * 34) % 46;
+        for (let d = off; d < ps.path.length - 20; d += 46) {
+            const pt = pointAtDistance(ps.path, d);
+            const fade = Math.min(1, d / 80, (ps.path.length - d) / 80);
+            ctx.save();
+            ctx.translate(pt.x, pt.y);
+            ctx.rotate(pt.angle);
+            ctx.fillStyle = `rgba(${col},${0.34 * fade})`;
+            ctx.beginPath();
+            ctx.moveTo(7, 0);
+            ctx.lineTo(-4, -6);
+            ctx.lineTo(-1, 0);
+            ctx.lineTo(-4, 6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+        const end = ps.path.points[ps.path.points.length - 1];
+        const pulse = 0.5 + 0.5 * Math.sin(animTime * 2.4);
+        const g = ctx.createRadialGradient(end.x, end.y, 4, end.x, end.y, 46 + pulse * 8);
+        g.addColorStop(0, 'rgba(255,90,100,0.55)');
+        g.addColorStop(1, 'rgba(255,90,100,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(end.x, end.y, 54, 0, 6.2832);
+        ctx.fill();
+    });
+}
+
+function drawSpots() {
+    const pulse = 0.5 + 0.5 * Math.sin(animTime * 2.2);
+    for (const spot of world.spots) {
+        if (spot.tower) continue;
+        const hovered = hoverSpot === spot;
+        const high = spot.kind === 'high';
+        const rgb = high ? '255,205,70' : '0,255,136';
+
+        ctx.fillStyle = `rgba(${rgb},${hovered ? 0.5 : 0.18 + pulse * 0.05})`;
+        ctx.strokeStyle = hovered ? `rgb(${rgb})` : `rgba(${rgb},0.6)`;
+        ctx.lineWidth = hovered ? 3 : 2;
+        ctx.beginPath();
+        ctx.arc(spot.x, spot.y, Core.BUILD_SPOT_RADIUS, 0, 6.2832);
+        ctx.fill();
+        ctx.stroke();
+
+        if (!hovered) {
+            ctx.strokeStyle = `rgba(${rgb},0.4)`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(spot.x - 15, spot.y);
+            ctx.lineTo(spot.x + 15, spot.y);
+            ctx.moveTo(spot.x, spot.y - 15);
+            ctx.lineTo(spot.x, spot.y + 15);
+            ctx.stroke();
+        }
+        if (high) {
+            ctx.strokeStyle = `rgba(255,215,90,${0.35 + pulse * 0.25})`;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 7]);
+            ctx.beginPath();
+            ctx.arc(spot.x, spot.y, Core.BUILD_SPOT_RADIUS + 6, 0, 6.2832);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+        if (hovered && (draggedType || armedType)) {
+            const type = draggedType || armedType;
+            const range = Core.TOWER_TYPES[type].range * (high ? Core.HIGH_GROUND_RANGE : 1);
+            ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(spot.x, spot.y, range, 0, 6.2832);
+            ctx.stroke();
+        }
+    }
+}
+
+function drawEntities() {
+    // üstteki nesneler altakileri örtsün diye y'ye göre sırala
+    const items = [];
+    world.towers.forEach(t => items.push({ y: t.y, draw: () => drawTower(t) }));
+    world.enemies.forEach(e => items.push({ y: e.y, draw: () => drawEnemy(e) }));
+    items.sort((a, b) => a.y - b.y);
+    items.forEach(i => i.draw());
+    world.projectiles.forEach(drawProjectile);
+}
+
+function drawShadow(x, y, w, h, alpha) {
+    ctx.fillStyle = `rgba(0,15,30,${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(x, y, w, h, 0, 0, 6.2832);
+    ctx.fill();
+}
+
+function drawEnemy(e) {
+    const bob = Math.sin(animTime * 4.2 + e.id * 1.7) * (e.type === 'boss' ? 2 : 3);
+    const sinceHit = animTime - (e.hitAnim || -10);
+    if (e.lastHit !== e.hitSeen) { e.hitSeen = e.lastHit; e.hitAnim = animTime; }
+    const pulse = sinceHit < 0.12 ? 1 + (0.12 - sinceHit) * 0.7 : 1;
+    const size = e.size * pulse;
+
+    if (e.type === 'boss' || e.mini) {
+        const g = ctx.createRadialGradient(e.x, e.y, size * 0.2, e.x, e.y, size * 0.85);
+        g.addColorStop(0, 'rgba(255,60,60,0.35)');
+        g.addColorStop(1, 'rgba(255,60,60,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, size * 0.85, 0, 6.2832);
+        ctx.fill();
+    }
+    drawShadow(e.x, e.y + size * 0.36, size * 0.34, size * 0.1, 0.22);
+
+    const img = enemySprite(e.type);
+    ctx.save();
+    ctx.translate(e.x, e.y + bob);
+    if (currentMap.flipSprites && e.dirX > 0) ctx.scale(-1, 1);
+    if (ready(img)) {
+        ctx.drawImage(img, -size / 2, -size / 2, size, size);
+    } else {
+        ctx.fillStyle = '#c33';
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 0.35, 0, 6.2832);
+        ctx.fill();
+    }
+    ctx.restore();
+
+    if (e.health < e.maxHealth || e.type === 'boss') {
+        const bw = e.type === 'boss' ? 90 : e.size * 0.75;
+        const by = e.y - e.size * 0.58;
+        const pct = Math.max(0, e.health / e.maxHealth);
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        ctx.fillRect(e.x - bw / 2 - 1, by - 1, bw + 2, 8);
+        ctx.fillStyle = pct > 0.5 ? '#3ddc6b' : pct > 0.25 ? '#f2c230' : '#ef4b4b';
+        ctx.fillRect(e.x - bw / 2, by, bw * pct, 6);
+    }
+    if (e.isSlowed) {
+        ctx.strokeStyle = 'rgba(80,170,255,0.9)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y + bob, size * 0.46, 0, 6.2832);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(80,170,255,0.18)';
+        ctx.fill();
+    }
+}
+
+function drawTower(t) {
+    const idle = Math.sin(animTime * 2 + t.id) * 1.6;
+    const since = world.time - t.firedAt;
+    const recoil = since < 0.16 ? 1 + (0.16 - since) * 0.9 : 1;
+    const selected = selectedTower === t;
+
+    if (t.spot.kind === 'high') {
+        ctx.strokeStyle = 'rgba(255,215,90,0.75)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(t.x, t.y + 34, 46, 15, 0, 0, 6.2832);
+        ctx.stroke();
+    }
+    drawShadow(t.x, t.y + 38, 36, 11, 0.28);
+
+    if (selected || hoverTowerId === t.id) {
+        ctx.beginPath();
+        ctx.strokeStyle = selected ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.28)';
+        ctx.fillStyle = selected ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)';
+        ctx.lineWidth = 2;
+        ctx.arc(t.x, t.y, t.range, 0, 6.2832);
+        ctx.fill();
+        ctx.stroke();
+    }
+
+    const img = sprites.towers[t.type];
+    const s = 100 * recoil;
+    if (ready(img)) ctx.drawImage(img, t.x - s / 2, t.y - s / 2 + idle, s, s);
+    else {
+        ctx.fillStyle = 'blue';
+        ctx.fillRect(t.x - 25, t.y - 25, 50, 50);
+    }
+
+    for (let i = 0; i < 3; i++) {
+        ctx.fillStyle = i < t.level ? '#ffcc00' : 'rgba(0,0,0,0.45)';
+        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(t.x - 12 + i * 12, t.y + 58, 4.2, 0, 6.2832);
+        ctx.fill();
+        ctx.stroke();
+    }
+
+    if (selected) {
+        ctx.beginPath();
+        ctx.strokeStyle = '#00ff88';
+        ctx.lineWidth = 3;
+        ctx.arc(t.x, t.y, 55, 0, 6.2832);
+        ctx.stroke();
+    }
+}
+
+function drawProjectile(p) {
+    const img = sprites.projectiles[p.type];
+    if (ready(img)) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(animTime * 9);
+        ctx.globalAlpha = 0.28;
+        ctx.drawImage(img, -12 - Math.cos(p.angle) * 12, -12 - Math.sin(p.angle) * 12, 24, 24);
+        ctx.globalAlpha = 1;
+        ctx.drawImage(img, -15, -15, 30, 30);
+        ctx.restore();
+    } else {
+        ctx.fillStyle = 'yellow';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8, 0, 6.2832);
+        ctx.fill();
+    }
+}
+
+function drawFx() {
+    fx.rings.forEach(r => {
+        const k = 1 - r.life / r.maxLife;
+        const radius = r.r + (r.max - r.r) * k;
+        ctx.globalAlpha = 1 - k;
+        if (r.aoeImg && ready(sprites.projectiles.eel)) {
+            ctx.drawImage(sprites.projectiles.eel, r.x - radius, r.y - radius, radius * 2, radius * 2);
+        }
+        ctx.strokeStyle = `rgba(${r.color},0.9)`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, radius, 0, 6.2832);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    });
+
+    fx.bubbles.forEach(b => {
+        ctx.globalAlpha = Math.max(0, b.life / b.maxLife);
+        ctx.strokeStyle = 'rgba(230,250,255,0.9)';
+        ctx.fillStyle = 'rgba(200,240,255,0.25)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, 6.2832);
+        ctx.fill();
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    });
+
+    ctx.textAlign = 'center';
+    fx.floaters.forEach(f => {
+        ctx.globalAlpha = Math.min(1, f.life / (f.maxLife * 0.5));
+        ctx.font = f.big ? 'bold 34px sans-serif' : 'bold 20px sans-serif';
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        ctx.strokeText(f.text, f.x, f.y);
+        ctx.fillStyle = f.color;
+        ctx.fillText(f.text, f.x, f.y);
+    });
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
+
+    if (fx.flash > 0) {
+        const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.9);
+        g.addColorStop(0, 'rgba(255,40,50,0)');
+        g.addColorStop(1, `rgba(255,40,50,${0.5 * fx.flash})`);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+    }
+}
+
+// ------------------------------------------------------------------ kule market ve giriş
 
 function renderTowerMarket() {
     const container = document.getElementById('towerMarketContainer');
     container.innerHTML = '';
-    ['octopus', 'eel', 'jellyfish'].forEach(type => {
+    TOWER_ORDER.forEach((type, idx) => {
         const btn = document.createElement('div');
         btn.className = 'tower-button';
         btn.setAttribute('draggable', 'true');
         btn.setAttribute('data-tower', type);
-        btn.setAttribute('data-cost', TOWER_COSTS[type]);
         const name = currentMap.towerNames[type];
         btn.innerHTML = `
             <div class="tower-icon-box"><img src="${currentMap.assets.towers[type]}" alt="${name}"></div>
-            <div class="tower-info"><strong>${name}</strong>
-                <div class="tower-cost">${TOWER_COSTS[type]} Enerji</div>
+            <div class="tower-info"><strong>${name} <span class="hotkey">${idx + 1}</span></strong>
+                <div class="tower-cost"><span class="cost-val"></span> Enerji</div>
+                <div class="tower-role">${TOWER_ROLE[type]}</div>
             </div>`;
-        container.appendChild(btn);
-    });
-    attachTowerButtonDragEvents();
-}
-
-function attachTowerButtonDragEvents() {
-    document.querySelectorAll('.tower-button').forEach(btn => {
-        btn.addEventListener('dragstart', (e) => {
-            draggedTowerType = btn.getAttribute('data-tower');
-            draggedTowerCost = parseInt(btn.getAttribute('data-cost'));
+        btn.addEventListener('dragstart', () => {
+            draggedType = type;
+            armedType = null;
             btn.classList.add('dragging');
         });
-
-        btn.addEventListener('dragend', (e) => {
+        btn.addEventListener('dragend', () => {
             btn.classList.remove('dragging');
-            game.hoveredSpot = null;
+            hoverSpot = null;
+            draggedType = null;
         });
+        btn.addEventListener('click', () => armTower(type));
+        container.appendChild(btn);
     });
 }
+
+function armTower(type) {
+    armedType = armedType === type ? null : type;
+    document.querySelectorAll('.tower-button').forEach(b =>
+        b.classList.toggle('armed', b.getAttribute('data-tower') === armedType));
+}
+
+function toLogical(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scale = Math.min(rect.width / W, rect.height / H);
+    const ox = (rect.width - W * scale) / 2;
+    const oy = (rect.height - H * scale) / 2;
+    return { x: (e.clientX - rect.left - ox) / scale, y: (e.clientY - rect.top - oy) / scale };
+}
+
+function spotAt(p) {
+    for (const spot of world.spots) {
+        if (!spot.tower && Math.hypot(p.x - spot.x, p.y - spot.y) < Core.BUILD_SPOT_RADIUS) return spot;
+    }
+    return null;
+}
+
+function towerAt(p) {
+    let best = null;
+    let bestDist = 60;
+    for (const t of world.towers) {
+        const d = Math.hypot(t.x - p.x, t.y - p.y);
+        if (d < bestDist) { bestDist = d; best = t; }
+    }
+    return best;
+}
+
+function tryBuild(type, spot) {
+    const cost = world.towerCost(type);
+    if (!spot) {
+        addLog('Kule sadece yeşil alanlara yerleştirilebilir!');
+        return false;
+    }
+    if (world.money < cost) {
+        addLog('Yetersiz enerji!');
+        fx.floaters.push({ x: spot.x, y: spot.y - 40, text: `${cost} Enerji gerek`, color: '#ff8a8a', life: 1.2, maxLife: 1.2 });
+        return false;
+    }
+    world.placeTower(type, spot);
+    updateUI();
+    renderTowerList();
+    return true;
+}
+
+let hoverTowerId = null;
 
 canvas.addEventListener('dragover', (e) => {
     e.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-
-    game.hoveredSpot = null;
-    for (let spot of BUILD_SPOTS) {
-        if (!spot.occupied) {
-            const dist = Math.sqrt((x - spot.x) ** 2 + (y - spot.y) ** 2);
-            if (dist < BUILD_SPOT_RADIUS) {
-                game.hoveredSpot = spot;
-                break;
-            }
-        }
-    }
+    hoverSpot = world ? spotAt(toLogical(e)) : null;
 });
-
-canvas.addEventListener('dragleave', (e) => {
-    game.hoveredSpot = null;
-});
-
+canvas.addEventListener('dragleave', () => { hoverSpot = null; });
 canvas.addEventListener('drop', (e) => {
     e.preventDefault();
-    if (!draggedTowerType || game.money < draggedTowerCost) {
-        addLog("Yetersiz enerji!");
-        game.hoveredSpot = null;
-        return;
-    }
-
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-
-    let targetSpot = null;
-    for (let spot of BUILD_SPOTS) {
-        if (!spot.occupied) {
-            const dist = Math.sqrt((x - spot.x) ** 2 + (y - spot.y) ** 2);
-            if (dist < BUILD_SPOT_RADIUS) {
-                targetSpot = spot;
-                break;
-            }
-        }
-    }
-
-    if (!targetSpot) {
-        addLog("Kule sadece yeşil alanlara yerleştirilebilir!");
-    } else {
-        game.money -= draggedTowerCost;
-        const towerId = game.nextTowerId++;
-        const newTower = new Tower(draggedTowerType, targetSpot.x, targetSpot.y, towerId);
-        newTower.spot = targetSpot;
-        game.towers.push(newTower);
-        targetSpot.occupied = true;
-        addLog(`Kullanıcı, (${Math.floor(targetSpot.x)}, ${Math.floor(targetSpot.y)}) konumuna '${newTower.name}-ID${String(towerId).padStart(3, '0')}' inşa etti. Kalan Enerji: ${game.money}.`);
-        updateUI();
-        renderTowerList();
-    }
-
-    game.hoveredSpot = null;
-    draggedTowerType = null;
+    if (!world || !draggedType) return;
+    tryBuild(draggedType, spotAt(toLogical(e)));
+    hoverSpot = null;
+    draggedType = null;
 });
-
+canvas.addEventListener('mousemove', (e) => {
+    if (!world) return;
+    const p = toLogical(e);
+    hoverSpot = armedType ? spotAt(p) : null;
+    const t = towerAt(p);
+    hoverTowerId = t ? t.id : null;
+    canvas.style.cursor = armedType ? (hoverSpot ? 'copy' : 'not-allowed') : (t ? 'pointer' : 'default');
+});
+canvas.addEventListener('mouseleave', () => { hoverSpot = null; hoverTowerId = null; });
 canvas.addEventListener('click', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-
-    let clicked = null;
-    let bestDist = 60;
-    for (const t of game.towers) {
-        const d = t.distanceTo({ x, y });
-        if (d < bestDist) {
-            bestDist = d;
-            clicked = t;
-        }
+    if (!world || world.result) return;
+    const p = toLogical(e);
+    if (armedType) {
+        const spot = spotAt(p);
+        if (spot) { tryBuild(armedType, spot); return; }
     }
-
-    if (clicked) {
-        openTowerModal(clicked);
+    const t = towerAt(p);
+    if (t) {
+        armedType = null;
+        document.querySelectorAll('.tower-button').forEach(b => b.classList.remove('armed'));
+        openTowerModal(t);
+    } else if (!armedType) {
+        closeTowerModal();
     }
 });
 
 document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    if (game.selectedTower) {
-        closeTowerModal();
-    } else if (game.gameActive) {
-        quitToMapSelect();
-    }
+    if (!world || document.getElementById('gameScreen').classList.contains('hidden')) return;
+    const k = e.key.toLowerCase();
+    if (k === 'escape') {
+        if (armedType) { armTower(armedType); }
+        else if (selectedTower) closeTowerModal();
+        else quitToMapSelect();
+    } else if (k === ' ') {
+        e.preventDefault();
+        startNextWave();
+    } else if (k === 'p') togglePause();
+    else if (k === 'f') toggleSpeed();
+    else if (k >= '1' && k <= '3') armTower(TOWER_ORDER[+k - 1]);
 });
 
-function openTowerModal(tower) {
-    game.selectedTower = tower;
-    document.getElementById('towerModalName').innerText = `${tower.name} (Seviye ${tower.level}/3)`;
-    document.getElementById('towerModalStats').innerText =
-        `Hasar: ${tower.dmg.toFixed(0)}   Menzil: ${tower.range.toFixed(0)}   Atış Aralığı: ${tower.rate.toFixed(2)} sn`;
+// ------------------------------------------------------------------ kule penceresi
 
-    const upgradeCost = tower.getUpgradeCost();
+function statLine(t) {
+    return `Hasar: ${t.dmg}   Menzil: ${t.range}   Atış Aralığı: ${t.rate.toFixed(2)} sn`;
+}
+
+function openTowerModal(tower) {
+    selectedTower = tower;
+    document.getElementById('towerModalName').innerText = `${tower.name} (Seviye ${tower.level}/${Core.MAX_LEVEL})`;
+
+    let stats = statLine(tower);
+    if (tower.level < Core.MAX_LEVEL) {
+        const next = Object.assign(Object.create(Core.Tower.prototype), tower, { level: tower.level + 1 });
+        next.derive();
+        stats += `\nSonraki: Hasar ${next.dmg} · Menzil ${next.range} · ${next.rate.toFixed(2)} sn`;
+    }
+    document.getElementById('towerModalStats').innerText = stats;
+    document.getElementById('towerModalPerk').innerText = tower.perk();
+    document.getElementById('modeBtn').innerText = 'Hedef: ' + MODE_LABEL[tower.mode];
+
+    const cost = tower.upgradeCost();
     const upgradeBtn = document.getElementById('upgradeBtn');
-    if (upgradeCost === null) {
+    if (cost === null) {
         upgradeBtn.innerText = 'MAKSİMUM SEVİYE';
         upgradeBtn.disabled = true;
     } else {
-        upgradeBtn.innerText = `YÜKSELT (${upgradeCost} Enerji)`;
-        upgradeBtn.disabled = game.money < upgradeCost;
+        upgradeBtn.innerText = `YÜKSELT (${cost} Enerji)`;
+        upgradeBtn.disabled = world.money < cost;
     }
-
-    document.getElementById('sellBtn').innerText = `SAT (+${tower.getSellRefund()} Enerji)`;
+    document.getElementById('sellBtn').innerText = `SAT (+${tower.sellValue()} Enerji)`;
     document.getElementById('towerModal').classList.remove('hidden');
     renderTowerList();
 }
 
 function closeTowerModal() {
-    game.selectedTower = null;
+    selectedTower = null;
     document.getElementById('towerModal').classList.add('hidden');
-    renderTowerList();
+    if (world) renderTowerList();
+}
+
+function cycleTargetMode() {
+    if (!selectedTower) return;
+    const modes = Core.TARGET_MODES;
+    selectedTower.mode = modes[(modes.indexOf(selectedTower.mode) + 1) % modes.length];
+    document.getElementById('modeBtn').innerText = 'Hedef: ' + MODE_LABEL[selectedTower.mode];
 }
 
 function upgradeSelectedTower() {
-    const tower = game.selectedTower;
-    if (!tower) return;
-    const cost = tower.getUpgradeCost();
-    if (cost === null || game.money < cost) return;
-
-    game.money -= cost;
-    tower.upgrade(cost);
-    addLog(`'${tower.name}-ID${String(tower.id).padStart(3, '0')}' Seviye ${tower.level}'e yükseltildi. Kalan Enerji: ${game.money}.`);
-    updateUI();
-    openTowerModal(tower);
+    if (!selectedTower) return;
+    if (world.upgradeTower(selectedTower)) {
+        updateUI();
+        openTowerModal(selectedTower);
+    }
 }
 
 function sellSelectedTower() {
-    const tower = game.selectedTower;
-    if (!tower) return;
-
-    const refund = tower.getSellRefund();
-    game.money += refund;
-    if (tower.spot) tower.spot.occupied = false;
-    game.towers = game.towers.filter(t => t !== tower);
-    addLog(`'${tower.name}-ID${String(tower.id).padStart(3, '0')}' satıldı. +${refund} Enerji. Kalan Enerji: ${game.money}.`);
+    if (!selectedTower) return;
+    world.sellTower(selectedTower);
     closeTowerModal();
     updateUI();
 }
 
 function renderTowerList() {
     const container = document.getElementById('towerList');
-    if (game.towers.length === 0) {
+    if (world.towers.length === 0) {
         container.innerHTML = '<p style="color:#888; font-size:0.95em;">Henüz kule yerleştirilmedi.</p>';
         return;
     }
     container.innerHTML = '';
-    game.towers.forEach(t => {
+    world.towers.forEach(t => {
         const row = document.createElement('div');
-        row.className = 'tower-list-row' + (game.selectedTower === t ? ' selected' : '');
-        row.innerText = `${t.name} · Lv${t.level}/3 (ID${String(t.id).padStart(3, '0')})`;
+        row.className = 'tower-list-row' + (selectedTower === t ? ' selected' : '');
+        row.innerText = `${t.name} · Lv${t.level}/${Core.MAX_LEVEL} (ID${pad3(t.id)})`;
         row.onclick = () => openTowerModal(t);
         container.appendChild(row);
     });
 }
 
+// ------------------------------------------------------------------ yan panel
+
+let uiCache = {};
+
+function setText(id, value) {
+    if (uiCache[id] === value) return;
+    uiCache[id] = value;
+    document.getElementById(id).innerText = value;
+}
+
+function updateUI() {
+    if (!world) return;
+    const hp = Math.max(0, Math.ceil(world.health));
+    setText('healthValue', hp);
+    setText('moneyValue', world.money);
+    setText('waveValue', `${world.wave}/${world.totalWaves}`);
+    const bar = document.getElementById('healthBar');
+    const pct = Math.round(100 * hp / world.maxHealth);
+    if (uiCache.hpPct !== pct) {
+        uiCache.hpPct = pct;
+        bar.style.width = pct + '%';
+        bar.style.background = pct > 50 ? '#3ddc6b' : pct > 25 ? '#f2c230' : '#ef4b4b';
+    }
+
+    const btn = document.getElementById('waveButton');
+    const can = world.canStartWave();
+    const text = world.wave >= world.totalWaves ? 'SON DALGA GELDİ' : `DALGA ${world.wave + 1} BAŞLAT`;
+    if (uiCache.waveBtn !== text + can) {
+        uiCache.waveBtn = text + can;
+        btn.innerText = text;
+        btn.disabled = !can;
+    }
+
+    const key = world.wave + ':' + world.towers.length;
+    if (uiCache.preview !== key) {
+        uiCache.preview = key;
+        renderWavePreview();
+    }
+
+    document.querySelectorAll('.tower-button').forEach(b => {
+        const type = b.getAttribute('data-tower');
+        const cost = world.towerCost(type);
+        const cv = b.querySelector('.cost-val');
+        if (cv.innerText !== String(cost)) cv.innerText = cost;
+        const afford = world.money >= cost;
+        b.classList.toggle('unaffordable', !afford);
+    });
+
+    if (selectedTower && world.towers.includes(selectedTower)) {
+        const cost = selectedTower.upgradeCost();
+        if (cost !== null) document.getElementById('upgradeBtn').disabled = world.money < cost;
+    }
+}
+
+function renderWavePreview() {
+    const box = document.getElementById('wavePreview');
+    const next = world.previewNext();
+    if (!next) {
+        box.innerHTML = '<div class="preview-title">Tüm dalgalar başladı</div>';
+        return;
+    }
+    const chips = Object.entries(next.counts).map(([type, count]) => {
+        const img = currentMap.assets.enemies[type] || (type === 'boss' ? currentMap.assets.enemies.armored : currentMap.assets.enemies.standard);
+        const name = currentMap.enemyNames[type] || type;
+        return `<span class="chip" title="${name}"><img src="${img}" alt="">×${count}</span>`;
+    }).join('');
+    box.innerHTML = `<div class="preview-title">Sıradaki: Dalga ${next.wave}</div><div class="chips">${chips}</div>`;
+}
+
+function togglePause() {
+    if (!world) return;
+    paused = !paused;
+    document.getElementById('pauseButton').innerText = paused ? 'DEVAM ET' : 'DURAKLAT';
+}
+
+function toggleSpeed() {
+    if (!world) return;
+    speedMultiplier = speedMultiplier === 1 ? 2 : 1;
+    document.getElementById('speedButton').innerText = `HIZ: ${speedMultiplier}x`;
+}
+
+function startNextWave() {
+    if (!world) return;
+    if (world.result) return;
+    if (world.wave >= world.totalWaves) {
+        addLog('Tüm dalgalar başladı!');
+        return;
+    }
+    if (!world.startWave()) addLog('Önceki dalganın düşmanları hâlâ doğuyor, biraz bekleyin.');
+    updateUI();
+}
+
+// ------------------------------------------------------------------ ekranlar
+
 function showMapSelect() {
     document.getElementById('menuScreen').classList.add('hidden');
     document.getElementById('mapSelectScreen').classList.remove('hidden');
+    renderMapSelectScreen();
 }
 
 function backToMenuFromMapSelect() {
@@ -802,352 +1058,119 @@ function backToMenuFromMapSelect() {
     document.getElementById('menuScreen').classList.remove('hidden');
 }
 
-function quitToMapSelect() {
-    game.gameActive = false;
+function stopGame() {
+    cancelAnimationFrame(rafId);
+    world = null;
     document.getElementById('towerModal').classList.add('hidden');
     document.getElementById('gameScreen').classList.add('hidden');
-    document.getElementById('mapSelectScreen').classList.remove('hidden');
-    addLog("Oyundan çıkıldı, harita seçimine dönüldü.");
+}
+
+function quitToMapSelect() {
+    if (world) addLog('Oyundan çıkıldı, harita seçimine dönüldü.');
+    stopGame();
+    showMapSelect();
+}
+
+function toMapSelect() {
+    document.getElementById('winScreen').classList.add('hidden');
+    document.getElementById('loseScreen').classList.add('hidden');
+    stopGame();
+    showMapSelect();
 }
 
 function renderMapSelectScreen() {
-    const container = document.getElementById('mapButtonsContainer');
-    container.innerHTML = '';
+    records = loadRecords();
+    const pills = document.getElementById('difficultyPills');
+    pills.innerHTML = '';
+    Object.entries(Core.DIFFICULTY).forEach(([key, d]) => {
+        const b = document.createElement('button');
+        b.className = 'pill' + (key === difficulty ? ' active' : '');
+        b.innerText = d.label;
+        b.onclick = () => {
+            difficulty = key;
+            try { window.localStorage.setItem('sas.difficulty', key); } catch (e) { /* yoksay */ }
+            renderMapSelectScreen();
+        };
+        pills.appendChild(b);
+    });
+
+    const grid = document.getElementById('mapGrid');
+    grid.innerHTML = '';
     MAPS.forEach((m, i) => {
-        const btn = document.createElement('button');
-        btn.className = 'menu-button map-button';
-        btn.innerHTML = `${m.name}<br><span class="map-desc">${m.desc}</span>`;
-        btn.onclick = () => selectMap(i);
-        container.appendChild(btn);
+        const rec = records[recordKey(m)];
+        const earned = rec ? '★'.repeat(rec.stars) + '☆'.repeat(3 - rec.stars) : '☆☆☆';
+        const card = document.createElement('button');
+        card.className = 'map-card';
+        card.style.backgroundImage = `url('${m.assets.bg}')`;
+        card.innerHTML = `
+            <div class="map-card-shade"></div>
+            <div class="map-card-earned ${rec ? 'done' : ''}">${earned}</div>
+            <div class="map-card-text">
+                <div class="map-card-name">${m.name}</div>
+                <div class="map-card-desc">${m.desc}</div>
+                <div class="map-card-meta">Zorluk ${'●'.repeat(m.stars)}${'○'.repeat(5 - m.stars)} · ${Core.totalWavesOf(m)} dalga</div>
+            </div>`;
+        card.onclick = () => selectMap(i);
+        grid.appendChild(card);
     });
 }
 
-function selectMap(mapIndex) {
-    loadMap(mapIndex);
-
-    document.getElementById('menuScreen').classList.add('hidden');
-    document.getElementById('mapSelectScreen').classList.add('hidden');
-    document.getElementById('winScreen').classList.add('hidden');
-    document.getElementById('loseScreen').classList.add('hidden');
+function showEnd() {
     document.getElementById('towerModal').classList.add('hidden');
-    document.getElementById('gameScreen').classList.remove('hidden');
-
-    game = new GameState();
-    lastTime = 0;
-    draggedTowerType = null;
-    draggedTowerCost = 0;
-
-    document.getElementById('gameLog').innerHTML = '';
-    document.getElementById('pauseButton').innerText = 'DURAKLAT';
-    document.getElementById('speedButton').innerText = 'HIZ: 1x';
-
-    game.gameActive = true;
-    requestAnimationFrame(gameLoop);
-    addLog(`Oyun başladı! (${currentMap.name}) Kulelerinizi yeşil alanlara yerleştirin ve dalgayı başlatın.`);
-    updateUI();
-    renderTowerList();
-}
-
-function gameLoop(timestamp) {
-    if (!lastTime) lastTime = timestamp;
-    let dt = (timestamp - lastTime) / 1000;
-    lastTime = timestamp;
-
-    if (dt > 0.1) dt = 0.1;
-
-    if (game.gameActive) {
-        if (!game.paused) {
-            update(dt * game.speedMultiplier);
+    const s = world.stats;
+    const statsText = `${s.kills} düşman yok edildi · ${world.towers.length} kule · ${Core.DIFFICULTY[difficulty].label}`;
+    if (world.result === 'win') {
+        const hp = Math.max(0, Math.ceil(world.health));
+        const stars = starsFor(hp, world.maxHealth);
+        const key = recordKey(currentMap);
+        if (!records[key] || records[key].stars < stars) {
+            records[key] = { stars, health: hp };
+            saveRecords(records);
         }
-        draw();
-        requestAnimationFrame(gameLoop);
-    }
-}
-
-function togglePause() {
-    game.paused = !game.paused;
-    document.getElementById('pauseButton').innerText = game.paused ? 'DEVAM ET' : 'DURAKLAT';
-}
-
-function toggleSpeed() {
-    game.speedMultiplier = game.speedMultiplier === 1 ? 2 : 1;
-    document.getElementById('speedButton').innerText = `HIZ: ${game.speedMultiplier}x`;
-}
-
-function currentSpawnInterval() {
-    return Math.max(700, CONFIG.SPAWN_INTERVAL - (game.currentWave - 1) * 120);
-}
-
-function update(dt) {
-    if (game.waveEnemies.length > 0) {
-        game.lastSpawnTime += dt * 1000;
-        if (game.lastSpawnTime > currentSpawnInterval()) {
-            let type = game.waveEnemies.shift();
-            let newEnemy = new Enemy(type, GAME_PATH[0].x, GAME_PATH[0].y, game.nextEnemyId++);
-            game.enemies.push(newEnemy);
-            addLog(`${newEnemy.name} haritaya girdi.`);
-            game.lastSpawnTime = 0;
-        }
-    }
-
-    game.enemies = game.enemies.filter(e => !e.update(dt));
-    game.towers.forEach(t => t.update(dt, game.enemies));
-    game.projectiles.forEach(p => p.update(dt));
-    game.projectiles = game.projectiles.filter(p => p.active);
-    game.particles = game.particles.filter(p => !p.update(dt));
-
-    game.enemies = game.enemies.filter(enemy => enemy.health > 0);
-
-    if (game.health <= 0) {
-        game.health = 0;
-        gameOver(false);
-    }
-    else if (game.currentWave === CONFIG.TOTAL_WAVES && game.enemies.length === 0 && game.waveEnemies.length === 0) {
-        gameOver(true);
-    }
-
-    updateUI();
-}
-
-function draw() {
-    if (SPRITES.bg.complete) {
-        ctx.drawImage(SPRITES.bg, 0, 0, canvas.width, canvas.height);
-    } else {
-        ctx.fillStyle = '#001d3d';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
-    ctx.beginPath();
-    ctx.moveTo(GAME_PATH[0].x, GAME_PATH[0].y);
-    for (let i = 1; i < GAME_PATH.length; i++) {
-        ctx.lineTo(GAME_PATH[i].x, GAME_PATH[i].y);
-    }
-
-    // koyu kontur: patika her arka plan renginde net gorunsun
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
-    ctx.lineWidth = 11;
-    ctx.stroke();
-
-    ctx.strokeStyle = 'rgba(255, 210, 100, 0.95)';
-    ctx.lineWidth = 5;
-    ctx.setLineDash([12, 6]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    for (let spot of BUILD_SPOTS) {
-        if (!spot.occupied) {
-            const isHovered = game.hoveredSpot === spot;
-
-            if (isHovered) {
-                ctx.fillStyle = 'rgba(0, 255, 136, 0.5)';
-                ctx.strokeStyle = '#00ff88';
-                ctx.lineWidth = 3;
-            } else {
-                ctx.fillStyle = 'rgba(0, 255, 136, 0.2)';
-                ctx.strokeStyle = 'rgba(0, 255, 136, 0.6)';
-                ctx.lineWidth = 2;
-            }
-
-            ctx.beginPath();
-            ctx.arc(spot.x, spot.y, BUILD_SPOT_RADIUS, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-
-            if (!isHovered) {
-                ctx.strokeStyle = 'rgba(0, 255, 136, 0.4)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(spot.x - 15, spot.y);
-                ctx.lineTo(spot.x + 15, spot.y);
-                ctx.moveTo(spot.x, spot.y - 15);
-                ctx.lineTo(spot.x, spot.y + 15);
-                ctx.stroke();
-            }
-        }
-    }
-
-    game.enemies.forEach(e => e.draw(ctx));
-    game.towers.forEach(t => t.draw(ctx, true));
-    game.projectiles.forEach(p => p.draw(ctx));
-    game.particles.forEach(p => p.draw(ctx));
-
-    if (game.paused) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 60px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('DURAKLANDI', canvas.width / 2, canvas.height / 2);
-        ctx.textAlign = 'left';
-    }
-}
-
-function updateUI() {
-    document.getElementById('healthValue').innerText = Math.max(0, Math.floor(game.health));
-    document.getElementById('moneyValue').innerText = game.money;
-    document.getElementById('waveValue').innerText = game.currentWave + "/" + CONFIG.TOTAL_WAVES;
-
-    document.querySelectorAll('.tower-button').forEach(btn => {
-        const cost = parseInt(btn.getAttribute('data-cost'));
-        if (game.money < cost) {
-            btn.style.opacity = '0.5';
-            btn.style.cursor = 'not-allowed';
-            btn.setAttribute('draggable', 'false');
-        } else {
-            btn.style.opacity = '1';
-            btn.style.cursor = 'grab';
-            btn.setAttribute('draggable', 'true');
-        }
-    });
-
-    if (game.selectedTower && game.towers.includes(game.selectedTower)) {
-        const upgradeCost = game.selectedTower.getUpgradeCost();
-        const upgradeBtn = document.getElementById('upgradeBtn');
-        if (upgradeCost !== null) {
-            upgradeBtn.disabled = game.money < upgradeCost;
-        }
-    }
-}
-
-function addLog(msg) {
-    let div = document.createElement('div');
-    div.className = 'log-entry';
-    div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    document.getElementById('gameLog').prepend(div);
-    game.logs.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
-
-    const logContainer = document.getElementById('gameLog');
-    logContainer.scrollTop = 0;
-}
-
-function startNextWave() {
-    if (game.currentWave >= CONFIG.TOTAL_WAVES) {
-        addLog("Tüm dalgalar tamamlandı!");
-        return;
-    }
-
-    game.currentWave++;
-    game.spawnIndex = 0;
-    game.lastSpawnTime = 0;
-
-    let waveEnemyList = [];
-    const enemyTypes = ['standard', 'armored', 'flying'];
-
-    if (game.currentWave === 1) {
-        waveEnemyList = ['standard', 'standard', 'armored', 'flying'];
-        const totalEnemies = Math.random() < 0.5 ? 4 : 5;
-        if (totalEnemies === 5) {
-            waveEnemyList.push(enemyTypes[Math.floor(Math.random() * enemyTypes.length)]);
-        }
-    } else if (game.currentWave === 2) {
-        const minCount = 8;
-        const maxCount = 12;
-        const count = Math.floor(Math.random() * (maxCount - minCount + 1)) + minCount;
-
-        waveEnemyList = [];
-        waveEnemyList.push('standard', 'armored', 'flying');
-
-        for (let i = 0; i < count - 3; i++) {
-            waveEnemyList.push(enemyTypes[Math.floor(Math.random() * enemyTypes.length)]);
-        }
-    } else if (game.currentWave === 3) {
-        const minCount = 12;
-        const maxCount = 16;
-        const count = Math.floor(Math.random() * (maxCount - minCount + 1)) + minCount;
-        const pool = ['standard', 'armored', 'armored', 'flying', 'flying'];
-
-        waveEnemyList = ['standard', 'armored', 'armored', 'flying'];
-        const baseLen3 = waveEnemyList.length;
-        for (let i = 0; i < count - baseLen3; i++) {
-            waveEnemyList.push(pool[Math.floor(Math.random() * pool.length)]);
-        }
-    } else if (game.currentWave === 4) {
-        const minCount = 16;
-        const maxCount = 20;
-        const count = Math.floor(Math.random() * (maxCount - minCount + 1)) + minCount;
-        const pool = ['standard', 'armored', 'armored', 'flying', 'flying', 'flying'];
-
-        waveEnemyList = ['standard', 'armored', 'armored', 'flying', 'flying'];
-        const baseLen4 = waveEnemyList.length;
-        for (let i = 0; i < count - baseLen4; i++) {
-            waveEnemyList.push(pool[Math.floor(Math.random() * pool.length)]);
-        }
-    } else if (game.currentWave === 5) {
-        const minCount = 20;
-        const maxCount = 26;
-        const count = Math.floor(Math.random() * (maxCount - minCount + 1)) + minCount;
-        const pool = ['armored', 'armored', 'flying', 'flying', 'standard'];
-
-        waveEnemyList = ['standard', 'armored', 'flying', 'armored', 'flying'];
-        const baseLen5 = waveEnemyList.length;
-        for (let i = 0; i < count - baseLen5; i++) {
-            waveEnemyList.push(pool[Math.floor(Math.random() * pool.length)]);
-        }
-    }
-
-    for (let i = waveEnemyList.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [waveEnemyList[i], waveEnemyList[j]] = [waveEnemyList[j], waveEnemyList[i]];
-    }
-
-    const typeCounts = waveEnemyList.reduce((acc, t) => { acc[t] = (acc[t] || 0) + 1; return acc; }, {});
-    const typeInfo = Object.entries(typeCounts).map(([t, c]) => `${currentMap.enemyNames[t]}: ${c}`).join(', ');
-    addLog(`=== DALGA ${game.currentWave} BAŞLADI === (${typeInfo}, Toplam: ${waveEnemyList.length})`);
-
-    game.waveEnemies = waveEnemyList;
-    updateUI();
-}
-
-function gameOver(won) {
-    game.gameActive = false;
-    document.getElementById('towerModal').classList.add('hidden');
-
-    const finalHealth = Math.max(0, Math.floor(game.health));
-    const finalMoney = game.money;
-
-    if (won) {
-        document.getElementById('finalHealthWin').innerText = finalHealth;
-        document.getElementById('finalMoneyWin').innerText = finalMoney;
+        document.getElementById('finalHealthWin').innerText = hp;
+        document.getElementById('finalMoneyWin').innerText = world.money;
+        document.getElementById('winStars').innerText = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+        document.getElementById('winStats').innerText = statsText;
         document.getElementById('winScreen').classList.remove('hidden');
-        addLog(`TEBRİKLER! Oyunu kazandınız! Kalan Can: ${finalHealth}`);
+        addLog(`TEBRİKLER! Oyunu kazandınız! Kalan Can: ${hp}`);
     } else {
-        document.getElementById('finalHealthLose').innerText = 0;
-        document.getElementById('finalMoneyLose').innerText = finalMoney;
+        document.getElementById('finalWaveLose').innerText = `${world.wave}/${world.totalWaves}`;
+        document.getElementById('finalMoneyLose').innerText = world.money;
+        document.getElementById('loseStats').innerText = statsText;
         document.getElementById('loseScreen').classList.remove('hidden');
-        addLog(`Oyunu kaybettiniz!`);
+        addLog('Oyunu kaybettiniz!');
     }
 }
 
 function downloadLog() {
     try {
-        let txt = "=== SU ALTI SAVUNMA - SİMÜLASYON GÜNLÜĞÜ ===\n";
-        txt += `Simülasyon Başladı. Senaryo: 'Derin Deniz'. Başlangıç Can: ${CONFIG.START_HEALTH}, Enerji: ${CONFIG.START_MONEY}.\n`;
-        txt += "================================================\n\n";
-        txt += game.logs.join('\n');
-        txt += "\n\n================================================\n";
-        txt += "SON DURUM RAPORU\n";
-        txt += "================================================\n";
-        txt += `Kalan Can: ${Math.max(0, game.health)}\n`;
-        txt += `Kalan Enerji: ${game.money}\n`;
-        txt += `Tamamlanan Dalga: ${game.currentWave}/${CONFIG.TOTAL_WAVES}\n`;
-        txt += `Toplam Kule: ${game.towers.length}\n`;
-        txt += `Tarih: ${new Date().toLocaleString()}\n`;
-        txt += game.health > 0 && game.currentWave >= CONFIG.TOTAL_WAVES ? "\nSON: Tüm dalgalar temizlendi. OYUN KAZANILDI!\n" : game.health <= 0 ? "\nSON: Üs düştü. OYUN KAYBEDİLDİ!\n" : "";
-
-        console.log("İndirme işlemi başlatılıyor...");
-        console.log("Log uzunluğu: " + txt.length + " karakter");
-
-        if (window.javaBridge && window.javaBridge.saveLog) {
-            console.log("JavaBridge bulundu, log gönderiliyor...");
-            window.javaBridge.saveLog(txt);
-        } else {
-            console.error("JavaBridge bulunamadı!");
-            alert("Java bağlantısı kurulamadı! Log kaydedilemedi.");
+        let txt = '=== SU ALTI SAVUNMA - SİMÜLASYON GÜNLÜĞÜ ===\n';
+        txt += `Simülasyon Başladı. Harita: '${currentMap.name}' (${Core.DIFFICULTY[difficulty].label}). Başlangıç Can: ${world ? world.maxHealth : '-'}.\n`;
+        txt += '================================================\n\n';
+        txt += logs.join('\n');
+        txt += '\n\n================================================\n';
+        txt += 'SON DURUM RAPORU\n';
+        txt += '================================================\n';
+        if (world) {
+            txt += `Kalan Can: ${Math.max(0, Math.ceil(world.health))}\n`;
+            txt += `Kalan Enerji: ${world.money}\n`;
+            txt += `Ulaşılan Dalga: ${world.wave}/${world.totalWaves}\n`;
+            txt += `Toplam Kule: ${world.towers.length}\n`;
+            txt += `Yok Edilen Düşman: ${world.stats.kills}\n`;
+            txt += `Tarih: ${new Date().toLocaleString()}\n`;
+            if (world.result === 'win') txt += '\nSON: Tüm dalgalar temizlendi. OYUN KAZANILDI!\n';
+            else if (world.result === 'lose') txt += '\nSON: Üs düştü. OYUN KAYBEDİLDİ!\n';
         }
 
+        if (window.javaBridge && window.javaBridge.saveLog) {
+            window.javaBridge.saveLog(txt);
+        } else {
+            console.error('JavaBridge bulunamadı!');
+            alert('Java bağlantısı kurulamadı! Log kaydedilemedi.');
+        }
     } catch (error) {
         console.error('İndirme hatası:', error);
-        addLog("Günlük kaydedilemedi! Hata: " + error.message);
+        if (world) addLog('Günlük kaydedilemedi! Hata: ' + error.message);
     }
 }
 
@@ -1163,15 +1186,12 @@ function restartGame() {
     selectMap(currentMapIndex);
 }
 
-function checkFonts() {
-    const testElements = document.querySelectorAll('#menuScreen h1, .menu-button');
-    testElements.forEach(el => {
-        el.style.fontFamily = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
-    });
-}
-
 window.onload = function () {
     document.getElementById('menuScreen').classList.remove('hidden');
-    checkFonts();
     renderMapSelectScreen();
+    // geliştirme kısayolu: index.html#map=2&diff=hard haritayı doğrudan açar
+    const m = /map=(\d+)/.exec(location.hash);
+    const d = /diff=(\w+)/.exec(location.hash);
+    if (d && Core.DIFFICULTY[d[1]]) difficulty = d[1];
+    if (m && MAPS[+m[1]]) selectMap(+m[1]);
 };

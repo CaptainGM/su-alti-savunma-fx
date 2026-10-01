@@ -1,0 +1,106 @@
+// Denge simülasyonu: oyunu tarayıcısız oynatan basit botlar.
+//   node tools/balans.js              -> tüm haritalar, normal zorluk
+//   node tools/balans.js mercan hard  -> tek harita, tek zorluk
+//   HPSCALE=1.4 node tools/balans.js yosun  -> haritanın hpScale değerini denemek için
+//
+// "spam" her yere ahtapot dikip yükselten oyuncuyu, "karisik" ise türleri dengeli kullanan oyuncuyu temsil eder.
+// Amaç: spam stratejisi karışık stratejiden belirgin şekilde kötü sonuç versin.
+const path = require('path');
+const web = path.join(__dirname, '..', 'src', 'main', 'resources', 'web', 'js');
+const Core = require(path.join(web, 'core.js'));
+const MAPS = require(path.join(web, 'maps.js'));
+
+// bir yerin yola ne kadar uzunluk boyunca menzil verdiği
+function coverage(world, spot, range) {
+    let covered = 0;
+    for (const p of world.paths) {
+        for (let i = 1; i < p.points.length; i++) {
+            const a = p.points[i];
+            if (Math.hypot(a.x - spot.x, a.y - spot.y) <= range) covered += p.dist[i] - p.dist[i - 1];
+        }
+    }
+    return covered * (spot.kind === 'high' ? 1.35 : 1);
+}
+
+function rankedSpots(world) {
+    return world.spots.slice().sort((a, b) => coverage(world, b, 200) - coverage(world, a, 200));
+}
+
+const BOTS = {
+    // her yere ahtapot, yer bitince yükselt
+    spam(world) {
+        const spots = rankedSpots(world);
+        for (;;) {
+            const free = spots.find(s => !s.tower);
+            if (free && world.money >= world.towerCost('octopus')) { world.placeTower('octopus', free); continue; }
+            if (!free) {
+                const up = world.towers.filter(t => t.upgradeCost() !== null && world.money >= t.upgradeCost())
+                    .sort((a, b) => a.level - b.level)[0];
+                if (up) { world.upgradeTower(up); continue; }
+            }
+            break;
+        }
+    },
+
+    // ahtapot : yılan balığı : deniz anası ~ 3:2:1, 6. kuleden sonra yükseltmeye ağırlık
+    karisik(world) {
+        const spots = rankedSpots(world);
+        const order = ['jellyfish', 'octopus', 'eel', 'octopus', 'eel', 'octopus'];
+        for (;;) {
+            const free = spots.find(s => !s.tower);
+            const n = world.towers.length;
+            const type = order[n % order.length];
+            if (free && n < 7 && world.money >= world.towerCost(type)) { world.placeTower(type, free); continue; }
+            const ups = world.towers.filter(t => t.upgradeCost() !== null && world.money >= t.upgradeCost())
+                .sort((a, b) => a.level - b.level || b.id - a.id);
+            if (n >= 6 && ups.length) { world.upgradeTower(ups[0]); continue; }
+            if (free && world.money >= world.towerCost(type)) { world.placeTower(type, free); continue; }
+            break;
+        }
+    },
+};
+
+function play(map, botName, diff, seed) {
+    const world = new Core.World(map, { difficulty: diff, seed });
+    const bot = BOTS[botName];
+    let t = 0;
+    let nextAct = 0;
+    const dt = 1 / 30;
+    while (!world.result && t < 3600) {
+        if (t >= nextAct) {
+            bot(world);
+            if (world.enemies.length === 0 && world.canStartWave()) world.startWave();
+            nextAct = t + 0.5;
+        }
+        world.update(dt);
+        t += dt;
+    }
+    return {
+        result: world.result || 'timeout',
+        wave: world.wave,
+        health: Math.max(0, Math.round(world.health)),
+        towers: world.towers.length,
+        money: world.money,
+        sec: Math.round(t),
+    };
+}
+
+const [mapArg, diffArg] = process.argv.slice(2);
+const maps = MAPS.filter(m => !mapArg || m.id === mapArg).map(m => (process.env.HPSCALE ? Object.assign({}, m, { hpScale: +process.env.HPSCALE }) : m));
+const diffs = diffArg ? [diffArg] : ['normal'];
+const SEEDS = [11, 23, 37];
+
+console.log('harita'.padEnd(10), 'zorluk'.padEnd(7), 'bot'.padEnd(8), 'kazanma', 'ort.can', 'ort.dalga', 'kule', 'enerji', 'sure');
+for (const map of maps) {
+    for (const diff of diffs) {
+        for (const bot of Object.keys(BOTS)) {
+            const runs = SEEDS.map(s => play(map, bot, diff, s));
+            const wins = runs.filter(r => r.result === 'win').length;
+            const avg = k => (runs.reduce((a, r) => a + r[k], 0) / runs.length).toFixed(0);
+            console.log(
+                map.id.padEnd(10), diff.padEnd(7), bot.padEnd(8),
+                `${wins}/${runs.length}`.padEnd(7), avg('health').padStart(7), `${avg('wave')}/${Core.totalWavesOf(map)}`.padStart(9),
+                avg('towers').padStart(4), avg('money').padStart(6), avg('sec').padStart(5) + 's');
+        }
+    }
+}
