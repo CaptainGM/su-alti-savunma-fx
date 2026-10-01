@@ -6,9 +6,16 @@ import toolkit as T
 from toolkit import rgb, S
 
 
-def build(out_path=None, seed=8):
+def draw_rock(seed=8):
     rng = np.random.default_rng(seed)
-    rock = T.rock_base(T.blank(), 500, 835, 300, 118, rng)
+    return T.rock_base(T.blank(), 500, 835, 300, 118, rng)
+
+
+def draw_fish(seed=8):
+    """Çapraz duran (kılıç sağ üste bakan) balık. Kaya yok."""
+    rng = np.random.default_rng(seed)
+    np.random.default_rng(seed)
+    T.rock_base(T.blank(), 500, 835, 300, 118, rng)   # rastgele akışı eskisiyle aynı tut
     img = T.blank()
 
     # kuyruk
@@ -67,9 +74,37 @@ def build(out_path=None, seed=8):
     img = T.over(img, cm)
     img = T.add_highlight(img, ex - 22, ey - 24, 16, 8, rot=-0.7, alpha=0.7)
 
-    # balık, kayanın üstüne otursun diye aşağı kaydırılır
+    return img
+
+
+# gövde merkezi ve gaga ucu: balığı döndürürken eksen olarak kullanılır
+PIVOT = (545, 515)
+TIP = (935, 120)
+
+
+def build(out_path=None, seed=8):
+    """Marketteki simge: balık kayanın üstünde, çapraz duruyor."""
+    rock = draw_rock(seed)
+    img = draw_fish(seed)
     img = np.stack([ndi.shift(img[..., c], (92, 8), order=1) for c in range(4)], axis=-1)
     img = T.over(rock, img)
     if out_path:
         T.finish(img, out_path)
     return img
+
+
+def build_parts(base_path, fish_path, seed=8):
+    """Oyun içi: kaide ayrı, balık yatay (kılıç +x yönüne bakar) ve dönebilir."""
+    T.finish(draw_rock(seed), base_path)
+
+    fish = draw_fish(seed)
+    im = Image.fromarray((np.clip(fish, 0, 1) * 255 + 0.5).astype(np.uint8), 'RGBA')
+    big = Image.new('RGBA', (1600, 1600), (0, 0, 0, 0))
+    off = 300
+    big.alpha_composite(im, (off, off))
+    pivot = (PIVOT[0] + off, PIVOT[1] + off)
+    ang = math.degrees(math.atan2(TIP[1] - PIVOT[1], TIP[0] - PIVOT[0]))   # negatif: yukarı bakıyor
+    big = big.rotate(ang, center=pivot, resample=Image.BICUBIC)            # saat yönünde döndürerek yataya getir
+    half = 600
+    crop = big.crop((pivot[0] - half, pivot[1] - half, pivot[0] + half, pivot[1] + half))
+    crop.resize((600, 600), Image.LANCZOS).save(fish_path)
