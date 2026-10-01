@@ -73,6 +73,101 @@ ok(manta.flying && !crab.flying && crab.armor > manta.armor && crab.heavy, 'patr
 const p1 = JSON.stringify(Core.buildWavePlan(mapOf('cukur'), 5, 7));
 const p2 = JSON.stringify(Core.buildWavePlan(mapOf('cukur'), 5, 7));
 ok(p1 === p2, 'dalga planı aynı tohumla aynı çıkar');
+
+// ---- haritaya özel mekanikler
+const runUntil = (w, cond, maxSec) => { for (let i = 0; i < maxSec * 30 && !cond(); i++) w.update(1 / 30); return cond(); };
+
+// yosun: yavaşlatma bölgesinde düşman daha az yol alır
+w = mk('yosun');
+const zoned = new Core.Enemy(w, 'standard', 0, 1, 1, {});
+const plain = new Core.Enemy(mk('mercan'), 'standard', 0, 1, 1, {});
+zoned.traveled = zoned.path.length * 0.25; plain.traveled = plain.path.length * 0.25;
+const z0 = zoned.traveled, p0 = plain.traveled;
+zoned.update(1); plain.update(1);
+ok((zoned.traveled - z0) < (plain.traveled - p0) * 0.75, 'yosun yatağında düşman yavaşlıyor');
+
+// girdap: yolun sonunda düşman hızlanır
+w = mk('girdap');
+const early = new Core.Enemy(w, 'standard', 0, 1, 1, {});
+const late = new Core.Enemy(w, 'standard', 0, 2, 1, {});
+early.traveled = early.path.length * 0.2; late.traveled = late.path.length * 0.9;
+const e0 = early.traveled, l0 = late.traveled;
+early.update(1); late.update(1);
+ok((late.traveled - l0) > (early.traveled - e0) * 1.25, 'girdabın çekimi yolun sonunda hızlandırıyor');
+
+// volkan: patlama düşmana hasar verir, yakındaki kuleyi susturur
+w = mk('volkan');
+w.money = 9999;
+const vt = w.placeTower('octopus', w.spots[0]).tower;
+const ve = new Core.Enemy(w, 'standard', 0, 1, 3, {});
+ve.traveled = ve.path.length * 0.5; ve.update(0.001);
+vt.x = ve.x + 20; vt.y = ve.y + 20;
+w.enemies.push(ve);
+w.mech[0].timer = 0.1;   // ilk patlamayı beklemeden başlat
+let warned = false, erupted = false;
+w.onEvent = (t) => { if (t === 'hazardWarn') warned = true; if (t === 'eruption') erupted = true; };
+const hp0 = ve.health;
+runUntil(w, () => erupted, 40);
+ok(warned && erupted, 'lav patlaması önce uyarı verir, sonra patlar');
+ok(ve.health < hp0 || ve.health <= 0, 'lav patlaması düşmanı yaktı');
+ok(vt.stun > 0, 'lav patlaması yakındaki kuleyi susturdu');
+
+// buz: fırtınada menzil kısalır, sonra eski hâline döner
+w = mk('buz');
+w.money = 9999;
+const bt = w.placeTower('octopus', w.spots[0]).tower;
+const bigRange = bt.range;
+const be = new Core.Enemy(w, 'armored', 0, 1, 10, {});
+be.speed = be.originalSpeed = 0.01;
+w.enemies.push(be);
+let storm = false;
+w.onEvent = (t) => { if (t === 'hazardStart') storm = true; };
+runUntil(w, () => storm, 60);
+ok(storm && bt.range < bigRange * 0.8, `kar fırtınasında menzil kısaldı (${bigRange} -> ${bt.range})`);
+runUntil(w, () => !w.stormActive, 30);
+ok(bt.range === bigRange, 'fırtına bitince menzil geri geldi');
+
+// çukur: ışıksız kule kısa görür, fener balığı yanındaysa değil
+w = mk('cukur');
+w.money = 9999;
+const ct = w.placeTower('octopus', w.spots[0]).tower;
+const darkRange = ct.range;
+const full = Core.TOWER_TYPES.octopus.range;
+ok(darkRange < full, `karanlıkta menzil kısa (${darkRange} < ${full})`);
+const spotNear = w.spots.filter(s => !s.tower).sort((a, b) => Math.hypot(a.x - ct.x, a.y - ct.y) - Math.hypot(b.x - ct.x, b.y - ct.y))[0];
+w.placeTower('angler', spotNear);
+const lit = Math.hypot(spotNear.x - ct.x, spotNear.y - ct.y) <= w.lightRadius(w.towers.find(t => t.support));
+ok(lit ? ct.range > darkRange : true, 'fener balığının ışığındaki kule menzilini geri alır');
+
+// atlantis: koruyucu darbe hasar verir ve sersemletir
+w = mk('atlantis');
+const g0 = w.map.guardians[1];
+const ae = new Core.Enemy(w, 'armored', 0, 1, 1, {});
+let bestD = 0, bestDist = 1e9;
+for (let d = 0; d < ae.path.length; d += 10) {
+    const q = Core.pointAt(ae.path, d);
+    const dd = Math.hypot(q.x - g0.x, q.y - g0.y);
+    if (dd < bestDist) { bestDist = dd; bestD = d; }
+}
+ae.traveled = bestD; ae.speed = ae.originalSpeed = 0; ae.update(0);
+w.enemies.push(ae);
+let pulsed = false;
+w.onEvent = (t, d) => { if (t === 'guardianPulse' && d.hits > 0) pulsed = true; };
+const ah = ae.health;
+runUntil(w, () => pulsed, 30);
+ok(pulsed && ae.health < ah && ae.stunTime > 0, 'koruyucu baş vurdu ve sersemletti');
+
+// batık: hazine belirir, tıklanınca altın verir
+w = mk('batik');
+const bm0 = w.money;
+const he = new Core.Enemy(w, 'armored', 0, 1, 1, {});
+he.speed = he.originalSpeed = 0.01;
+w.enemies.push(he);
+runUntil(w, () => w.treasure, 40);
+ok(!!w.treasure, 'hazine sandığı ortaya çıktı');
+const before = w.money;
+ok(w.collectTreasure() && w.money > before && !w.treasure, 'hazine toplandı');
+
 // JavaFX WebView uyumluluğu: bunlar Chrome'da çalışır ama burada tuvali siler ya da sayfayı beyaz bırakır
 const fs = require('fs');
 const css = fs.readFileSync(path.join(web, '..', 'css', 'style.css'), 'utf8');

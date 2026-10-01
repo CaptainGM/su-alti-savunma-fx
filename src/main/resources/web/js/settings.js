@@ -3,7 +3,7 @@
 'use strict';
 
 const Settings = (function () {
-    const DEFAULTS = { sfx: 0.8, mute: false, fullscreen: false, size: 'auto', quality: 'high', effects: true, floaters: true };
+    const DEFAULTS = { sfx: 1.0, mute: false, fullscreen: false, size: 'auto', quality: 'high', effects: true, floaters: true };
     const state = { settings: Object.assign({}, DEFAULTS), records: {}, difficulty: 'normal' };
     let listeners = [];
 
@@ -110,7 +110,7 @@ function bindSettingsForm() {
         Settings.set('sfx', e.target.value / 100);
         document.getElementById('setSfxVal').innerText = e.target.value + '%';
     });
-    on('setSfx', 'change', () => { if (typeof playTone === 'function') playTone(520, 0.12, 'triangle', 0.12, 780); });
+    on('setSfx', 'change', () => { if (typeof sfx === 'function') sfx('fire_swordfish'); });
     on('setMute', 'change', e => Settings.set('mute', e.target.checked));
     on('setFullscreen', 'change', e => {
         Settings.set('fullscreen', e.target.checked);

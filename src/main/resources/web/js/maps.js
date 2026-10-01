@@ -12,6 +12,8 @@
 //   waves        : dalga sayısı (varsayılan 10).
 //   countScale   : düşman sayısı çarpanı.
 //   hpScale      : düşman canı çarpanı (haritanın genel zorluğu; ilk dalgada 1, son dalgada bu değer).
+//   rule         : haritaya özel kural metni (arayüzde gösterilir)
+//   mechanics    : kuralın ayarları (core.js World.initMechanics): tangle | pull | eruption | blizzard | guardians | darkness | treasure
 //   ambient      : arka plan canlandırma ayarları (bkz. game.js, drawAmbientBack/Front).
 (function (root) {
     'use strict';
@@ -54,10 +56,12 @@
         },
         {
             id: 'yosun',
+            rule: 'Yosun yatakları: işaretli bölgelerde düşmanlar %38 yavaşlar',
+            mechanics: [{ type: 'tangle', color: '40,120,50', zones: [{ from: 0.20, to: 0.34, factor: 0.62 }, { from: 0.56, to: 0.70, factor: 0.62 }] }],
             name: 'Yosun Ormanı',
             desc: 'Sualtı · Uzun, kıvrımlı yosun yolu',
             stars: 2,
-            hpScale: 1.85,
+            hpScale: 2.2,
             speedScale: 1,
             startMoney: 200,
             waves: 10,
@@ -89,6 +93,8 @@
         },
         {
             id: 'mangrov',
+            rule: 'Mangrov kökleri: üç kolun orta bölümünde düşmanlar %30 yavaşlar',
+            mechanics: [{ type: 'tangle', color: '110,76,40', zones: [{ from: 0.38, to: 0.60, factor: 0.7 }] }],
             name: 'Mangrov Deltası',
             desc: 'Bataklık · Üçe ayrılan nehir',
             stars: 2,
@@ -134,10 +140,12 @@
         },
         {
             id: 'batik',
+            rule: 'Batık hazine: sandık ara sıra parlar, tıklayıp altın topla',
+            mechanics: [{ type: 'treasure', interval: 22, first: 13, life: 8, reward: 45 }],
             name: 'Batık Gemi Mezarlığı',
             desc: 'Sualtı · İki girişli tahta iskele',
             stars: 3,
-            hpScale: 1.22,
+            hpScale: 1.05,
             speedScale: 1,
             startMoney: 220,
             waves: 10,
@@ -168,14 +176,17 @@
                 { x: 488, y: 626 }, { x: 901, y: 710 }, { x: 592, y: 782 },
                 { x: 886, y: 482 }, { x: 1033, y: 758, kind: 'high' }, { x: 827, y: 314 },
             ],
+            treasure: { x: 1111, y: 852 },
             // geo:end batik
         },
         {
             id: 'atlantis',
+            rule: 'Koruyucu başlar: 3 taş baş her 10 sn düşmanlara vurup sersemletir',
+            mechanics: [{ type: 'guardians', interval: 10, first: 7, radius: 215, flat: 14, pct: 0.12, stun: 1.6 }],
             name: 'Atlantis Harabeleri',
             desc: 'Sualtı · Mermer basamaklar',
             stars: 3,
-            hpScale: 1.45,
+            hpScale: 2.7,
             speedScale: 1.0,
             startMoney: 220,
             waves: 10,
@@ -203,14 +214,17 @@
                 { x: 818, y: 650 }, { x: 566, y: 518 }, { x: 902, y: 746 },
                 { x: 242, y: 302 }, { x: 878, y: 470 }, { x: 542, y: 254 },
             ],
+            guardians: [{ x: 246, y: 198 }, { x: 582, y: 414 }, { x: 918, y: 642 }],
             // geo:end atlantis
         },
         {
             id: 'buz',
+            rule: 'Kar fırtınası: ara sıra 9 sn boyunca kule menzilleri %25 kısalır',
+            mechanics: [{ type: 'blizzard', interval: 36, first: 20, warn: 3, duration: 9, rangeMul: 0.75 }],
             name: 'Buz Koyu',
             desc: 'Kutup · Çarpı biçimli kanal',
             stars: 3,
-            hpScale: 2.2,
+            hpScale: 0.5,
             speedScale: 1.0,
             startMoney: 220,
             waves: 10,
@@ -225,27 +239,31 @@
             // geo:begin buz
             paths: [
                 [
-                    { x: -40, y: 110 }, { x: 200, y: 170 }, { x: 420, y: 300 }, { x: 640, y: 450 },
-                    { x: 860, y: 580 }, { x: 1050, y: 690 }, { x: 1230, y: 640 }, { x: 1290, y: 480 },
-                    { x: 1200, y: 320 }, { x: 1040, y: 220 }, { x: 860, y: 250 }, { x: 740, y: 350 },
-                    { x: 640, y: 450 }, { x: 520, y: 560 }, { x: 390, y: 690 }, { x: 240, y: 790 },
-                    { x: 80, y: 880 }, { x: 30, y: 945 },
+                    { x: -40, y: 70 }, { x: 230, y: 190 }, { x: 480, y: 330 }, { x: 675, y: 450 },
+                    { x: 870, y: 570 }, { x: 1030, y: 700 }, { x: 1120, y: 830 }, { x: 1160, y: 945 },
+                ],
+                [
+                    { x: 1390, y: 70 }, { x: 1120, y: 190 }, { x: 870, y: 330 }, { x: 675, y: 450 },
+                    { x: 480, y: 570 }, { x: 320, y: 700 }, { x: 230, y: 830 }, { x: 190, y: 945 },
                 ],
             ],
             buildSpots: [
-                { x: 770, y: 434 }, { x: 1094, y: 506, kind: 'high' }, { x: 410, y: 482 },
-                { x: 1022, y: 326 }, { x: 182, y: 254, kind: 'high' }, { x: 170, y: 734, kind: 'high' },
-                { x: 722, y: 602 }, { x: 626, y: 338 }, { x: 566, y: 626 },
-                { x: 890, y: 398 }, { x: 1142, y: 386 }, { x: 974, y: 554 },
+                { x: 675, y: 350 }, { x: 495, y: 446 }, { x: 855, y: 446 },
+                { x: 675, y: 556 }, { x: 560, y: 625 }, { x: 790, y: 625 },
+                { x: 242, y: 290 }, { x: 1108, y: 290 }, { x: 170, y: 62, kind: 'high' },
+                { x: 1180, y: 62, kind: 'high' }, { x: 340, y: 800 }, { x: 1010, y: 800 },
+                { x: 182, y: 746, kind: 'high' }, { x: 1168, y: 746, kind: 'high' },
             ],
             // geo:end buz
         },
         {
             id: 'girdap',
+            rule: 'Girdabın çekimi: yolun ikinci yarısında düşmanlar giderek hızlanır (en çok %35)',
+            mechanics: [{ type: 'pull', from: 0.5, factor: 1.35 }],
             name: 'Girdap',
             desc: 'Sualtı · Spiral akıntı, uzun yol',
             stars: 4,
-            hpScale: 2.3,
+            hpScale: 2.1,
             speedScale: 1.12,
             startMoney: 200,
             waves: 10,
@@ -280,10 +298,12 @@
         },
         {
             id: 'volkan',
+            rule: 'Lav patlamaları: düşmanları yakar ama yakındaki kuleleri 2,5 sn susturur',
+            mechanics: [{ type: 'eruption', interval: 15, first: 11, warn: 1.7, radius: 105, count: 2, pct: 0.22, stun: 2.5 }],
             name: 'Volkanik Bacalar',
             desc: 'Yanardağ · Üç sütunlu zigzag',
             stars: 4,
-            hpScale: 2.3,
+            hpScale: 2.9,
             speedScale: 1.0,
             startMoney: 230,
             waves: 10,
@@ -316,12 +336,14 @@
         },
         {
             id: 'cukur',
+            rule: 'Karanlık: Fener Balığı ışığının dışındaki kulelerin menzili %15 kısalır',
+            mechanics: [{ type: 'darkness', rangeMul: 0.85, lightMul: 1.4 }],
             name: 'Derin Çukur',
             desc: 'Sualtı · Karanlık kaya adası',
             stars: 5,
             hpScale: 1,
             speedScale: 1,
-            startMoney: 220,
+            startMoney: 320,
             waves: 12,
             countScale: 1.1,
             mix: { armored: 1.5, flying: 1.2 },

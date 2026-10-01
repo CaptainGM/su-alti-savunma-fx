@@ -56,7 +56,7 @@
             <div class="set-group">
                 <h4>Ses</h4>
                 <label class="set-row">Efekt sesi
-                    <span class="set-control"><input type="range" id="setSfx" min="0" max="100" step="5"><span id="setSfxVal" class="set-val"></span></span>
+                    <span class="set-control"><input type="range" id="setSfx" min="0" max="150" step="5"><span id="setSfxVal" class="set-val"></span></span>
                 </label>
                 <label class="set-row"><span>Sesi kapat</span><input type="checkbox" id="setMute"></label>
             </div>
@@ -118,6 +118,7 @@
                     <div class="hp-track"><div id="healthBar"></div></div>
                     <p>Enerji: <span id="moneyValue" style="color:#ffcc00; font-weight:bold;">200</span></p>
                     <p>Dalga: <span id="waveValue">0/10</span></p>
+                    <p id="ruleLine"></p>
                     <div id="wavePreview"></div>
                     <button class="btn" id="waveButton" onclick="startNextWave()">DALGA BAŞLAT</button>
                     <div style="display:flex; gap:8px; margin-top:8px;">
