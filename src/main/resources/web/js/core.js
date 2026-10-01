@@ -31,34 +31,38 @@
     // role: markette görünen kısa açıklama
     const TOWER_TYPES = {
         octopus: { name: 'Ahtapot', cost: 50, range: 210, dmg: 9, rate: 0.9, projSpeed: 520, role: 'Hızlı atar, havadakini de vurur. Zırhlı düşmana zayıf.' },
-        eel: { name: 'Yılan Balığı', cost: 80, range: 180, dmg: 28, rate: 2.6, aoe: 62, groundOnly: true, pierce: 0.5, role: 'Yere alan şoku verir, zırhı deler. Havadakini vuramaz.' },
-        jellyfish: { name: 'Deniz Anası', cost: 70, range: 200, dmg: 12, rate: 1.7, slow: 0.5, slowTime: 3, projSpeed: 480, role: 'Vurduğu düşmanı yavaşlatır, kalabalığı geciktirir.' },
-        swordfish: { name: 'Kılıç Balığı', cost: 130, range: 380, dmg: 50, rate: 3.6, projSpeed: 1100, pierce: 0.3, defaultMode: 'strong', role: 'Çok uzun menzilli keskin nişancı. Patronlara %50 fazla hasar verir.' },
-        angler: { name: 'Fener Balığı', cost: 100, range: 200, dmg: 17, rate: 1.2, projSpeed: 620, pierce: 0.2, role: 'Dengeli bir kule. Karanlık haritada çevresini aydınlatır, ışığındaki kuleler menzil kaybetmez.' },
-        puffer: { name: 'Balon Balığı', cost: 110, range: 270, dmg: 38, rate: 3.0, aoe: 78, lob: true, groundOnly: true, projSpeed: 300, role: 'Havan: düşmanın gideceği yere atar, kümelere alan hasarı verir. Havadakini vuramaz.' },
+        eel: { name: 'Yılan Balığı', cost: 70, range: 180, dmg: 28, rate: 2.6, aoe: 62, groundOnly: true, pierce: 0.5, role: 'Yere alan şoku verir, zırhı deler. Havadakini vuramaz.' },
+        jellyfish: { name: 'Deniz Anası', cost: 60, range: 200, dmg: 12, rate: 1.7, slow: 0.5, slowTime: 3, projSpeed: 480, role: 'Vurduğu düşmanı yavaşlatır, kalabalığı geciktirir.' },
+        swordfish: { name: 'Kılıç Balığı', cost: 100, range: 380, dmg: 50, rate: 3.6, projSpeed: 1100, pierce: 0.3, defaultMode: 'strong', role: 'Çok uzun menzilli keskin nişancı. Patronlara %50 fazla hasar verir.' },
+        angler: { name: 'Fener Balığı', cost: 80, range: 200, dmg: 17, rate: 1.2, projSpeed: 620, pierce: 0.2, role: 'Dengeli bir kule. Karanlık haritada çevresini aydınlatır, ışığındaki kuleler menzil kaybetmez.' },
+        puffer: { name: 'Balon Balığı', cost: 90, range: 270, dmg: 38, rate: 3.0, aoe: 78, lob: true, groundOnly: true, projSpeed: 300, role: 'Havan: düşmanın gideceği yere atar, kümelere alan hasarı verir. Havadakini vuramaz.' },
     };
 
     const MAX_LEVEL = 5;
     const SLOW_VULNERABILITY = 1.2;   // yavaşlamış düşman %20 fazla hasar alır (Deniz Anası ile birlikte oynamak karşılığını verir)
-    const ADAPT_FROM_WAVE = 3;        // düşmanlar bu dalgadan sonra en çok hasar veren türe alışmaya başlar
-    const ADAPT_FREE_SHARE = 0.5;     // bir türün hasar payı bunun altındaysa alışma olmaz
-    const ADAPT_MAX = 0.3;            // en çok %30 hasar azalması
+    const ADAPT_FROM_WAVE = 4;        // düşmanlar bu dalgadan sonra en çok hasar veren türe alışmaya başlar
+    const ADAPT_FREE_SHARE = 0.55;    // bir türün hasar payı bunun altındaysa alışma olmaz
+    const ADAPT_MAX = 0.25;           // en çok %25 hasar azalması
     const BUILD_SPOT_RADIUS = 55;
     const HIGH_GROUND_RANGE = 1.2;
     const TARGET_MODES = ['first', 'last', 'strong', 'close'];
 
-    // Zorluk: oyunu gerçekten değiştiren altı ayar (arayüzde de gösterilir)
+    // Zorluk: oyunu gerçekten değiştiren ayarlar (arayüzde de gösterilir).
+    // startBonus: haritanın başlangıç enerjisine eklenir (kolay +50, zor -50: yuvarlak sayılar).
+    // costStep: aynı türden her yeni kulenin fiyat artışı (yalnızca zorda var; yığılmayı alışma da cezalandırır).
     const DIFFICULTY = {
-        easy: { label: 'Kolay', hp: 0.88, speed: 0.97, money: 1.2, reward: 1.08, bonus: 1.15, refund: 0.6, health: 120 },
-        normal: { label: 'Normal', hp: 1.0, speed: 1.0, money: 1.0, reward: 1.0, bonus: 1.0, refund: 0.5, health: 100 },
-        hard: { label: 'Zor', hp: 1.06, speed: 1.03, money: 0.95, reward: 0.97, bonus: 0.95, refund: 0.45, health: 90 },
+        easy: { label: 'Kolay', hp: 0.9, speed: 0.97, startBonus: 50, reward: 1.08, bonus: 1.15, refund: 0.6, health: 120, costStep: 0 },
+        normal: { label: 'Normal', hp: 1.0, speed: 1.0, startBonus: 0, reward: 1.0, bonus: 1.0, refund: 0.5, health: 100, costStep: 0 },
+        hard: { label: 'Zor', hp: 1.06, speed: 1.03, startBonus: -50, reward: 0.97, bonus: 0.95, refund: 0.45, health: 90, costStep: 0.06 },
     };
 
     function describeDifficulty(d) {
         const pct = (v, label) => (Math.abs(v - 1) < 0.005 ? null : `${label} ${v > 1 ? '+' : ''}${Math.round((v - 1) * 100)}%`);
-        const parts = [pct(d.hp, 'düşman canı'), pct(d.speed, 'düşman hızı'), pct(d.money, 'başlangıç enerjisi'), pct(d.reward, 'öldürme ödülü'), pct(d.bonus, 'dalga bonusu')].filter(Boolean);
+        const parts = [pct(d.hp, 'düşman canı'), pct(d.speed, 'düşman hızı'), d.startBonus ? `başlangıç enerjisi ${d.startBonus > 0 ? '+' : ''}${d.startBonus}` : null,
+            pct(d.reward, 'öldürme ödülü'), pct(d.bonus, 'dalga bonusu')].filter(Boolean);
         const head = parts.length ? parts.join(' · ') : 'Standart ayarlar';
-        return `${head} · üs canı ${d.health} · satış iadesi %${Math.round(d.refund * 100)}`;
+        const price = d.costStep ? `aynı türden her kule +%${Math.round(d.costStep * 100)} pahalı` : 'sabit kule fiyatı';
+        return `${head} · ${price} · üs canı ${d.health} · satış iadesi %${Math.round(d.refund * 100)}`;
     }
 
     function mulberry32(seed) {
@@ -214,6 +218,7 @@
             this.id = id;
             this.type = type;
             this.lane = lane;
+            this.waveNo = waveNo;
             this.mini = !!(spawn && spawn.mini);
             this.kind = type === 'boss' ? ((spawn && spawn.kind) || 'shark') : null;
             const bk = this.kind ? BOSS_KINDS[this.kind] : null;
@@ -452,7 +457,7 @@
 
             this.health = this.diff.health;
             this.maxHealth = this.diff.health;
-            this.money = Math.round((map.startMoney || 200) * this.diff.money);
+            this.money = (map.startMoney || 250) + this.diff.startBonus;
             this.wave = 0;
             this.time = 0;
             this.enemies = [];
@@ -741,7 +746,7 @@
 
         towerCost(type) {
             const owned = this.towers.filter(t => t.type === type).length;
-            const raw = TOWER_TYPES[type].cost * (1 + 0.12 * owned);
+            const raw = TOWER_TYPES[type].cost * (1 + this.diff.costStep * owned);
             return Math.round(raw / 5) * 5;
         }
 
@@ -802,6 +807,103 @@
             this.stats.lost = (this.stats.lost || 0) + 1;
             this.refreshLight();
             this.emit('towerDestroyed', { tower: t, cause, by: by || null });
+        }
+
+        // ---- kaydet / devam et
+        // Oyunun anlık durumunu küçük bir nesneye çevirir (JSON'a yazılabilir). Uçuştaki mermiler, düşen kayalar ve
+        // süren mekanik uyarıları kaydedilmez; devam edildiğinde bunlar sıfırlanır.
+        serialize() {
+            const r = v => Math.round(v * 1000) / 1000;
+            return {
+                v: 1,
+                diff: this.diffKey,
+                seed: this.seed,
+                endless: this.endless,
+                totalWaves: this.totalWaves,
+                wave: this.wave,
+                time: r(this.time),
+                health: r(this.health),
+                money: this.money,
+                stats: Object.assign({}, this.stats),
+                unclearedWaves: this.unclearedWaves.slice(),
+                nextEnemyId: this.nextEnemyId,
+                nextTowerId: this.nextTowerId,
+                dealt: Object.assign({}, this.dealt),
+                adapt: Object.assign({}, this.adapt),
+                towers: this.towers.map(t => ({ id: t.id, type: t.type, x: t.spot.x, y: t.spot.y, level: t.level, mode: t.mode, invested: t.invested, lastFire: r(t.lastFire), stun: r(Math.max(0, t.stun)) })),
+                enemies: this.enemies.filter(e => e.health > 0).map(e => ({
+                    id: e.id, type: e.type, lane: e.lane, kind: e.kind, mini: e.mini, waveNo: e.waveNo,
+                    health: r(e.health), maxHealth: e.maxHealth, traveled: r(e.traveled), speed: r(e.speed), slowTime: r(Math.max(0, e.slowTime)),
+                    stunTime: r(Math.max(0, e.stunTime)), didSplit: e.didSplit, furyCasts: e.furyCasts, furyTimer: r(e.furyTimer),
+                })),
+                queue: this.queue.map(it => Object.assign({}, it)),
+                spawnTimer: r(this.spawnTimer),
+                mech: this.mech.map(m => ({ phase: m.phase, timer: r(m.timer), guards: m.guards ? m.guards.map(g => r(g.timer)) : null })),
+            };
+        }
+
+        // serialize() çıktısından oyunu yeniden kurar
+        static restore(map, snap, opts = {}) {
+            const w = new World(map, Object.assign({}, opts, { difficulty: snap.diff, seed: snap.seed }));
+            w.endless = !!snap.endless;
+            w.totalWaves = snap.totalWaves;
+            w.wave = snap.wave;
+            w.time = snap.time;
+            w.health = snap.health;
+            w.money = snap.money;
+            w.stats = Object.assign({ kills: 0, leaks: 0, earned: 0 }, snap.stats);
+            w.unclearedWaves = (snap.unclearedWaves || []).slice();
+            w.nextEnemyId = snap.nextEnemyId;
+            w.nextTowerId = snap.nextTowerId;
+            w.dealt = Object.assign({}, snap.dealt);
+            w.adapt = Object.assign({}, snap.adapt);
+            w.rng = mulberry32((snap.seed ^ 0x5bd1e995 ^ Math.imul(snap.wave + 1, 977) ^ Math.floor(snap.time)) >>> 0);
+
+            for (const st of snap.towers || []) {
+                const spot = w.spots.find(sp => Math.hypot(sp.x - st.x, sp.y - st.y) < 4 && !sp.tower);
+                if (!spot || !TOWER_TYPES[st.type]) continue;
+                const t = new Tower(w, st.type, spot, st.id);
+                t.level = st.level;
+                t.mode = st.mode;
+                t.invested = st.invested;
+                t.lastFire = st.lastFire;
+                t.stun = st.stun;
+                spot.tower = t;
+                w.towers.push(t);
+            }
+            w.towers.forEach(t => t.derive());
+            w.refreshLight();
+
+            for (const se of snap.enemies || []) {
+                const e = new Enemy(w, se.type, se.lane, se.id, se.waveNo, { mini: se.mini, kind: se.kind, hpMul: 1 });
+                e.maxHealth = se.maxHealth;
+                e.health = se.health;
+                e.traveled = se.traveled;
+                e.speed = se.speed;
+                e.slowTime = se.slowTime;
+                e.isSlowed = se.slowTime > 0;
+                e.stunTime = se.stunTime;
+                e.didSplit = se.didSplit;
+                e.furyCasts = se.furyCasts;
+                e.furyTimer = Math.max(se.furyTimer, 1.5);
+                e.furyPhase = e.fury && e.furyCasts >= e.fury.casts ? 'done' : 'idle';
+                e.update(0);
+                w.enemies.push(e);
+            }
+            w.queue = (snap.queue || []).map(it => Object.assign({}, it));
+            w.spawnTimer = snap.spawnTimer;
+            w.mech.forEach((m, i) => {
+                const sm = (snap.mech || [])[i];
+                if (!sm) return;
+                // süren uyarılar ve fırtına sıfırlanır; zamanlayıcılar kaldığı yerden devam eder
+                m.phase = 'idle';
+                m.timer = sm.phase === 'idle' ? sm.timer : (m.cfg.interval || 20) * 0.5;
+                if (m.guards && sm.guards) m.guards.forEach((g, gi) => { g.timer = sm.guards[gi]; g.warned = false; });
+            });
+            w.rangeMul = 1;
+            w.towers.forEach(t => t.derive());
+            w.refreshLight();
+            return w;
         }
 
         // ---- dalga yönetimi
@@ -1025,7 +1127,7 @@
             if (this.wave >= ADAPT_FROM_WAVE && total > 0) {
                 for (const k of types) {
                     const share = this.dealt[k] / total;
-                    const r = Math.max(0, Math.min(ADAPT_MAX, (share - ADAPT_FREE_SHARE) * 0.9));
+                    const r = Math.max(0, Math.min(ADAPT_MAX, (share - ADAPT_FREE_SHARE) * 0.8));
                     if (r >= 0.02) next[k] = Math.round(r * 100) / 100;
                 }
             }
