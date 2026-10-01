@@ -3,7 +3,7 @@
 'use strict';
 
 const Settings = (function () {
-    const DEFAULTS = { sfx: 1.0, mute: false, fullscreen: false, size: 'auto', quality: 'high', effects: true, floaters: true };
+    const DEFAULTS = { sfx: 1.0, mute: false, fullscreen: false, size: 'auto', quality: 'high', effects: true, floaters: true, fps: 120, showFps: false };
     const state = { settings: Object.assign({}, DEFAULTS), records: {}, difficulty: 'normal' };
     let listeners = [];
 
@@ -81,6 +81,8 @@ function syncSettingsForm() {
     document.getElementById('setQuality').value = s.quality;
     document.getElementById('setEffects').checked = s.effects;
     document.getElementById('setFloaters').checked = s.floaters;
+    document.getElementById('setFps').value = String(s.fps);
+    document.getElementById('setShowFps').checked = s.showFps;
 }
 
 function openSettings() {
@@ -124,6 +126,8 @@ function bindSettingsForm() {
     });
     on('setEffects', 'change', e => Settings.set('effects', e.target.checked));
     on('setFloaters', 'change', e => Settings.set('floaters', e.target.checked));
+    on('setFps', 'change', e => Settings.set('fps', +e.target.value));
+    on('setShowFps', 'change', e => Settings.set('showFps', e.target.checked));
 }
 
 document.addEventListener('keydown', (e) => {
