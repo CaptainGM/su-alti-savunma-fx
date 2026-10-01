@@ -47,8 +47,10 @@
     };
 
     function describeDifficulty(d) {
-        const pct = v => (v >= 1 ? '+' : '') + Math.round((v - 1) * 100) + '%';
-        return `Düşman canı ${pct(d.hp)} · hızı ${pct(d.speed)} · başlangıç enerjisi ${pct(d.money)} · ödül ${pct(d.reward)} · üs canı ${d.health} · satış iadesi %${Math.round(d.refund * 100)}`;
+        const pct = (v, label) => (Math.abs(v - 1) < 0.005 ? null : `${label} ${v > 1 ? '+' : ''}${Math.round((v - 1) * 100)}%`);
+        const parts = [pct(d.hp, 'düşman canı'), pct(d.speed, 'düşman hızı'), pct(d.money, 'başlangıç enerjisi'), pct(d.reward, 'öldürme ödülü'), pct(d.bonus, 'dalga bonusu')].filter(Boolean);
+        const head = parts.length ? parts.join(' · ') : 'Standart ayarlar';
+        return `${head} · üs canı ${d.health} · satış iadesi %${Math.round(d.refund * 100)}`;
     }
 
     function mulberry32(seed) {

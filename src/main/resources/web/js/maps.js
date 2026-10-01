@@ -1,5 +1,6 @@
 // Harita verileri. Yeni harita eklemek için diziye bir nesne eklemek yeterli.
 //
+//   thumb        : harita kartındaki küçük önizleme
 //   bg           : arka plan resmi. Tuval haritanın 'size' değeriyle (varsayılan 1350x900) eşleşmeli
 //   paths        : yol(lar). Her yol kontrol noktası listesidir, düşmanlar ilk noktadan doğar, son noktada üsse varır.
 //                  Birden fazla yol verilirse düşmanlar sırayla bunlara dağılır.
@@ -31,6 +32,7 @@
             pathStyle: 'rail',
             flipSprites: true,
             bg: 'assets/game_bg.jpg',
+            thumb: 'assets/maps/thumbs/mercan.jpg',
             ambient: { motes: 28, bubbles: 7, moteColor: '230,255,255' },
             paths: [
                 [
@@ -65,6 +67,7 @@
             towers: ['octopus', 'jellyfish', 'puffer', 'angler'],
             flipSprites: true,
             bg: 'assets/maps/yosun.jpg',
+            thumb: 'assets/maps/thumbs/yosun.jpg',
             ambient: { motes: 30, bubbles: 10, moteColor: '230,255,230', caustics: 0.10, rays: { count: 5, color: '210,255,200', alpha: 0.09 }, vignette: 0.16 },
             // geo:begin yosun
             paths: [
@@ -85,6 +88,51 @@
             // geo:end yosun
         },
         {
+            id: 'mangrov',
+            name: 'Mangrov Deltası',
+            desc: 'Bataklık · Üçe ayrılan nehir',
+            stars: 2,
+            hpScale: 0.9,
+            speedScale: 1.0,
+            startMoney: 220,
+            waves: 10,
+            countScale: 1.1,
+            mix: { swarm: 1.3 },
+            boss: 'shark',
+            towers: ['octopus', 'eel', 'jellyfish', 'puffer'],
+            flipSprites: true,
+            bg: 'assets/maps/mangrov.jpg',
+            thumb: 'assets/maps/thumbs/mangrov.jpg',
+            ambient: { motes: 40, bubbles: 4, moteColor: '232,255,122', caustics: 0.06, vignette: 0.28 },
+            // geo:begin mangrov
+            paths: [
+                [
+                    { x: -40, y: 130 }, { x: 230, y: 160 }, { x: 420, y: 190 }, { x: 560, y: 260 },
+                    { x: 430, y: 400 }, { x: 370, y: 520 }, { x: 430, y: 640 }, { x: 560, y: 730 },
+                    { x: 690, y: 745 }, { x: 800, y: 710 }, { x: 900, y: 770 }, { x: 1020, y: 830 },
+                    { x: 1100, y: 945 },
+                ],
+                [
+                    { x: -40, y: 130 }, { x: 230, y: 160 }, { x: 420, y: 190 }, { x: 560, y: 260 },
+                    { x: 610, y: 380 }, { x: 640, y: 500 }, { x: 690, y: 610 }, { x: 750, y: 680 },
+                    { x: 800, y: 710 }, { x: 900, y: 770 }, { x: 1020, y: 830 }, { x: 1100, y: 945 },
+                ],
+                [
+                    { x: -40, y: 130 }, { x: 230, y: 160 }, { x: 420, y: 190 }, { x: 560, y: 260 },
+                    { x: 800, y: 300 }, { x: 980, y: 370 }, { x: 1030, y: 520 }, { x: 930, y: 640 },
+                    { x: 860, y: 690 }, { x: 800, y: 710 }, { x: 900, y: 770 }, { x: 1020, y: 830 },
+                    { x: 1100, y: 945 },
+                ],
+            ],
+            buildSpots: [
+                { x: 410, y: 278 }, { x: 974, y: 710 }, { x: 590, y: 602 },
+                { x: 806, y: 386 }, { x: 1094, y: 746 }, { x: 530, y: 434 },
+                { x: 878, y: 566 }, { x: 842, y: 830 }, { x: 278, y: 290 },
+                { x: 158, y: 242, kind: 'high' }, { x: 482, y: 122 }, { x: 1160, y: 560, kind: 'high' },
+            ],
+            // geo:end mangrov
+        },
+        {
             id: 'batik',
             name: 'Batık Gemi Mezarlığı',
             desc: 'Sualtı · İki girişli tahta iskele',
@@ -99,6 +147,7 @@
             towers: ['octopus', 'eel', 'swordfish', 'angler'],
             flipSprites: true,
             bg: 'assets/maps/batik.jpg',
+            thumb: 'assets/maps/thumbs/batik.jpg',
             ambient: { motes: 18, bubbles: 8, moteColor: '255,250,230', caustics: 0.16, rays: { count: 4, color: '255,250,210', alpha: 0.10 }, vignette: 0.12 },
             // geo:begin batik
             paths: [
@@ -122,10 +171,80 @@
             // geo:end batik
         },
         {
+            id: 'atlantis',
+            name: 'Atlantis Harabeleri',
+            desc: 'Sualtı · Mermer basamaklar',
+            stars: 3,
+            hpScale: 1.45,
+            speedScale: 1.0,
+            startMoney: 220,
+            waves: 10,
+            countScale: 1.1,
+            mix: { flying: 1.2 },
+            boss: 'manta',
+            towers: ['octopus', 'jellyfish', 'swordfish', 'angler', 'puffer'],
+            flipSprites: true,
+            bg: 'assets/maps/atlantis.jpg',
+            thumb: 'assets/maps/thumbs/atlantis.jpg',
+            ambient: { motes: 26, bubbles: 8, moteColor: '255,232,150', caustics: 0.14, rays: { count: 5, color: '255,236,170', alpha: 0.11 }, vignette: 0.2 },
+            // geo:begin atlantis
+            paths: [
+                [
+                    { x: -40, y: 120 }, { x: 260, y: 120 }, { x: 300, y: 130 }, { x: 320, y: 170 },
+                    { x: 330, y: 320 }, { x: 360, y: 340 }, { x: 600, y: 340 }, { x: 640, y: 360 },
+                    { x: 650, y: 400 }, { x: 650, y: 530 }, { x: 690, y: 560 }, { x: 940, y: 560 },
+                    { x: 980, y: 580 }, { x: 990, y: 620 }, { x: 990, y: 740 }, { x: 1030, y: 770 },
+                    { x: 1300, y: 770 }, { x: 1340, y: 800 }, { x: 1390, y: 830 },
+                ],
+            ],
+            buildSpots: [
+                { x: 482, y: 422 }, { x: 1106, y: 650, kind: 'high' }, { x: 146, y: 218, kind: 'high' },
+                { x: 746, y: 446 }, { x: 1250, y: 686, kind: 'high' }, { x: 410, y: 230 },
+                { x: 818, y: 650 }, { x: 566, y: 518 }, { x: 902, y: 746 },
+                { x: 242, y: 302 }, { x: 878, y: 470 }, { x: 542, y: 254 },
+            ],
+            // geo:end atlantis
+        },
+        {
+            id: 'buz',
+            name: 'Buz Koyu',
+            desc: 'Kutup · Çarpı biçimli kanal',
+            stars: 3,
+            hpScale: 2.2,
+            speedScale: 1.0,
+            startMoney: 220,
+            waves: 10,
+            countScale: 1.1,
+            mix: { armored: 1.3 },
+            boss: 'crab',
+            towers: ['octopus', 'eel', 'jellyfish', 'swordfish', 'puffer'],
+            flipSprites: true,
+            bg: 'assets/maps/buz.jpg',
+            thumb: 'assets/maps/thumbs/buz.jpg',
+            ambient: { motes: 90, moteColor: '240,250,255', moteDir: 'down', moteSize: 1.3, bubbles: 0, caustics: 0.10, vignette: 0.24, vignetteColor: '8,28,58' },
+            // geo:begin buz
+            paths: [
+                [
+                    { x: -40, y: 110 }, { x: 200, y: 170 }, { x: 420, y: 300 }, { x: 640, y: 450 },
+                    { x: 860, y: 580 }, { x: 1050, y: 690 }, { x: 1230, y: 640 }, { x: 1290, y: 480 },
+                    { x: 1200, y: 320 }, { x: 1040, y: 220 }, { x: 860, y: 250 }, { x: 740, y: 350 },
+                    { x: 640, y: 450 }, { x: 520, y: 560 }, { x: 390, y: 690 }, { x: 240, y: 790 },
+                    { x: 80, y: 880 }, { x: 30, y: 945 },
+                ],
+            ],
+            buildSpots: [
+                { x: 770, y: 434 }, { x: 1094, y: 506, kind: 'high' }, { x: 410, y: 482 },
+                { x: 1022, y: 326 }, { x: 182, y: 254, kind: 'high' }, { x: 170, y: 734, kind: 'high' },
+                { x: 722, y: 602 }, { x: 626, y: 338 }, { x: 566, y: 626 },
+                { x: 890, y: 398 }, { x: 1142, y: 386 }, { x: 974, y: 554 },
+            ],
+            // geo:end buz
+        },
+        {
             id: 'girdap',
             name: 'Girdap',
             desc: 'Sualtı · Spiral akıntı, uzun yol',
-            stars: 3,
+            stars: 4,
             hpScale: 2.3,
             speedScale: 1.12,
             startMoney: 200,
@@ -136,6 +255,7 @@
             towers: ['octopus', 'eel', 'jellyfish', 'swordfish', 'puffer'],
             flipSprites: true,
             bg: 'assets/maps/girdap.jpg',
+            thumb: 'assets/maps/thumbs/girdap.jpg',
             ambient: { motes: 22, bubbles: 14, moteColor: '210,240,255', caustics: 0.07, vignette: 0.22 },
             // geo:begin girdap
             paths: [
@@ -159,20 +279,57 @@
             // geo:end girdap
         },
         {
+            id: 'volkan',
+            name: 'Volkanik Bacalar',
+            desc: 'Yanardağ · Üç sütunlu zigzag',
+            stars: 4,
+            hpScale: 2.3,
+            speedScale: 1.0,
+            startMoney: 230,
+            waves: 10,
+            countScale: 1.0,
+            mix: { armored: 1.3, swarm: 1.2 },
+            boss: 'brood',
+            towers: ['octopus', 'eel', 'swordfish', 'puffer', 'angler'],
+            flipSprites: true,
+            bg: 'assets/maps/volkan.jpg',
+            thumb: 'assets/maps/thumbs/volkan.jpg',
+            ambient: { motes: 70, moteColor: '255,150,70', bubbles: 0, vignette: 0.42, vignetteColor: '40,6,0' },
+            // geo:begin volkan
+            paths: [
+                [
+                    { x: 290, y: -40 }, { x: 290, y: 200 }, { x: 290, y: 520 }, { x: 300, y: 740 },
+                    { x: 390, y: 840 }, { x: 520, y: 800 }, { x: 560, y: 600 }, { x: 560, y: 300 },
+                    { x: 580, y: 120 }, { x: 690, y: 60 }, { x: 820, y: 110 }, { x: 840, y: 300 },
+                    { x: 840, y: 600 }, { x: 850, y: 780 }, { x: 940, y: 850 }, { x: 1060, y: 800 },
+                    { x: 1090, y: 600 }, { x: 1090, y: 380 }, { x: 1110, y: 200 }, { x: 1150, y: 120 },
+                    { x: 1230, y: 90 }, { x: 1300, y: 40 }, { x: 1390, y: 20 },
+                ],
+            ],
+            buildSpots: [
+                { x: 974, y: 650 }, { x: 722, y: 254 }, { x: 446, y: 650, kind: 'high' },
+                { x: 1250, y: 170, kind: 'high' }, { x: 410, y: 350 }, { x: 986, y: 470, kind: 'high' },
+                { x: 410, y: 506 }, { x: 962, y: 338 }, { x: 698, y: 386 },
+                { x: 698, y: 530 }, { x: 698, y: 662 }, { x: 962, y: 206 },
+            ],
+            // geo:end volkan
+        },
+        {
             id: 'cukur',
             name: 'Derin Çukur',
             desc: 'Sualtı · Karanlık kaya adası',
-            stars: 4,
+            stars: 5,
             hpScale: 1,
             speedScale: 1,
             startMoney: 220,
             waves: 12,
             countScale: 1.1,
             mix: { armored: 1.5, flying: 1.2 },
-            boss: 'brood',
+            boss: 'crab',
             towers: ['octopus', 'eel', 'jellyfish', 'swordfish', 'angler', 'puffer'],
             flipSprites: true,
             bg: 'assets/maps/cukur.jpg',
+            thumb: 'assets/maps/thumbs/cukur.jpg',
             ambient: { motes: 46, bubbles: 8, moteColor: '120,255,255', vignette: 0.30 },
             // geo:begin cukur
             paths: [
