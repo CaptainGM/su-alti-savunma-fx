@@ -90,6 +90,8 @@ def build(out_path):
     for x, y, _ in SPOTS:
         PL.disk(wide, x, y, 125)
     wide |= dc1 < hw + 50
+    for gx, gy in S.ATLANTIS_GUARDIANS:
+        PL.disk(avoid, gx, gy, 80)
     ew = PL.edge_weights(1.0, 0.25)
     sh_ = (5, 8, 6, 0.38, (0.0, 0.1, 0.12))
 
@@ -98,7 +100,12 @@ def build(out_path):
         if p:
             sc.stamp(AT.temple_base(rng, rng.uniform(130, 160)), p[0][0], p[0][1], shadow=(8, 12, 8, 0.4, (0, 0.1, 0.12)))
             PL.disk(avoid, p[0][0], p[0][1], 100)
-    PL.sprinkle(sc, rng, lambda r: AT.stone_head(r, r.uniform(30, 42)), 3, avoid | wide, 150, weights=ew, block=60, shadow=sh_)
+    # koruyucu başlar: oyunda periyodik olarak düşmanlara vurur, altlarında soluk bir rün çemberi var
+    for gx, gy in S.ATLANTIS_GUARDIANS:
+        d = np.sqrt((xx - gx) ** 2 + (yy - gy) ** 2)
+        sc.add(rgb('#7ffff0'), np.exp(-((d - 46) / 2.6) ** 2) * 0.42 + np.exp(-((d - 62) / 1.6) ** 2) * 0.22)
+        sc.stamp(AT.stone_head(rng, 38), gx, gy, shadow=(5, 8, 6, 0.4, (0.0, 0.1, 0.12)))
+        PL.disk(avoid, gx, gy, 70)
     PL.sprinkle(sc, rng, lambda r: AT.column(r, r.uniform(13, 18), broken=r.random() < 0.4), 16, avoid, 70, weights=ew, block=30, shadow=sh_, keepout=wide)
     PL.sprinkle(sc, rng, lambda r: AT.fallen_column(r, r.uniform(70, 130), r.uniform(11, 16)), 9, avoid, 100, weights=ew, block=50, shadow=sh_, keepout=wide)
     PL.sprinkle(sc, rng, lambda r: AT.trident(r, r.uniform(50, 66)), 3, avoid, 120, weights=ew, block=40, shadow=sh_, keepout=wide)

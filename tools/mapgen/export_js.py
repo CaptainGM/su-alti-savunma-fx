@@ -30,7 +30,7 @@ def spots(sp, per_line=3):
     return '\n'.join('                ' + ln for ln in lines)
 
 
-def geo(paths, sp):
+def geo(paths, sp, extra=None):
     out = ['            paths: [']
     for p in paths:
         out.append('                [')
@@ -40,13 +40,18 @@ def geo(paths, sp):
     out.append('            buildSpots: [')
     out.append(spots(sp))
     out.append('            ],')
+    extra = extra or {}
+    if 'guardians' in extra:
+        out.append('            guardians: [' + ', '.join(f'{{ x: {x}, y: {y} }}' for x, y in extra['guardians']) + '],')
+    if 'treasure' in extra:
+        out.append(f"            treasure: {{ x: {extra['treasure'][0]}, y: {extra['treasure'][1]} }},")
     return '\n'.join(out)
 
 
 def registry():
     reg = {
         'yosun': ([S.KELP_PATH], S.KELP_SPOTS),
-        'batik': ([S.WRECK_LANE_L, S.WRECK_LANE_R], wreck.SPOTS),
+        'batik': ([S.WRECK_LANE_L, S.WRECK_LANE_R], wreck.SPOTS, {'treasure': S.BATIK_TREASURE}),
         'girdap': ([S.VORTEX_PATH], vortex.SPOTS),
         'cukur': ([S.ABYSS_LEFT, S.ABYSS_RIGHT], abyss.SPOTS),
     }
@@ -62,8 +67,9 @@ def registry():
 def main():
     reg = registry()
     text = open(MAPS_JS, encoding='utf-8').read()
-    for name, (paths, sp) in reg.items():
-        block = geo(paths, sp)
+    for name, entry in reg.items():
+        paths, sp = entry[0], entry[1]
+        block = geo(paths, sp, entry[2] if len(entry) > 2 else None)
         pat = re.compile(r'(            // geo:begin %s\n).*?(\n            // geo:end %s)' % (name, name), re.S)
         if '--write' in sys.argv:
             if not pat.search(text):
