@@ -42,10 +42,54 @@
     </div>
 
     <div id="menuScreen" class="screen">
+        <img id="menuLogo" src="assets/logo.png" alt="">
         <h1>SU ALTI SAVUNMA</h1>
         <button class="menu-button" onclick="showMapSelect()">Oyunu Başlat</button>
+        <button class="menu-button" onclick="openSettings()">Ayarlar</button>
         <button class="menu-button" onclick="toggleInfo()">Yardım</button>
         <button class="menu-button" onclick="exitGame()">Çıkış</button>
+    </div>
+
+    <div id="settingsScreen" class="screen hidden">
+        <div class="settings-card">
+            <h2>Ayarlar</h2>
+            <div class="set-group">
+                <h4>Ses</h4>
+                <label class="set-row">Efekt sesi
+                    <span class="set-control"><input type="range" id="setSfx" min="0" max="100" step="5"><span id="setSfxVal" class="set-val"></span></span>
+                </label>
+                <label class="set-row"><span>Sesi kapat</span><input type="checkbox" id="setMute"></label>
+            </div>
+            <div class="set-group">
+                <h4>Ekran</h4>
+                <label class="set-row"><span>Tam ekran <small>(F11)</small></span><input type="checkbox" id="setFullscreen"></label>
+                <label class="set-row">Pencere boyutu
+                    <select id="setSize">
+                        <option value="auto">Otomatik</option>
+                        <option value="1280x720">1280 x 720</option>
+                        <option value="1600x900">1600 x 900</option>
+                        <option value="1920x1080">1920 x 1080</option>
+                        <option value="2560x1440">2560 x 1440 (2K)</option>
+                    </select>
+                </label>
+            </div>
+            <div class="set-group">
+                <h4>Grafik</h4>
+                <label class="set-row">Görüntü kalitesi
+                    <select id="setQuality">
+                        <option value="high">Yüksek</option>
+                        <option value="medium">Orta</option>
+                        <option value="low">Düşük (yavaş bilgisayarlar için)</option>
+                    </select>
+                </label>
+                <label class="set-row"><span>Ortam efektleri <small>(kabarcık, ışık huzmesi, parçacıklar)</small></span><input type="checkbox" id="setEffects"></label>
+                <label class="set-row"><span>Kazanç ve hasar yazıları</span><input type="checkbox" id="setFloaters"></label>
+            </div>
+            <div class="settings-buttons">
+                <button class="menu-button" onclick="resetSettings()">Sıfırla</button>
+                <button class="menu-button" onclick="closeSettings()">Tamam</button>
+            </div>
+        </div>
     </div>
 
     <div id="mapSelectScreen" class="screen hidden">
@@ -63,6 +107,7 @@
                 <div id="canvasBackdrop"></div>
                 <canvas id="gameCanvas" width="1350" height="900"></canvas>
                 <button id="backToMapSelectBtn" onclick="quitToMapSelect()" title="Harita Seçimine Dön (Esc)">← Haritalar</button>
+                <button id="settingsBtn" onclick="openSettings()" title="Ayarlar">⚙ Ayarlar</button>
                 <div id="mapBanner"></div>
             </div>
 
@@ -132,6 +177,7 @@
     </div>
 
     <script src="js/core.js"></script>
+    <script src="js/settings.js"></script>
     <script src="js/maps.js"></script>
     <script src="js/game.js"></script>
 </body>

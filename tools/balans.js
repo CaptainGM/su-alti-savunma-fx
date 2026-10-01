@@ -112,6 +112,7 @@ for (const map of maps) {
     for (const diff of diffs) {
         for (const bot of Object.keys(BOTS)) {
             const runs = SEEDS.map(s => play(map, bot, diff, s));
+            if (process.env.DEBUG) console.log(JSON.stringify(runs));
             const wins = runs.filter(r => r.result === 'win').length;
             const avg = k => (runs.reduce((a, r) => a + r[k], 0) / runs.length).toFixed(0);
             console.log(

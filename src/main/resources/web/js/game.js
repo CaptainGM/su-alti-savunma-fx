@@ -23,23 +23,9 @@ const SPRITE_FILES = {
 const towerOrder = () => currentMap.towers;
 const MODE_LABEL = { first: 'İlk', last: 'Son', strong: 'En Güçlü', close: 'En Yakın' };
 
-// ------------------------------------------------------------------ kayıtlar
+// ------------------------------------------------------------------ kayıtlar (js/settings.js)
 
-const memoryStore = {};
-function loadRecords() {
-    try {
-        const raw = window.localStorage.getItem('sas.records');
-        if (raw) return JSON.parse(raw);
-    } catch (e) { /* WebView'da localStorage kapalı olabilir */ }
-    return Object.assign({}, memoryStore);
-}
-function saveRecords(rec) {
-    Object.assign(memoryStore, rec);
-    try { window.localStorage.setItem('sas.records', JSON.stringify(rec)); } catch (e) { /* yoksay */ }
-}
-let records = loadRecords();
-let difficulty = 'normal';
-try { difficulty = window.localStorage.getItem('sas.difficulty') || 'normal'; } catch (e) { /* yoksay */ }
+let difficulty = Settings.difficulty();
 if (!Core.DIFFICULTY[difficulty]) difficulty = 'normal';
 
 function starsFor(health, maxHealth) {
@@ -47,6 +33,13 @@ function starsFor(health, maxHealth) {
     return f >= 0.8 ? 3 : f >= 0.4 ? 2 : 1;
 }
 function recordKey(map) { return map.id + ':' + difficulty; }
+
+// Java kayıtlı verileri yükleyince çağrılır
+function refreshAfterLoad() {
+    difficulty = Settings.difficulty();
+    if (!Core.DIFFICULTY[difficulty]) difficulty = 'normal';
+    if (!document.getElementById('mapSelectScreen').classList.contains('hidden')) renderMapSelectScreen();
+}
 
 // ------------------------------------------------------------------ görseller
 
@@ -106,9 +99,11 @@ const ctx = canvas.getContext('2d');
 
 function playTone(freq, duration, waveType, volume, freqEnd) {
     try {
+        const st = Settings.get();
+        if (st.mute || st.sfx <= 0) return;
         if (window.javaBridge && window.javaBridge.playTone) {
             const durationMs = Math.round(duration * 1000);
-            window.javaBridge.playTone(freq, freqEnd || freq, durationMs, waveType || 'sine', volume || 0.12);
+            window.javaBridge.playTone(freq, freqEnd || freq, durationMs, waveType || 'sine', (volume || 0.12) * st.sfx);
         }
     } catch (e) { /* ses köprüsü hazır değilse sessizce yok say */ }
 }
@@ -199,23 +194,27 @@ function onWorldEvent(type, d) {
             addLog(`${label(d.enemy)} öldü. Ödül +${d.reward}. Toplam Enerji: ${world.money}.`);
             playEnemyDeathSound();
             spawnBubbles(d.enemy.x, d.enemy.y, d.enemy.type === 'boss' ? 26 : 8);
-            fx.floaters.push({ x: d.enemy.x, y: d.enemy.y - 30, text: '+' + d.reward, color: '#ffd84a', life: 1.0, maxLife: 1.0 });
+            addFloater({ x: d.enemy.x, y: d.enemy.y - 30, text: '+' + d.reward, color: '#ffd84a', life: 1.0, maxLife: 1.0 });
             break;
         case 'leak':
             addLog(`${label(d.enemy)} üsse ulaştı. Oyuncu Canı: ${Math.max(0, Math.round(world.health))} (-${d.enemy.damage}).`);
             playBaseHitSound();
             fx.flash = 1;
-            fx.floaters.push({ x: d.enemy.x, y: d.enemy.y - 20, text: '-' + d.enemy.damage, color: '#ff5a64', life: 1.2, maxLife: 1.2 });
+            addFloater({ x: d.enemy.x, y: d.enemy.y - 20, text: '-' + d.enemy.damage, color: '#ff5a64', life: 1.2, maxLife: 1.2 });
             break;
         case 'waveClear':
             addLog(`Dalga temizlendi! Dalga bonusu: +${d.bonus} Enerji. Toplam Enerji: ${world.money}.`);
             playWaveClearSound();
-            fx.floaters.push({ x: W / 2, y: 120, text: `Dalga temizlendi  +${d.bonus}`, color: '#7dffb0', life: 2.0, maxLife: 2.0, big: true });
+            addFloater({ x: W / 2, y: 120, text: `Dalga temizlendi  +${d.bonus}`, color: '#7dffb0', life: 2.0, maxLife: 2.0, big: true });
             break;
         case 'end':
             endDelay = 0.9;
             break;
     }
+}
+
+function addFloater(f) {
+    if (Settings.get().floaters || f.important) fx.floaters.push(f);
 }
 
 function spawnBubbles(x, y, n) {
@@ -302,7 +301,8 @@ function fitCanvas() {
     const scale = Math.min(cw / W, ch / H);
     // WebKit tuvali 2048 pikselin üstünde sorun çıkarabiliyor
     const maxRes = Math.min(2048 / W, 2048 / H);
-    res = Math.max(0.75, Math.min(maxRes, scale * (window.devicePixelRatio || 1)));
+    const q = { high: 1, medium: 0.75, low: 0.5 }[Settings.get().quality] || 1;
+    res = Math.max(0.5, Math.min(maxRes, scale * (window.devicePixelRatio || 1) * q));
     canvas.width = Math.round(W * res);
     canvas.height = Math.round(H * res);
     ctx.setTransform(res, 0, 0, res, 0, 0);
@@ -353,11 +353,12 @@ function draw() {
         ctx.fillRect(0, 0, W, H);
     }
 
-    drawAmbientBack();
+    const fancy = Settings.get().effects;
+    if (fancy) drawAmbientBack();
     drawPath();
     drawSpots();
     drawEntities();
-    drawAmbientFront();
+    if (fancy) drawAmbientFront();
     drawFx();
 
     if (paused) {
@@ -417,14 +418,16 @@ function drawAmbientFront() {
     const a = currentMap.ambient;
     if (!a) return;
 
+    const down = a.moteDir === 'down';   // kar taneleri aşağı, kıvılcımlar yukarı
     ambient.motes.forEach(m => {
-        m.y -= m.sp * 0.016;
-        m.x += Math.sin(animTime * 0.6 + m.ph) * 0.12;
+        m.y += (down ? 1 : -1) * m.sp * 0.016;
+        m.x += Math.sin(animTime * 0.6 + m.ph) * (down ? 0.3 : 0.12);
         if (m.y < -4) { m.y = H + 4; m.x = Math.random() * W; }
-        const tw = 0.35 + 0.35 * Math.sin(animTime * 1.7 + m.ph);
+        if (m.y > H + 4) { m.y = -4; m.x = Math.random() * W; }
+        const tw = down ? 0.7 : 0.35 + 0.35 * Math.sin(animTime * 1.7 + m.ph);
         ctx.fillStyle = `rgba(${a.moteColor || '220,255,255'},${tw})`;
         ctx.beginPath();
-        ctx.arc(m.x, m.y, m.r, 0, 6.2832);
+        ctx.arc(m.x, m.y, m.r * (a.moteSize || 1), 0, 6.2832);
         ctx.fill();
     });
 
@@ -833,7 +836,7 @@ function tryBuild(type, spot) {
     }
     if (world.money < cost) {
         addLog('Yetersiz enerji!');
-        fx.floaters.push({ x: spot.x, y: spot.y - 40, text: `${cost} Enerji gerek`, color: '#ff8a8a', life: 1.2, maxLife: 1.2 });
+        addFloater({ x: spot.x, y: spot.y - 40, text: `${cost} Enerji gerek`, color: '#ff8a8a', life: 1.2, maxLife: 1.2, important: true });
         return false;
     }
     world.placeTower(type, spot);
@@ -884,6 +887,10 @@ canvas.addEventListener('click', (e) => {
 
 document.addEventListener('keydown', (e) => {
     if (!world || document.getElementById('gameScreen').classList.contains('hidden')) return;
+    if (!document.getElementById('settingsScreen').classList.contains('hidden')) {
+        if (e.key === 'Escape') closeSettings();
+        return;
+    }
     const k = e.key.toLowerCase();
     if (k === 'escape') {
         if (armedType) { armTower(armedType); }
@@ -1109,7 +1116,7 @@ function toMapSelect() {
 }
 
 function renderMapSelectScreen() {
-    records = loadRecords();
+    const records = Settings.records();
     const pills = document.getElementById('difficultyPills');
     pills.innerHTML = '';
     Object.entries(Core.DIFFICULTY).forEach(([key, d]) => {
@@ -1118,7 +1125,7 @@ function renderMapSelectScreen() {
         b.innerText = d.label;
         b.onclick = () => {
             difficulty = key;
-            try { window.localStorage.setItem('sas.difficulty', key); } catch (e) { /* yoksay */ }
+            Settings.setDifficulty(key);
             renderMapSelectScreen();
         };
         pills.appendChild(b);
@@ -1132,7 +1139,7 @@ function renderMapSelectScreen() {
         const earned = rec ? '★'.repeat(rec.stars) + '☆'.repeat(3 - rec.stars) : '☆☆☆';
         const card = document.createElement('button');
         card.className = 'map-card';
-        card.style.backgroundImage = `url('${m.bg}')`;
+        card.style.backgroundImage = `url('${m.thumb || m.bg}')`;
         card.innerHTML = `
             <div class="map-card-shade"></div>
             <div class="map-card-earned ${rec ? 'done' : ''}">${earned}</div>
@@ -1154,10 +1161,8 @@ function showEnd() {
         const hp = Math.max(0, Math.ceil(world.health));
         const stars = starsFor(hp, world.maxHealth);
         const key = recordKey(currentMap);
-        if (!records[key] || records[key].stars < stars) {
-            records[key] = { stars, health: hp };
-            saveRecords(records);
-        }
+        const old = Settings.records()[key];
+        if (!old || old.stars < stars) Settings.setRecord(key, { stars, health: hp });
         document.getElementById('finalHealthWin').innerText = hp;
         document.getElementById('finalMoneyWin').innerText = world.money;
         document.getElementById('winStars').innerText = '★'.repeat(stars) + '☆'.repeat(3 - stars);
