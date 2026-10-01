@@ -32,9 +32,11 @@ def main():
     swordfish.build(out('tower_swordfish.png'))          # marketteki simge
     swordfish.build_parts(out('tower_swordfish_base.png'), out('tower_swordfish_fish.png'))   # oyun içi: kaide + dönen balık
     angler.build(out('tower_angler.png'))
-    puffer.build(out('tower_puffer.png'))
+    puffer.build(out('tower_puffer_icon.png'))                                    # marketteki simge
+    puffer.build_parts(out('tower_puffer.png'), out('tower_puffer_barrel.png'))   # oyun içi: gövde + dönen namlu
     projectiles.spike_ball(out('projectile_puffer.png'))
     projectiles.harpoon(out('projectile_swordfish.png'))
+    projectiles.lantern_orb(out('projectile_angler.png'))
 
     # patron varyantları: mevcut sprite'ların renk değiştirilmiş ve taçlı halleri
     lobster = Image.open(out('enemy_lobster.png')).convert('RGBA')
