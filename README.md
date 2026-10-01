@@ -10,7 +10,7 @@ Derin Çukur haritasından bir kare: Fener Balıkları karanlığı aydınlatıy
 
 ## Oynanış
 
-- **9 harita**, her birinin yolu, atmosferi ve özel kuralı farklı (aşağıdaki tabloya bak). Her haritada 20-25 kule yeri vardır ve harita boyunca dengeli dağılır; yola yakın yerler kısa menzilli kulelere, uzak ve yüksek (altın halkalı) yerler uzun menzilli kulelere uyar
+- **9 harita**, her birinin yolu, atmosferi ve özel kuralı farklı (aşağıdaki tabloya bak). Her haritada 15-25 kule yeri vardır; hepsi yola yetişir (yol kıvrımlarının iç tarafları dahil) ve harita boyunca dengeli dağılır. Yola yakın yerler kısa menzilli kulelere uyar, biraz daha uzak yüksek (altın halkalı) yerlerin menzili %20 artar
 - **6 kule türü**, her harita bunlardan 4-6 tanesini sunar:
   - Ahtapot: hızlı, havayı da vurur, zırhlıya çok zayıf
   - Yılan Balığı: alan şoku, zırh deler, havayı vuramaz
@@ -72,7 +72,7 @@ Her haritanın yolu farklı olduğu gibi kendine özel bir kuralı da var. Kural
 | Harita | Yol | Özel kural |
 |---|---|---|
 | Mercan Kanalı | tek, S dönüşlü | yok (başlangıç haritası) |
-| Yosun Ormanı | tek, uzun yılan | işaretli yosun yataklarında düşmanlar %38 yavaşlar |
+| Yosun Ormanı | tek, uzun yılan | yolun iki virajındaki yosun yataklarında düşmanlar %38 yavaşlar |
 | Mangrov Deltası | nehir üçe ayrılır, sonra birleşir | kök bölgesinde düşmanlar %30 yavaşlar |
 | Batık Gemi Mezarlığı | iki girişli, ortada birleşir | sandık ara sıra parlar, **tıklayıp** altın toplarsın |
 | Atlantis Harabeleri | mermer basamaklar | 3 taş koruyucu baş her 10 sn düşmanlara vurup sersemletir |
@@ -126,6 +126,25 @@ Tüm sesleri WAV olarak yazmak ve düzeylerini görmek için:
 java -cp target/classes com.kule.savunma.SoundBank sesler
 ```
 
+## Görsel kaynakları
+
+- Menü arka planı: Johannes Andersson'ın dalga fotoğrafı ([Unsplash](https://unsplash.com/photos/v5gGwubKzEA), Wikimedia Commons üzerinden CC0), sol bölümü kırpılıp 2560x1440'a getirildi
+- Harita arka planları `tools/mapgen` betikleriyle üretilir; Mercan Kanalı'nın arka planı özgün resmin 2700x1800'e büyütülmüş halidir
+- Kule, düşman ve patron sprite'ları `tools/sprites` betikleriyle üretilir
+
+## Yapılabilecekler
+
+Proje bu haliyle tamamlanmış sayılır; devam edilmek istenirse sırasıyla şunlar en çok değer katar:
+
+1. **Kule yetenek seçimi:** 3. seviyede iki yetenekten birini seçmek (ör. Ahtapot: çift mermi ya da zırh delen mürekkep). Aynı kuleyle farklı oyun tarzları açar
+2. **Yeni düşman davranışları:** iyileştiren, kalkan taşıyan, kulenin ışığından kaçıp gizlenen düşmanlar; böylece "tek tür yığmak" ve "hep aynı dizilim" daha da cezalanır
+3. **Özel güçler:** dalga başına bir kez kullanılan bomba, dondurma ya da onarım gibi tıklanabilir yetenekler
+4. **İlerleme ve günlük meydan okuma:** yıldızla açılan kuleler/haritalar, başarımlar, sabit tohumlu günlük harita ve yerel skor tablosu
+5. **Ses ve atmosfer:** haritaya özel ortam müziği ve su altı sesleri (şimdiki sesler kodla üretiliyor, müzik yok)
+6. **Erişilebilirlik:** renk körü paleti, yazı boyutu ayarı, tamamen klavyeyle oynama, İngilizce dil seçeneği
+7. **Harita editörü:** yol ve kule yerlerini tuvalde çizip `maps.js` çıktısı veren küçük bir araç (şimdi Python betikleri ve elle koordinat gerekiyor)
+8. **Otomatik denetim ve dağıtım:** GitHub Actions ile `node tools/test_core.js` ve `mvn compile`, `jpackage` ile Windows kurulum dosyası; kullanılmayan `model/` paketinin kaldırılması
+
 ## Teknoloji
 
 - Java 25+, JavaFX (controls, fxml, web)
@@ -151,14 +170,14 @@ BOTS=rastgele,karisik SEEDS=11,23,37,41,59 node tools/balans.js yosun   # bot ve
 python tools/mapgen/build.py         # harita arka planlarını ve önizlemelerini yeniden üretir
 python tools/mapgen/export_js.py --write   # yolları (ve ilk kule yerlerini) maps.js'e yazar
 python tools/mapgen/spots.py         # kule yerlerinin dağılımını önizler (tools/mapgen/spots_preview/)
-python tools/mapgen/spots.py --write # boş kalan bölgelere yer ekleyip maps.js'e yazar
+python tools/mapgen/spots.py --write # yolu kapsamayan yerleri siler, boş bölgelere yer ekleyip maps.js'e yazar
 python tools/sprites/build.py        # kule, mermi ve patron sprite'larını üretir
 python tools/sprites/logo.py         # logo ve uygulama simgesi
 ```
 
 Denge botları: `spam` her yere tek tür dizer, `rastgele` türü, yeri ve yükseltmeyi rastgele seçip parayı bitirir, `karisik` türleri sırayla kullanıp en iyi yerlere dizer, `akilli` bunu sıradaki dalganın içeriğine göre uyarlar. Amaç `spam` ve `rastgele` normal zorlukta kaybederken `karisik`ın kazanmasıdır; yeni bir harita ya da kural eklerken `hpScale` buna göre ayarlanır.
 
-`spots.py` elle yerleştirilmiş yerleri korur; yolun 80-350 piksel çevresinde, aralarında en az ~170 piksel boşluk kalmayacak biçimde yeni yerler ekler (yola uzak olanlar yüksek zemin olur) ve arka planın en karmaşık bölgelerinden (iskelet, kristal öbeği) kaçınır. `export_js.py` kule yerlerini de yeniden yazdığı için sırayla çalıştırılmalıdır: önce `export_js.py --write`, sonra `spots.py --write`.
+`spots.py` her yeri üç kurala göre denetler: yolun eksenine en az 80 piksel uzakta olmalı, normal yer en çok 185, yüksek zemin en çok 235 piksel uzakta olabilir ve en kısa menzilli kuleyle (200 piksel) yolun en az 150 pikselini kapsamalı. Kurallara uyan elle yerleştirilmiş yerleri korur, uymayanları siler, yola yakın bölgelerde ~170 pikselden büyük boşluk kalmayacak biçimde viraj içleri gibi yolu çok kapsayan noktalara yeni yerler ekler ve arka planın en karmaşık bölgelerinden (iskelet, kristal öbeği) kaçınır. `export_js.py` kule yerlerini de yeniden yazdığı için sırayla çalıştırılmalıdır: önce `export_js.py --write`, sonra `spots.py --write`.
 
 Harita arka planları ve yeni sprite'lar `tools` altındaki Python betikleriyle üretilir (numpy, scipy, Pillow gerekir); arka planlar 2700x1800 çözünürlüktedir.
 Kendi çizdiğiniz ya da bir görsel üreticiyle oluşturduğunuz bir arka planı kullanmak için `maps.js`'e yeni bir
