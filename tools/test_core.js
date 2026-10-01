@@ -5,6 +5,7 @@ const Core = require(path.join(web, 'core.js'));
 const MAPS = require(path.join(web, 'maps.js'));
 let fails = 0;
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FAIL ') + m); if (!c) fails++; };
+const runUntilSafe = (w, cond, maxSec) => { for (let i = 0; i < maxSec * 30 && !cond(); i++) w.update(1 / 30); return cond(); };
 const mapOf = id => MAPS.find(m => m.id === id);
 const mk = (id, opts) => new Core.World(mapOf(id), Object.assign({ seed: 1 }, opts));
 
@@ -13,7 +14,7 @@ MAPS.forEach(m => {
     ok(m.buildSpots.length >= 10 && m.paths.length >= 1, `${m.id}: yol ve kule yerleri var`);
     ok(m.towers.every(t => Core.TOWER_TYPES[t]), `${m.id}: kule türleri geçerli`);
     ok(Core.BOSS_KINDS[m.boss], `${m.id}: patron türü geçerli`);
-    ok(m.towers.filter(t => !Core.TOWER_TYPES[t].groundOnly && !Core.TOWER_TYPES[t].support).length >= 2, `${m.id}: en az iki kule havayı vurabiliyor`);
+    ok(m.towers.filter(t => !Core.TOWER_TYPES[t].groundOnly).length >= 2, `${m.id}: en az iki kule havayı vurabiliyor`);
 });
 
 // kule fiyatı her alımda artar, harita dışı kule alınamaz
@@ -24,16 +25,19 @@ w.placeTower('octopus', w.spots[0]);
 ok(w.towerCost('octopus') > c1, 'aynı türden kule pahalanır');
 ok(w.placeTower('angler', w.spots[1]).reason === 'unavailable', 'haritada olmayan kule alınamaz');
 
-// destek kulesi: menzildeki kuleye bonus verir
+// fener balığı normal haritalarda düz bir kule gibi ateş eder (yardımcı bonus vermez)
 w = mk('yosun');
 w.money = 9999;
 const o = w.placeTower('octopus', w.spots[3]).tower;
 const base = o.dmg;
 const a = w.placeTower('angler', w.spots[4]).tower;
-const near = Math.hypot(a.x - o.x, a.y - o.y) <= a.range;
-ok(near ? o.dmg > base : o.dmg === base, `fener balığı etkisi (mesafe ${Math.round(Math.hypot(a.x - o.x, a.y - o.y))}, alan ${a.range})`);
-w.sellTower(a);
-ok(o.dmg === base, 'destek kulesi satılınca bonus kalkar');
+ok(a.dmg > 0 && a.rate < 10, 'fener balığı kendi hasarıyla ateş eder');
+ok(o.dmg === base && !o.dark, 'fener balığı yanındaki kulenin değerlerini değiştirmez');
+w.startWave();
+let anglerShot = false;
+w.onEvent = (t, d) => { if (t === 'fire' && d.tower === a) anglerShot = true; };
+runUntilSafe(w, () => anglerShot, 40);
+ok(anglerShot, 'fener balığı düşmana ateş etti');
 
 // zorluk gerçekten bir şeyleri değiştiriyor
 const easy = mk('mercan', { difficulty: 'easy' });
@@ -136,7 +140,7 @@ const full = Core.TOWER_TYPES.octopus.range;
 ok(darkRange < full, `karanlıkta menzil kısa (${darkRange} < ${full})`);
 const spotNear = w.spots.filter(s => !s.tower).sort((a, b) => Math.hypot(a.x - ct.x, a.y - ct.y) - Math.hypot(b.x - ct.x, b.y - ct.y))[0];
 w.placeTower('angler', spotNear);
-const lit = Math.hypot(spotNear.x - ct.x, spotNear.y - ct.y) <= w.lightRadius(w.towers.find(t => t.support));
+const lit = Math.hypot(spotNear.x - ct.x, spotNear.y - ct.y) <= w.lightRadius(w.towers.find(t => t.type === 'angler'));
 ok(lit ? ct.range > darkRange : true, 'fener balığının ışığındaki kule menzilini geri alır');
 
 // atlantis: koruyucu darbe hasar verir ve sersemletir
@@ -167,6 +171,57 @@ runUntil(w, () => w.treasure, 40);
 ok(!!w.treasure, 'hazine sandığı ortaya çıktı');
 const before = w.money;
 ok(w.collectTreasure() && w.money > before && !w.treasure, 'hazine toplandı');
+
+
+// volkan: lav bombası bir kuleye düşer ve onu yok eder (önceden satılırsa kurtulur)
+w = mk('volkan');
+w.money = 9999;
+const bombTower = w.placeTower('octopus', w.spots[0]).tower;
+const decoy = new Core.Enemy(w, 'armored', 0, 1, 1, {});
+decoy.speed = decoy.originalSpeed = 0.01; decoy.traveled = decoy.path.length * 0.4; decoy.update(0);
+w.enemies.push(decoy);
+w.mech[0].cfg = Object.assign({}, w.mech[0].cfg, { bombChance: 1 });
+w.mech[0].timer = 0.1;
+let bombWarn = null, destroyed = null;
+w.onEvent = (t, d) => { if (t === 'hazardWarn') bombWarn = d.bomb; if (t === 'towerDestroyed') destroyed = d.tower; };
+runUntilSafe(w, () => destroyed, 30);
+ok(bombWarn && bombWarn.towerId === bombTower.id, 'lav bombası önceden uyarı verdi');
+ok(destroyed === bombTower && !w.towers.includes(bombTower) && !w.spots[0].tower, 'lav bombası kuleyi yok etti, yer boşaldı');
+
+// lav bombası uyarıdan sonra kule satılırsa kimse zarar görmez
+w = mk('volkan');
+w.money = 9999;
+const sold = w.placeTower('octopus', w.spots[0]).tower;
+const slowOne = Object.assign(new Core.Enemy(w, 'armored', 0, 1, 1, {}), { speed: 0.01, originalSpeed: 0.01 });
+slowOne.traveled = slowOne.path.length * 0.4; slowOne.update(0);
+w.enemies.push(slowOne);
+w.mech[0].cfg = Object.assign({}, w.mech[0].cfg, { bombChance: 1 });
+w.mech[0].timer = 0.1;
+let warnedBomb = false, wrongDestroy = false;
+w.onEvent = (t, d) => { if (t === 'hazardWarn' && d.bomb) { warnedBomb = true; w.sellTower(sold); } if (t === 'towerDestroyed') wrongDestroy = true; };
+runUntilSafe(w, () => warnedBomb && w.mech[0].phase === 'idle', 30);
+ok(warnedBomb && !wrongDestroy, 'bomba düşmeden satılan kule için yıkım olmaz');
+
+// patron saldırısı: yakındaki kuleleri yutar, patron ölünce geri verir
+w = mk('mercan');
+w.money = 9999;
+const t1 = w.placeTower('octopus', w.spots[0]).tower;
+const t2 = w.placeTower('octopus', w.spots[1]).tower;
+const boss = new Core.Enemy(w, 'boss', 0, 1, 5, { kind: 'shark', hpMul: 1 });
+boss.speed = boss.originalSpeed = 0.01;
+boss.x = t1.x + 40; boss.y = t1.y + 40; boss.traveled = 1;
+boss.furyTimer = 0.1;
+w.enemies.push(boss);
+boss.update = function () { this.x = t1.x + 60; this.y = t1.y + 60; return false; };   // kulelerin yakınında dursun
+let cast = false, eaten = 0, freed = 0;
+w.onEvent = (t) => { if (t === 'bossFury') cast = true; if (t === 'towerDevoured') eaten++; if (t === 'towerFreed') freed++; };
+runUntilSafe(w, () => eaten > 0, 20);
+ok(cast && eaten >= 1 && eaten <= 2 && (t1.devoured || t2.devoured), 'patron önce hırladı, sonra 1-2 kuleyi yuttu');
+const shotsBefore = w.projectiles.length;
+boss.health = 0;
+w.update(0.1);
+ok(freed === eaten && !t1.devoured && !t2.devoured, 'patron ölünce yutulan kuleler geri geliyor');
+ok(Core.ENEMY_TYPES.boss.hp >= 750, 'patron yüksek canlı');
 
 // JavaFX WebView uyumluluğu: bunlar Chrome'da çalışır ama burada tuvali siler ya da sayfayı beyaz bırakır
 const fs = require('fs');

@@ -9,7 +9,7 @@
 // Amaç: spam stratejisi karışık stratejiden belirgin şekilde kötü sonuç versin.
 const path = require('path');
 const web = path.join(__dirname, '..', 'src', 'main', 'resources', 'web', 'js');
-const Core = require(path.join(web, 'core.js'));
+const Core = require(process.env.CORE || path.join(web, 'core.js'));
 const MAPS = require(path.join(web, 'maps.js'));
 
 // bir yerin yola ne kadar uzunluk boyunca menzil verdiği
@@ -26,17 +26,6 @@ function coverage(world, spot, range) {
 
 function rankedSpots(world) {
     return world.spots.slice().sort((a, b) => coverage(world, b, 200) - coverage(world, a, 200));
-}
-
-// destek kulesi için: yakınında en çok kule olan boş yer
-function bestSupportSpot(world, free) {
-    let best = null;
-    let bestN = -1;
-    for (const s of free) {
-        const n = world.towers.filter(t => !t.support && Math.hypot(t.x - s.x, t.y - s.y) <= 190).length;
-        if (n > bestN) { bestN = n; best = s; }
-    }
-    return best;
 }
 
 const PREFERENCE = ['jellyfish', 'octopus', 'swordfish', 'eel', 'puffer', 'octopus', 'angler'];
@@ -70,21 +59,20 @@ const BOTS = {
             let type = order[n % order.length];
             let spot;
             if (dark) {
-                const lantern = world.towers.find(t => t.support);
+                const lantern = world.towers.find(t => t.type === 'angler');
                 if (!lantern) {
                     type = 'angler';
                     // en çok boş yeri ışığına alan konum
                     spot = frees.slice().sort((a, b) => lit(world, b, frees) - lit(world, a, frees))[0];
                 } else {
-                    if (type === 'angler') type = order.find(t => t !== 'angler');
                     const inLight = frees.filter(s => Math.hypot(s.x - lantern.x, s.y - lantern.y) <= world.lightRadius(lantern));
                     spot = (inLight.length ? inLight : frees)[0];
                 }
             } else {
-                spot = type === 'angler' ? bestSupportSpot(world, frees) : frees[0];
+                spot = frees[0];
             }
             const ups = world.towers.filter(t => t.upgradeCost() !== null && world.money >= t.upgradeCost())
-                .sort((a, b) => (a.support - b.support) || a.level - b.level || b.id - a.id);
+                .sort((a, b) => a.level - b.level || b.id - a.id);
             if (spot && n < 7 && world.money >= world.towerCost(type)) { world.placeTower(type, spot); continue; }
             if (n >= 6 && ups.length) { world.upgradeTower(ups[0]); continue; }
             if (spot && world.money >= world.towerCost(type)) { world.placeTower(type, spot); continue; }
@@ -101,6 +89,15 @@ function lit(world, spot, frees) {
 function play(map, botName, diff, seed) {
     const world = new Core.World(map, { difficulty: diff, seed });
     const bot = BOTS[botName];
+    const leaks = {};
+    world.onEvent = (type, d) => {
+        // dikkatli oyuncu: lav bombası uyarısını görünce o kuleyi satar
+        if (type === 'hazardWarn' && d.bomb && botName === 'karisik') {
+            const tw = world.towers.find(x => x.id === d.bomb.towerId);
+            if (tw) world.sellTower(tw);
+        }
+        if (type === 'leak') { const k = d.enemy.type + '@w' + world.wave; leaks[k] = (leaks[k] || 0) + 1; }
+    };
     let t = 0;
     let nextAct = 0;
     const dt = 1 / 30;
@@ -112,6 +109,7 @@ function play(map, botName, diff, seed) {
         }
         world.update(dt);
         t += dt;
+        if (process.env.TIMELINE && Math.abs(t - Math.round(t / 40) * 40) < dt / 2 && t > 1) console.log(`  ${botName} ${Math.round(t)}s w${world.wave} $${world.money} kule${world.towers.length} lv[${world.towers.map(x => x.level).join('')}] oldurme${world.stats.kills} sizan${world.stats.leaks} can${Math.round(world.health)}`);
     }
     return {
         result: world.result || 'timeout',
@@ -120,9 +118,11 @@ function play(map, botName, diff, seed) {
         towers: world.towers.length,
         money: world.money,
         sec: Math.round(t),
+        leaks,
     };
 }
 
+if (process.env.BOSSHP) Core.ENEMY_TYPES.boss.hp = +process.env.BOSSHP;   // patron canını denemek için
 const [mapArg, diffArg] = process.argv.slice(2);
 const maps = MAPS.filter(m => !mapArg || m.id === mapArg)
     .map(m => (process.env.HPSCALE ? Object.assign({}, m, { hpScale: +process.env.HPSCALE }) : m))

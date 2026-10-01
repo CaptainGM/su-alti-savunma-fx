@@ -8,15 +8,19 @@
         armored: { speed: 25, hp: 75, reward: 20, damage: 10, armor: 75, flying: false, size: 80 },
         flying: { speed: 75, hp: 50, reward: 15, damage: 5, armor: 0, flying: true, size: 80 },
         swarm: { speed: 92, hp: 22, reward: 5, damage: 3, armor: 0, flying: false, size: 56 },
-        boss: { speed: 19, hp: 700, reward: 110, damage: 40, armor: 45, flying: false, size: 150 },
+        boss: { speed: 22, hp: 800, reward: 130, damage: 55, armor: 45, flying: false, size: 175 },
     };
 
     // Patron çeşitleri: her harita birini seçer (map.boss)
     const BOSS_KINDS = {
-        shark: { name: 'Kral Köpek Balığı', hp: 1.0, speed: 1.0, armor: 45, flying: false, heavy: false, note: 'dengeli patron' },
-        crab: { name: 'Dev Kral Yengeç', hp: 1.35, speed: 0.72, armor: 80, flying: false, heavy: true, note: 'çok zırhlı ve yavaş' },
-        manta: { name: 'Manta İmparatoru', hp: 0.85, speed: 1.35, armor: 20, flying: true, heavy: false, note: 'havadan gelir' },
-        brood: { name: 'Yavru Anası', hp: 1.0, speed: 0.95, armor: 30, flying: false, heavy: false, splits: 8, note: 'yarı canda yavru saçar' },
+        shark: { name: 'Kral Köpek Balığı', hp: 1.0, speed: 1.0, armor: 45, flying: false, heavy: false, note: 'dengeli patron',
+            fury: { verb: 'ısırdı', interval: 12, first: 6, targets: 1, casts: 2, range: 340 } },
+        crab: { name: 'Dev Kral Yengeç', hp: 1.35, speed: 0.72, armor: 80, flying: false, heavy: true, note: 'çok zırhlı ve yavaş',
+            fury: { verb: 'kıskaçla ezdi', interval: 14, first: 7, targets: 1, casts: 2, range: 300 } },
+        manta: { name: 'Manta İmparatoru', hp: 0.85, speed: 1.35, armor: 20, flying: true, heavy: false, note: 'havadan gelir',
+            fury: { verb: 'elektrik şokuyla çarptı', interval: 10, first: 5, targets: 1, casts: 2, range: 380 } },
+        brood: { name: 'Yavru Anası', hp: 1.0, speed: 0.95, armor: 30, flying: false, heavy: false, splits: 8, note: 'yarı canda yavru saçar',
+            fury: { verb: 'yumurta yağdırdı', interval: 12, first: 6, targets: 1, casts: 2, range: 340 } },
     };
 
     const ENEMY_NAMES = {
@@ -26,12 +30,12 @@
 
     // role: markette görünen kısa açıklama
     const TOWER_TYPES = {
-        octopus: { name: 'Ahtapot', cost: 50, range: 210, dmg: 9, rate: 0.9, projSpeed: 520, role: 'Hızlı · havayı da vurur · zırha zayıf' },
-        eel: { name: 'Yılan Balığı', cost: 80, range: 180, dmg: 28, rate: 2.6, aoe: 62, groundOnly: true, pierce: 0.5, role: 'Alan şoku · zırh deler · havayı vuramaz' },
-        jellyfish: { name: 'Deniz Anası', cost: 70, range: 200, dmg: 12, rate: 1.7, slow: 0.5, slowTime: 3, projSpeed: 480, role: 'Yavaşlatır · destek vuruşu' },
-        swordfish: { name: 'Kılıç Balığı', cost: 130, range: 380, dmg: 50, rate: 3.6, projSpeed: 1100, pierce: 0.3, defaultMode: 'strong', role: 'Keskin nişancı · çok uzun menzil · patronlara ölümcül' },
-        angler: { name: 'Fener Balığı', cost: 100, range: 190, dmg: 0, rate: 99, support: true, role: 'Destek · yakındaki kulelere hasar ve hız verir' },
-        puffer: { name: 'Balon Balığı', cost: 110, range: 270, dmg: 38, rate: 3.0, aoe: 78, lob: true, groundOnly: true, projSpeed: 300, role: 'Havan topu · kümelere alan hasarı · havayı vuramaz' },
+        octopus: { name: 'Ahtapot', cost: 50, range: 210, dmg: 9, rate: 0.9, projSpeed: 520, role: 'Hızlı atar, havadakini de vurur. Zırhlı düşmana zayıf.' },
+        eel: { name: 'Yılan Balığı', cost: 80, range: 180, dmg: 28, rate: 2.6, aoe: 62, groundOnly: true, pierce: 0.5, role: 'Yere alan şoku verir, zırhı deler. Havadakini vuramaz.' },
+        jellyfish: { name: 'Deniz Anası', cost: 70, range: 200, dmg: 12, rate: 1.7, slow: 0.5, slowTime: 3, projSpeed: 480, role: 'Vurduğu düşmanı yavaşlatır, kalabalığı geciktirir.' },
+        swordfish: { name: 'Kılıç Balığı', cost: 130, range: 380, dmg: 50, rate: 3.6, projSpeed: 1100, pierce: 0.3, defaultMode: 'strong', role: 'Çok uzun menzilli keskin nişancı. Patronlara %50 fazla hasar verir.' },
+        angler: { name: 'Fener Balığı', cost: 100, range: 200, dmg: 17, rate: 1.2, projSpeed: 620, pierce: 0.2, role: 'Dengeli bir kule. Karanlık haritada çevresini aydınlatır, ışığındaki kuleler menzil kaybetmez.' },
+        puffer: { name: 'Balon Balığı', cost: 110, range: 270, dmg: 38, rate: 3.0, aoe: 78, lob: true, groundOnly: true, projSpeed: 300, role: 'Havan: düşmanın gideceği yere atar, kümelere alan hasarı verir. Havadakini vuramaz.' },
     };
 
     const MAX_LEVEL = 5;
@@ -165,7 +169,7 @@
             if (m === 0) {
                 items.push({ type: 'boss', kind, gap: 3, hpMul: 1 });
             } else if (total >= 8 && m === Math.floor(total / 2)) {
-                items.push({ type: 'boss', kind, gap: 3, hpMul: 0.45, mini: true });
+                items.push({ type: 'boss', kind, gap: 3, hpMul: 0.35, mini: true });
             }
         }
 
@@ -224,7 +228,7 @@
             this.speed = st.speed * (bk ? bk.speed : 1) * (world.map.speedScale || 1) * diff.speed * (1 + 0.012 * (waveNo - 1));
             this.originalSpeed = this.speed;
             this.reward = Math.round(st.reward * (1 + 0.05 * (waveNo - 1)) * diff.reward * (this.mini ? 1.4 : 1));
-            this.damage = st.damage;
+            this.damage = this.mini ? Math.round(st.damage * 0.5) : st.damage;
             this.slowTime = 0;
             this.isSlowed = false;
             this.traveled = 0;
@@ -238,6 +242,14 @@
             this.lastHit = -10;
             this.didSplit = false;
             this.stunTime = 0;
+            // patron saldırısı: aralıklarla yakındaki 1-2 kuleyi yutar
+            this.fury = bk ? Object.assign({}, bk.fury) : null;
+            if (this.fury && this.mini) this.fury.casts = 1;      // ara patron yalnızca bir kez saldırır
+            this.furyCasts = 0;
+            this.furyTimer = this.fury ? this.fury.first : 0;
+            this.furyPhase = 'idle';
+            this.furyT = 0;
+            this.furyTargets = [];
             this.pathMul = world.pathSpeedFn(lane);   // haritaya özel yavaşlatma/hızlandırma bölgeleri
             this.zoneMul = 1;
         }
@@ -303,18 +315,14 @@
             this.x = spot.x;
             this.y = spot.y;
             this.name = (world.map.towerNames && world.map.towerNames[type]) || TOWER_TYPES[type].name;
-            this.support = !!TOWER_TYPES[type].support;
             this.level = 1;
             this.lastFire = 0;
             this.target = null;
             this.mode = TOWER_TYPES[type].defaultMode || 'first';
             this.invested = 0;
             this.firedAt = -10;
-            // destek kulelerinden gelen çarpanlar (World.refreshAuras doldurur)
-            this.auraDmg = 0;
-            this.auraRate = 0;
-            this.auraRange = 0;
             this.stun = 0;        // lav patlaması gibi olaylarla geçici susturma (sn)
+            this.devoured = null; // patron tarafından yutuldu: patron ölene ya da dalga bitene kadar ateş etmez
             this.dark = false;    // karanlık haritada ışık dışında kalma
             this.derive();
         }
@@ -326,11 +334,11 @@
             const lv3 = this.level >= 3;
             const lv5 = this.level >= 5;
             const high = this.spot.kind === 'high' ? HIGH_GROUND_RANGE : 1;
-            this.dmg = Math.round(st.dmg * (1 + 0.35 * L) * (1 + this.auraDmg));
+            this.dmg = Math.round(st.dmg * (1 + 0.35 * L));
             const w = this.world;
             const envMul = (w ? w.rangeMul : 1) * (this.dark && w ? w.darkMul : 1);
-            this.range = Math.round(st.range * (1 + 0.07 * L) * high * (1 + this.auraRange) * envMul);
-            this.rate = +(st.rate * (1 - 0.11 * L) / (1 + this.auraRate)).toFixed(2);
+            this.range = Math.round(st.range * (1 + 0.07 * L) * high * envMul);
+            this.rate = +(st.rate * (1 - 0.11 * L)).toFixed(2);
             const aoeMul = this.type === 'puffer' ? (lv5 ? 1.5 : lv3 ? 1.25 : 1) : (lv5 ? 1.8 : lv3 ? 1.4 : 1);
             this.aoe = st.aoe ? Math.round(st.aoe * aoeMul) : 0;
             this.slow = st.slow ? (lv5 ? 0.3 : lv3 ? 0.4 : st.slow) : 0;
@@ -338,12 +346,6 @@
             this.shots = this.type === 'octopus' ? (lv5 ? 3 : lv3 ? 2 : 1) : 1;
             this.pierce = (st.pierce || 0) + (this.type === 'swordfish' && lv3 ? 0.2 : 0);
             if (this.type === 'puffer' && lv5) { this.slow = 0.7; this.slowTime = 2; }
-            if (this.support) {
-                // destek: menzil = etki alanı yarıçapı
-                this.supDmg = 0.18 + 0.07 * L;
-                this.supRate = 0.08 + 0.04 * L;
-                this.supRange = lv5 ? 0.2 : lv3 ? 0.1 : 0;
-            }
         }
 
         perk() {
@@ -352,7 +354,7 @@
                 case 'eel': return 'Sv 3: şok alanı %40 genişler · Sv 5: alan %80 genişler';
                 case 'jellyfish': return 'Sv 3: yavaşlatma %60, 4 sn · Sv 5: yavaşlatma %70, 5 sn';
                 case 'swordfish': return 'Patronlara %50 fazla hasar · Sv 3: zırhın büyük kısmını deler';
-                case 'angler': return 'Yakındaki kulelere hasar ve atış hızı verir · Sv 3: +%10, Sv 5: +%20 menzil';
+                case 'angler': return 'Karanlık haritada çevresini aydınlatır: ışığındaki kuleler menzil cezası almaz. Işık alanı menziliyle büyür';
                 case 'puffer': return 'Sv 3: patlama %25 büyür · Sv 5: %50 büyür ve düşmanı yavaşlatır';
                 default: return '';
             }
@@ -367,12 +369,10 @@
         sellValue(refund) { return Math.round(this.invested * (refund != null ? refund : 0.5)); }
 
         canTarget(enemy) {
-            if (this.support) return false;
             return !(TOWER_TYPES[this.type].groundOnly && enemy.flying);
         }
 
         pick(enemies) {
-            if (this.support) return null;
             let best = null;
             let bestScore = -Infinity;
             for (const e of enemies) {
@@ -550,6 +550,37 @@
             }
         }
 
+        // -- patron saldırısı: hırlar (uyarı), sonra yakındaki 1-2 kuleyi yutar
+        tickBoss(e, dt) {
+            const f = e.fury;
+            if (e.furyPhase === 'done') return;
+            if (e.furyPhase === 'idle') {
+                e.furyTimer -= dt;
+                if (e.furyTimer > 0) return;
+                const targets = this.towers
+                    .filter(t => !t.devoured && Math.hypot(t.x - e.x, t.y - e.y) <= f.range)
+                    .sort((a, b) => (b.level - a.level) || (Math.hypot(a.x - e.x, a.y - e.y) - Math.hypot(b.x - e.x, b.y - e.y)))
+                    .slice(0, f.targets);
+                if (!targets.length) { e.furyTimer = 1.5; return; }
+                e.furyTargets = targets;
+                e.furyPhase = 'cast';
+                e.furyT = 1.4;
+                this.emit('bossFury', { enemy: e, towers: targets, time: e.furyT });
+            } else {
+                e.furyT -= dt;
+                if (e.furyT > 0) return;
+                for (const t of e.furyTargets) {
+                    if (!this.towers.includes(t)) continue;
+                    t.devoured = e;
+                    this.emit('towerDevoured', { tower: t, enemy: e, verb: f.verb });
+                }
+                e.furyTargets = [];
+                e.furyCasts++;
+                e.furyPhase = e.furyCasts >= f.casts ? 'done' : 'idle';
+                e.furyTimer = f.interval;
+            }
+        }
+
         // -- lav patlaması: önce uyarı çemberi, sonra düşmanları yakar, yakındaki kuleleri susturur
         tickEruption(m, dt, live) {
             const c = m.cfg;
@@ -562,7 +593,13 @@
                 m.phase = 'warn';
                 m.t = c.warn;
                 m.points = pts;
-                this.emit('hazardWarn', { type: 'eruption', points: pts, time: c.warn });
+                // bazen lav doğrudan bir kuleye düşer: önceden satılmazsa kule yok olur
+                m.bomb = null;
+                if (c.bombChance && this.towers.length && this.rng() < c.bombChance) {
+                    const tw = this.towers[Math.floor(this.rng() * this.towers.length)];
+                    m.bomb = { x: tw.x, y: tw.y, r: 58, towerId: tw.id };
+                }
+                this.emit('hazardWarn', { type: 'eruption', points: pts, bomb: m.bomb, time: c.warn });
             } else {
                 m.t -= dt;
                 if (m.t > 0) return;
@@ -579,6 +616,12 @@
                             this.emit('towerStun', { tower: t, time: c.stun });
                         }
                     }
+                }
+                if (m.bomb) {
+                    this.emit('eruption', { x: m.bomb.x, y: m.bomb.y, r: m.bomb.r, bomb: true });
+                    const tw = this.towers.find(t => t.id === m.bomb.towerId);
+                    if (tw) this.destroyTower(tw, 'lav');
+                    m.bomb = null;
                 }
                 m.phase = 'idle';
                 m.timer = c.interval;
@@ -701,7 +744,7 @@
             tower.invested = cost;
             spot.tower = tower;
             this.towers.push(tower);
-            this.refreshAuras();
+            this.refreshLight();
             this.emit('build', { tower, cost });
             return { ok: true, tower, cost };
         }
@@ -713,7 +756,7 @@
             tower.level++;
             tower.invested += cost;
             tower.derive();
-            this.refreshAuras();
+            this.refreshLight();
             this.emit('upgrade', { tower, cost });
             return true;
         }
@@ -724,33 +767,29 @@
             tower.spot.tower = null;
             this.towers = this.towers.filter(t => t !== tower);
             this.projectiles.forEach(p => { if (p.owner === tower) p.active = false; });
-            this.refreshAuras();
+            this.refreshLight();
             this.emit('sell', { tower, refund });
             return refund;
         }
 
-        // Fener Balığı gibi destek kulelerinin etkisini komşu kulelere dağıtır (toplam bonus sınırlı)
-        refreshAuras() {
-            const supports = this.towers.filter(t => t.support);
+        // Karanlık haritada Fener Balığı'nın ışığındaki kuleler menzil cezası almaz
+        refreshLight() {
+            const lights = this.towers.filter(t => t.type === 'angler');
             for (const t of this.towers) {
-                let d = 0;
-                let r = 0;
-                let g = 0;
-                if (!t.support) {
-                    for (const s of supports) {
-                        if (Math.hypot(s.x - t.x, s.y - t.y) <= s.range) {
-                            d += s.supDmg;
-                            r += s.supRate;
-                            g += s.supRange;
-                        }
-                    }
-                }
-                t.dark = !t.support && this.darkMul < 1 && !supports.some(s => Math.hypot(s.x - t.x, s.y - t.y) <= this.lightRadius(s));
-                t.auraDmg = Math.min(0.6, d);
-                t.auraRate = Math.min(0.4, r);
-                t.auraRange = Math.min(0.25, g);
+                t.dark = this.darkMul < 1 && !lights.some(l => Math.hypot(l.x - t.x, l.y - t.y) <= this.lightRadius(l));
                 t.derive();
             }
+        }
+
+        // kuleyi yok eder (lav bombası gibi olaylar); satış gibi para iadesi yoktur
+        destroyTower(t, cause) {
+            if (!this.towers.includes(t)) return;
+            t.spot.tower = null;
+            this.towers = this.towers.filter(x => x !== t);
+            this.projectiles.forEach(p => { if (p.owner === t) p.active = false; });
+            this.stats.lost = (this.stats.lost || 0) + 1;
+            this.refreshLight();
+            this.emit('towerDestroyed', { tower: t, cause });
         }
 
         // ---- dalga yönetimi
@@ -818,8 +857,20 @@
 
             this.updateMechanics(dt);
 
+            for (const e of this.enemies) {
+                if (e.fury && e.health > 0) this.tickBoss(e, dt);
+            }
+
             for (const t of this.towers) {
-                if (t.support) continue;
+                if (t.devoured) {
+                    if (t.devoured.health <= 0) {
+                        t.devoured = null;
+                        this.emit('towerFreed', { tower: t });
+                    } else {
+                        t.target = null;
+                        continue;
+                    }
+                }
                 if (t.stun > 0) { t.stun -= dt; t.target = null; continue; }
                 t.lastFire += dt;
                 t.target = t.pick(this.enemies);

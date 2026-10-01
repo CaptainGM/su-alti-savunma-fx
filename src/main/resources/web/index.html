@@ -11,19 +11,16 @@
 <body>
 
     <div id="infoModal" class="hidden">
-        <h3 style="color:#00d4ff; font-size:2em; margin-bottom:20px;">Nasıl Oynanır?</h3>
-        <p style="font-size:1.15em; line-height:1.6; color:#ddd; text-align:left;">
-            1. Sağdan bir kuleyi <strong>SÜRÜKLE</strong> ya da tıkla, sonra haritada bir <strong>YEŞİL ALANA</strong> tıkla.<br>
-            2. "Dalga Başlat"a bas (boşluk tuşu da olur).<br>
-            3. Düşmanlar yolu takip edip üsse ulaşmaya çalışır, onları durdur.<br>
-            4. Kuleye <strong>TIKLA</strong>: yükselt, sat ya da hedef önceliğini değiştir.<br>
-            5. <strong>Altın halkalı</strong> yerler yüksek zemindir, kulenin menzili %20 artar.<br>
-            <br>
-            <span style="color:#9ab;">Ahtapot her şeyi vurur ama zırhlıya zayıftır. Yılan Balığı zırh deler ve alana vurur ama havadakini göremez.
-                Deniz Anası yavaşlatır. Bir türü her yere dikmek işe yaramaz, kule fiyatları da her alımda artar.</span><br>
-            <br>
-            <span style="color:#9ab;">Kısayollar: Boşluk dalga · P duraklat · F hız · 1-2-3 kule seç · Esc geri</span>
-        </p>
+        <h3 style="color:#00d4ff; font-size:2em; margin-bottom:14px;">Nasıl Oynanır?</h3>
+        <div class="help-text">
+            <p><b>Amaç:</b> Düşmanlar yolun başından girip sonuna ulaşırsa üssün canı azalır. Tüm dalgaları bitirmeden canın tükenmesin.</p>
+            <p><b>Kule kurmak:</b> Sağ paneldeki bir kuleyi haritadaki <b>yeşil alana</b> sürükle, ya da kuleye tıklayıp sonra alana tıkla. Altın halkalı yerler yüksek zemindir (+%20 menzil).</p>
+            <p><b>Kuleyi geliştirmek:</b> Kuleye tıkla; yükselt, sat ya da hedef önceliğini değiştir (İlk / Son / En Güçlü / En Yakın). Kuleler 5 seviyedir, 3. ve 5. seviyede yeni yetenek açılır.</p>
+            <p><b>Fiyatlar:</b> Aynı türden her yeni kule bir öncekinden %12 pahalıdır, o yüzden tek tür kuleyle yığılmak işe yaramaz. Türleri karıştır.</p>
+            <p><b>Patronlar:</b> Belirli dalgalarda güçlü bir patron gelir. Patron zaman zaman yakınındaki bir kuleyi <b>yutar</b>; yutulan kule patron ölene kadar ateş edemez.</p>
+            <p><b>Harita kuralları:</b> Her haritanın kendine özel bir kuralı vardır (haritanın başında ve sağ üst kutuda yazar). Lav kuleye düşecekse uyarı çıkar, kuleyi satmayı unutma.</p>
+            <p class="help-keys">Kısayollar: Boşluk dalga başlat · P duraklat · F hız · 1-6 kule seç · F11 tam ekran · Esc geri</p>
+        </div>
         <button class="close-btn" onclick="toggleInfo()">ANLAŞILDI</button>
     </div>
 
@@ -56,7 +53,7 @@
             <div class="set-group">
                 <h4>Ses</h4>
                 <label class="set-row">Efekt sesi
-                    <span class="set-control"><input type="range" id="setSfx" min="0" max="150" step="5"><span id="setSfxVal" class="set-val"></span></span>
+                    <span class="set-control"><input type="range" id="setSfx" min="0" max="100" step="5"><span id="setSfxVal" class="set-val"></span></span>
                 </label>
                 <label class="set-row"><span>Sesi kapat</span><input type="checkbox" id="setMute"></label>
             </div>
@@ -135,19 +132,13 @@
                     <div id="towerHint">Bir kulenin üzerine gel</div>
                 </div>
 
-                <div class="panel" style="border-color: #ffcc00; max-height:170px; display:flex; flex-direction:column;">
+                <div class="panel" style="border-color: #ffcc00; flex: 1; min-height:120px; display:flex; flex-direction:column;">
                     <h3>Yerleştirdiğiniz Kuleler</h3>
                     <div id="towerList" style="overflow-y:auto;">
                         <p style="color:#888; font-size:0.95em;">Henüz kule yerleştirilmedi.</p>
                     </div>
                 </div>
 
-                <div class="panel" style="border-color: #00d4ff; flex: 1; display:flex; flex-direction:column;">
-                    <h3>Savaş Günlüğü</h3>
-                    <div id="gameLog"></div>
-                    <button class="btn" onclick="downloadLog()"
-                        style="background: #333; margin-top: 10px; font-size: 1em; padding: 10px;">Kaydı İndir</button>
-                </div>
             </div>
         </div>
     </div>
@@ -172,7 +163,6 @@
         <p class="end-sub" id="loseStats"></p>
         <div class="end-buttons">
             <button class="menu-button" onclick="restartGame()">Tekrar Oyna</button>
-            <button class="menu-button" onclick="downloadLog()">Günlük İndir</button>
             <button class="menu-button" onclick="toMapSelect()">Haritalar</button>
         </div>
     </div>
