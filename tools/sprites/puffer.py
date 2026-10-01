@@ -18,36 +18,12 @@ def cone(img, cx, cy, ang, base_r, length, c0, c1, width):
     return T.over(img, T.layer(T.mask_poly(pts), rgb(c0), rgb(c1), angle=math.degrees(ang) + 90, sigma=6, outline_px=8, gloss=0.15, rim=0.0))
 
 
-def build(out_path=None, seed=5):
+def draw_body(seed=5):
+    """Kaya, dikenli gövde ve yüz. Namlu ayrı çizilir (düşmana dönebilsin diye)."""
     rng = np.random.default_rng(seed)
     img = T.rock_base(T.blank(), 500, 835, 300, 118, rng)
 
     cx, cy, R = 500, 520, 232
-
-    # --- havan namlusu (gövdenin arkasında, sağ üste eğik)
-    ax, ay = 462, 380
-    bx, by = 592, 140
-    barrel = T.mask_taper([(ax, ay), ((ax + bx) / 2, (ay + by) / 2), (bx, by)], 118, 150)
-    img = T.over(img, T.layer(barrel, rgb('#e0a84a'), rgb('#7d4a1c'), angle=20, sigma=16, outline_px=11, gloss=0.5, rim=0.25))
-    dirx, diry = bx - ax, by - ay
-    ln = math.hypot(dirx, diry)
-    dirx, diry = dirx / ln, diry / ln
-    nx, ny = -diry, dirx
-    for t, w in ((0.30, 68), (0.62, 74)):                       # demir bantlar
-        mx, my = ax + (bx - ax) * t, ay + (by - ay) * t
-        band = T.mask_stroke([(mx - nx * w, my - ny * w), (mx + nx * w, my + ny * w)], 16)
-        img = T.over(img, T.layer(band, rgb('#8a8f99'), rgb('#4b4f5a'), angle=90, sigma=5, outline_px=6, gloss=0.4, rim=0.0))
-    # namlu ağzı (karanlık delik)
-    mouth = T.mask_ellipse(bx, by, 76, 34, rot=math.atan2(ny, nx) + math.pi / 2 - math.pi / 2)
-    ring = T.mask_ellipse(bx, by, 88, 42, rot=math.atan2(ny, nx) + math.pi / 2 - math.pi / 2)
-    img = T.over(img, T.layer(ring, rgb('#f0c060'), rgb('#9a6420'), angle=90, sigma=6, outline_px=8, gloss=0.3, rim=0.0))
-    img = T.over(img, T.layer(mouth, rgb('#2a1a14'), rgb('#0d0806'), angle=90, sigma=6, outline=False, gloss=0.0, rim=0.0))
-    # namlu üzerinde ince duman
-    yy, xx = np.mgrid[0:S, 0:S].astype(np.float32)
-    for k, (ox, oy, rr, a) in enumerate(((10, -50, 42, 0.30), (-14, -105, 54, 0.22), (14, -170, 62, 0.14))):
-        d = np.sqrt((xx - (bx + ox)) ** 2 + (yy - (by + oy)) ** 2)
-        puff = np.clip(1 - d / rr, 0, 1) ** 0.8 * a
-        img = T.over(img, np.dstack([np.broadcast_to(rgb('#cfd6dc'), (S, S, 3)), puff]))
 
     # --- arka diken halkası
     for i in range(30):
@@ -102,11 +78,61 @@ def build(out_path=None, seed=5):
     img = T.add_highlight(img, 488, 576, 15, 7, rot=-0.4, alpha=0.7)
     img = T.add_highlight(img, 395, 335, 76, 30, rot=-0.45, alpha=0.5)
 
-    if out_path:
-        T.finish(img, out_path)
     return img
 
 
-if __name__ == '__main__':
-    import sys
-    build(sys.argv[1] if len(sys.argv) > 1 else 'puffer_test.png')
+MOUNT = (500, 330)    # namlunun gövdedeki bağlantı noktası (oyunda kule merkezinin 17 px üstü)
+PIVOT = (300, 500)    # namlu çiziminde dönme noktası; namlu +x yönüne bakar
+
+
+def draw_barrel():
+    """Bronz havan namlusu, yatay (+x). Dönme noktası PIVOT."""
+    img = T.blank()
+    px, py = PIVOT
+    tube = T.mask_taper([(px, py), (px + 170, py), (px + 340, py)], 130, 164)
+    img = T.over(img, T.layer(tube, rgb('#e6b052'), rgb('#7d4a1c'), angle=90, sigma=18, outline_px=11, gloss=0.55, rim=0.25))
+    for x, half in ((px + 110, 66), (px + 235, 72)):                   # demir bantlar
+        band = T.mask_stroke([(x, py - half), (x, py + half)], 18)
+        img = T.over(img, T.layer(band, rgb('#a2a8b3'), rgb('#4b4f5a'), angle=0, sigma=5, outline_px=6, gloss=0.4, rim=0.0))
+    mx = px + 340                                                     # namlu ağzı
+    rim = T.mask_ellipse(mx, py, 30, 92)
+    img = T.over(img, T.layer(rim, rgb('#f0c060'), rgb('#9a6420'), angle=0, sigma=7, outline_px=8, gloss=0.3, rim=0.0))
+    hole = T.mask_ellipse(mx + 2, py, 19, 70)
+    img = T.over(img, T.layer(hole, rgb('#2a1a14'), rgb('#0d0806'), angle=0, sigma=6, outline=False, gloss=0.0, rim=0.0))
+    collar = T.mask_ellipse(px, py, 80, 80)                           # bağlantı halkası
+    img = T.over(img, T.layer(collar, rgb('#c9ced8'), rgb('#59606e'), angle=90, sigma=16, outline_px=10, gloss=0.5, rim=0.2))
+    for ang in range(0, 360, 60):
+        x = px + math.cos(math.radians(ang)) * 52
+        y = py + math.sin(math.radians(ang)) * 52
+        img = T.over(img, T.layer(T.mask_ellipse(x, y, 9, 9), rgb('#8a8f99'), rgb('#3b3f48'), sigma=3, outline_px=4, gloss=0.3, rim=0.0))
+    img = T.add_highlight(img, px + 170, py - 44, 120, 11, rot=0, alpha=0.45)
+    return img
+
+
+def _to_pil(a):
+    return Image.fromarray((np.clip(a, 0, 1) * 255 + 0.5).astype(np.uint8), 'RGBA')
+
+
+def build(out_path=None, seed=5):
+    """Marketteki simge: gövde ve sağ üste bakan namlu birlikte."""
+    body = _to_pil(draw_body(seed))
+    barrel = _to_pil(draw_barrel()).rotate(60, center=PIVOT, resample=Image.BICUBIC)
+    icon = body.copy()
+    layer = Image.new('RGBA', body.size, (0, 0, 0, 0))
+    layer.alpha_composite(barrel, (MOUNT[0] - PIVOT[0], MOUNT[1] - PIVOT[1]))
+    icon.alpha_composite(layer)
+    if out_path:
+        T.finish(np.asarray(icon).astype(np.float32) / 255.0, out_path)
+    return icon
+
+
+def build_parts(body_path, barrel_path, seed=5):
+    """Oyun içi: sabit gövde + ayrı dönen namlu (1200 birimlik çerçeve, merkez = dönme noktası)."""
+    T.finish(draw_body(seed), body_path)
+    barrel = _to_pil(draw_barrel())
+    frame = Image.new('RGBA', (1200, 1200), (0, 0, 0, 0))
+    frame.alpha_composite(barrel, (600 - PIVOT[0], 600 - PIVOT[1]))
+    frame.resize((600, 600), Image.LANCZOS).save(barrel_path)
+
+
+

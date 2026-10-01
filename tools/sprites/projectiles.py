@@ -33,3 +33,15 @@ def harpoon(path):
         tail = T.mask_poly([(x, 500), (x - 110, 420), (x - 70, 500), (x - 110, 580)])
         img = T.over(img, T.layer(tail, rgb('#7fc4ff'), rgb('#3a76c4'), angle=0, sigma=10, outline_px=12))
     T.finish(img, path)
+
+
+def lantern_orb(path):
+    """Fener Balığı'nın ışık mermisi: parlak çekirdek ve yumuşak hale."""
+    yy, xx = np.mgrid[0:S, 0:S].astype(np.float32)
+    d = np.sqrt((xx - 500) ** 2 + (yy - 500) ** 2)
+    halo = np.clip(1 - d / 420, 0, 1) ** 1.6 * 0.55
+    img = np.dstack([np.broadcast_to(rgb('#ffe27a'), (S, S, 3)), halo])
+    core = T.mask_ellipse(500, 500, 165, 165)
+    img = T.over(img, T.layer(core, rgb('#ffffff'), rgb('#ffc94a'), angle=90, sigma=50, outline_px=12, gloss=0.5, rim=0.0))
+    img = T.add_highlight(img, 450, 450, 55, 32, rot=-0.6, alpha=0.9)
+    T.finish(img, path)
