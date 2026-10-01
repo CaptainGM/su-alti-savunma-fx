@@ -73,5 +73,14 @@ ok(manta.flying && !crab.flying && crab.armor > manta.armor && crab.heavy, 'patr
 const p1 = JSON.stringify(Core.buildWavePlan(mapOf('cukur'), 5, 7));
 const p2 = JSON.stringify(Core.buildWavePlan(mapOf('cukur'), 5, 7));
 ok(p1 === p2, 'dalga planı aynı tohumla aynı çıkar');
+// sonsuz mod: kazandıktan sonra devam eder ve patronlar döngüyle gelir
+w = mk('mercan');
+w.money = 9999;
+w.wave = w.totalWaves; w.result = 'win';
+ok(w.goEndless() && w.canStartWave(), 'sonsuz moda geçilebilir');
+w.startWave();
+ok(w.wave === 11, 'sonsuz modda 11. dalga başladı');
+const plan20 = Core.buildWavePlan(mapOf('mercan'), 20, 3);
+ok(plan20.some(it => it.type === 'boss' && !it.mini), '20. dalgada yine patron var');
 console.log(fails ? `${fails} BASARISIZ` : 'HEPSI GECTI');
 process.exit(fails ? 1 : 0);
