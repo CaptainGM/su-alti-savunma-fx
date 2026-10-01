@@ -36,7 +36,7 @@ def build(out_path):
     PL.path_pebbles(sc, rng, dc, hw, rgb('#c9b484'), count=150)
 
     # --- kule zeminleri
-    PL.spot_pads(sc, rng, spots, '#a9b79a', '#8b9a86', high_base='#c8b27a')
+    # kule yerlerinin altına zemin çizilmiyor: oyunda yeşil/altın halkalar zaten yerleri gösteriyor, sade görünüm için
 
     # --- nesneler
     avoid = dc1 < hw + 34

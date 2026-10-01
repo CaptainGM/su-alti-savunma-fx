@@ -82,7 +82,7 @@ def build(out_path):
     sc.add(rgb('#dff6ff'), foam * 0.35)
 
     # --- kule zeminleri
-    PL.spot_pads(sc, rng, SPOTS, '#8fb8d2', '#f4fbff', high_base='#d9c98a')
+    # kule yerlerinin altına zemin çizilmiyor: oyunda yeşil/altın halkalar zaten yerleri gösteriyor, sade görünüm için
 
     # --- nesneler (buz üstü)
     ice1 = C.logic(ice) > 0.6

@@ -89,10 +89,7 @@ def build(out_path):
     PL.path_pebbles(sc, rng, dc, hw, rgb('#5c7078'), count=90, size=(1.4, 3.4))
 
     # --- kule zeminleri (ışıklı kenarlı)
-    PL.spot_pads(sc, rng, SPOTS, '#3c5058', '#57707a', high_base='#4a3a5e')
-    for x, y, kind in SPOTS:
-        d = np.sqrt((xx - x) ** 2 + (yy - y) ** 2)
-        sc.add(MAGENTA if kind == 'high' else CYAN, np.exp(-((d - 52) / 6.0) ** 2) * 0.22)
+    # kule yerlerinin altına zemin çizilmiyor: oyunda yeşil/altın halkalar zaten yerleri gösteriyor, sade görünüm için
 
     # --- nesneler
     avoid = (dc1 < hw + 30) | isl1
