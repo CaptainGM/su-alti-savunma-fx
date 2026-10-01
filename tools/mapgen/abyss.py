@@ -24,7 +24,7 @@ LIME = rgb('#a8ff6a')
 
 def glow_stamp(sc, patch, glow, x, y, color, strength=0.9, radius=14):
     """Parlayan nesne: önce ışıma, sonra nesne. radius mantıksal birim."""
-    pad = 36 * K
+    pad = 80 * K
     g = np.pad(glow, pad)
     h, w = g.shape
     gl = ndi.gaussian_filter(g, radius * K) * 1.8 + ndi.gaussian_filter(g, radius * K * 0.4) * 0.8
@@ -159,7 +159,7 @@ def build(out_path):
             continue
         col = [CYAN, CYAN, MAGENTA, LIME][int(rng.integers(0, 4))]
         r = rng.uniform(1.0, 2.4)
-        y0_, y1_, x0_, x1_ = max(0, int((y - 14) * K)), min(PH, int((y + 15) * K)), max(0, int((x - 14) * K)), min(PW, int((x + 15) * K))
+        y0_, y1_, x0_, x1_ = max(0, int((y - 24) * K)), min(PH, int((y + 24) * K)), max(0, int((x - 24) * K)), min(PW, int((x + 24) * K))
         sub = np.sqrt((xx[y0_:y1_, x0_:x1_] - x) ** 2 + (yy[y0_:y1_, x0_:x1_] - y) ** 2)
         sc.img[y0_:y1_, x0_:x1_] += col[None, None, :] * (np.exp(-(sub / (r * 1.6)) ** 2) * 0.9 + np.exp(-(sub / (r * 6)) ** 2) * 0.12)[..., None]
 

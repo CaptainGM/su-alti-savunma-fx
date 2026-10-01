@@ -7,9 +7,13 @@ import os
 import sys
 
 import abyss
+import atlantis
 import common as C
 import fx
+import ice
 import kelp
+import mangrove
+import volcano
 import vortex
 import wreck
 
@@ -19,7 +23,24 @@ JOBS = {
     'wreck': lambda: wreck.build(os.path.join(OUT, 'batik.jpg')),
     'vortex': lambda: vortex.build(os.path.join(OUT, 'girdap.jpg')),
     'abyss': lambda: abyss.build(os.path.join(OUT, 'cukur.jpg')),
+    'ice': lambda: ice.build(os.path.join(OUT, 'buz.jpg')),
+    'volcano': lambda: volcano.build(os.path.join(OUT, 'volkan.jpg')),
+    'atlantis': lambda: atlantis.build(os.path.join(OUT, 'atlantis.jpg')),
+    'mangrove': lambda: mangrove.build(os.path.join(OUT, 'mangrov.jpg')),
 }
+
+def make_thumbs():
+    """Harita kartları için küçük önizlemeler (büyük arka planları kartlarda yüklememek için)."""
+    from PIL import Image
+    tdir = os.path.join(OUT, 'thumbs')
+    os.makedirs(tdir, exist_ok=True)
+    sources = {n: os.path.join(OUT, n) for n in os.listdir(OUT) if n.endswith('.jpg')}
+    sources['mercan.jpg'] = os.path.join(C.ASSETS, 'game_bg.jpg')
+    for name, path in sources.items():
+        im = Image.open(path).convert('RGB')
+        im.thumbnail((640, 427), Image.LANCZOS)
+        im.save(os.path.join(tdir, name), quality=84, optimize=True)
+
 
 if __name__ == '__main__':
     os.makedirs(OUT, exist_ok=True)
@@ -29,3 +50,4 @@ if __name__ == '__main__':
     for n in names:
         JOBS[n]()
         print('tamam:', n)
+    make_thumbs()

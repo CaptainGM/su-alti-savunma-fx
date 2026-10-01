@@ -15,6 +15,10 @@ MAPS = {
     'wreck': [S.WRECK_LANE_L, S.WRECK_LANE_R],
     'vortex': [S.VORTEX_PATH],
     'abyss': [S.ABYSS_LEFT, S.ABYSS_RIGHT],
+    'ice': [S.ICE_PATH],
+    'volcano': [S.VOLCANO_PATH],
+    'atlantis': [S.ATLANTIS_PATH],
+    'mangrove': [S.MANGROVE_LEFT, S.MANGROVE_MID, S.MANGROVE_RIGHT],
 }
 
 
@@ -23,7 +27,7 @@ def main():
     n = int(sys.argv[2]) if len(sys.argv) > 2 else 12
     paths = MAPS[name]
     dc, smooth = C.centerline_dist(paths)
-    spots = C.suggest_spots(dc, smooth, n)
+    spots = C.suggest_spots(dc, smooth, n, min_gap=124, near=(80, 190))
     img = Image.new('RGB', (C.W, C.H), (20, 60, 90))
     d = ImageDraw.Draw(img)
     for pts in smooth:
