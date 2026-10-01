@@ -33,12 +33,16 @@ public final class SoundBank {
      */
     private static final Map<String, Double> LEVEL = new LinkedHashMap<>();
 
+    /** Tüm seslerin birlikte kısılması/açılması için (dB). Ayarlardaki ses çubuğu bunun üstüne uygulanır. */
+    private static final double MASTER_DB = -5.5;
+
     static {
         LEVEL.put("fire_octopus", -22.0);
         LEVEL.put("fire_eel", -22.0);
         LEVEL.put("fire_jellyfish", -23.0);
         LEVEL.put("fire_swordfish", -19.5);
         LEVEL.put("fire_puffer", -20.0);
+        LEVEL.put("fire_angler", -23.0);
         LEVEL.put("splash", -19.0);
         LEVEL.put("hit", -31.0);
         LEVEL.put("kill", -23.5);
@@ -124,6 +128,14 @@ public final class SoundBank {
                 thump(b, 0, 640, 210, 0.06, 45, 0.6);
                 sweep(b, 0.0, 3000, 420, 0.16, 0.22, false);
                 echo(b, 0.11, 0.28, 2);
+                break;
+            case "fire_angler":
+                // fener balığı: yumuşak çıngırak + tok vuruş
+                b = new float[ms(380)];
+                thump(b, 0, 220, 80, 0.13, 22, 0.9);
+                thump(b, 0, 540, 190, 0.05, 55, 0.45);
+                tone(b, 0.01, 987.8, 0.3, 0.32, 0.002, 12, 4, 1.4);
+                tone(b, 0.01, 1480, 0.2, 0.14, 0.002, 16, 2, 1.3);
                 break;
             case "fire_puffer":
                 // havan: boğuk "pomf" + hava
@@ -303,7 +315,7 @@ public final class SoundBank {
             default:
                 b = new float[ms(100)];
         }
-        finish(b, LEVEL.getOrDefault(name, 0.7));
+        finish(b, LEVEL.getOrDefault(name, -24.0) + MASTER_DB);
         return b;
     }
 

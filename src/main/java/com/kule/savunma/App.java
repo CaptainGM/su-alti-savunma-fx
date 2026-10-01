@@ -33,8 +33,14 @@ public class App extends Application {
 
                 webView.getEngine().executeScript(
                         "window.javaBridge = {" +
-                                "saveLog: function(logContent) {" +
-                                "   alert('JAVA_SAVE_LOG:' + logContent);" +
+                                "startLog: function(title) {" +
+                                "   alert('JAVA_LOG_START:' + title);" +
+                                "}," +
+                                "appendLog: function(text) {" +
+                                "   alert('JAVA_LOG:' + text);" +
+                                "}," +
+                                "endLog: function() {" +
+                                "   alert('JAVA_LOG_END');" +
                                 "}," +
                                 "exitApp: function() {" +
                                 "   alert('JAVA_EXIT_APP');" +
@@ -111,11 +117,14 @@ public class App extends Application {
     }
 
     private void handleBridgeMessage(String data, LogWriter logWriter) {
-        if (data.startsWith("JAVA_SAVE_LOG:")) {
-            String logContent = data.substring(14);
-            System.out.println("Log kaydediliyor: " + logContent.length() + " karakter");
-            logWriter.saveLog(logContent);
+        if (data.startsWith("JAVA_LOG_START:")) {
+            logWriter.start(data.substring("JAVA_LOG_START:".length()));
+        } else if (data.startsWith("JAVA_LOG:")) {
+            logWriter.append(data.substring("JAVA_LOG:".length()));
+        } else if (data.equals("JAVA_LOG_END")) {
+            logWriter.close();
         } else if (data.equals("JAVA_EXIT_APP")) {
+            logWriter.close();
             System.out.println("Uygulama kapatiliyor...");
             Platform.exit();
             System.exit(0);
