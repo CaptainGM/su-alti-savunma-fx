@@ -1,9 +1,10 @@
-target/
 *.class
-savunma_gunlugu.txt
-.idea/
 *.iml
+.idea/
+__pycache__/
+hs_err_pid*.log
+savunma_gunlugu.txt
+target/
 tools/mapgen/__pycache__/
 tools/mapgen/layout_*.png
 tools/mapgen/swatch*.png
-hs_err_pid*.log

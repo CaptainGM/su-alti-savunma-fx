@@ -23,6 +23,7 @@ public class App extends Application {
     @Override
     public void start(Stage primaryStage) {
         this.stage = primaryStage;
+        SoundPlayer.init();
         WebView webView = new WebView();
         LogWriter logWriter = new LogWriter();
 
@@ -40,6 +41,9 @@ public class App extends Application {
                                 "}," +
                                 "playTone: function(freqStart, freqEnd, durationMs, waveType, volume) {" +
                                 "   alert('JAVA_PLAY_TONE:' + freqStart + ',' + freqEnd + ',' + durationMs + ',' + waveType + ',' + volume);" +
+                                "}," +
+                                "playSfx: function(name, volume) {" +
+                                "   alert('JAVA_SFX:' + name + ',' + volume);" +
                                 "}," +
                                 "saveData: function(json) {" +
                                 "   alert('JAVA_SAVE_DATA:' + json);" +
@@ -115,6 +119,9 @@ public class App extends Application {
             System.out.println("Uygulama kapatiliyor...");
             Platform.exit();
             System.exit(0);
+        } else if (data.startsWith("JAVA_SFX:")) {
+            String[] parts = data.substring("JAVA_SFX:".length()).split(",");
+            SoundPlayer.playSfx(parts[0], Double.parseDouble(parts[1]));
         } else if (data.startsWith("JAVA_PLAY_TONE:")) {
             String[] parts = data.substring("JAVA_PLAY_TONE:".length()).split(",");
             double freqStart = Double.parseDouble(parts[0]);
