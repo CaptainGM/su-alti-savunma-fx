@@ -29,7 +29,8 @@ def out(name):
 
 
 def main():
-    swordfish.build(out('tower_swordfish.png'))
+    swordfish.build(out('tower_swordfish.png'))          # marketteki simge
+    swordfish.build_parts(out('tower_swordfish_base.png'), out('tower_swordfish_fish.png'))   # oyun içi: kaide + dönen balık
     angler.build(out('tower_angler.png'))
     puffer.build(out('tower_puffer.png'))
     projectiles.spike_ball(out('projectile_puffer.png'))
