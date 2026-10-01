@@ -51,6 +51,7 @@
     <div id="mapSelectScreen" class="screen hidden">
         <h1 class="select-title">HARİTA SEÇ</h1>
         <div id="difficultyPills"></div>
+        <div id="difficultyInfo"></div>
         <div id="mapGrid"></div>
         <button class="menu-button" onclick="backToMenuFromMapSelect()"
             style="margin-top: 15px; font-size: 1.3em; padding: 12px 50px;">Geri</button>
@@ -59,7 +60,8 @@
     <div id="gameScreen" class="screen hidden">
         <div class="game-layout">
             <div class="canvas-container" id="canvasContainer">
-                <canvas id="gameCanvas" width="1100" height="900"></canvas>
+                <div id="canvasBackdrop"></div>
+                <canvas id="gameCanvas" width="1350" height="900"></canvas>
                 <button id="backToMapSelectBtn" onclick="quitToMapSelect()" title="Harita Seçimine Dön (Esc)">← Haritalar</button>
                 <div id="mapBanner"></div>
             </div>
@@ -84,6 +86,7 @@
                 <div class="panel" style="border-color: #00ff88;">
                     <h3>Kule Market</h3>
                     <div id="towerMarketContainer"></div>
+                    <div id="towerHint">Bir kulenin üzerine gel</div>
                 </div>
 
                 <div class="panel" style="border-color: #ffcc00; max-height:170px; display:flex; flex-direction:column;">
