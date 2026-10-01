@@ -73,6 +73,16 @@ ok(manta.flying && !crab.flying && crab.armor > manta.armor && crab.heavy, 'patr
 const p1 = JSON.stringify(Core.buildWavePlan(mapOf('cukur'), 5, 7));
 const p2 = JSON.stringify(Core.buildWavePlan(mapOf('cukur'), 5, 7));
 ok(p1 === p2, 'dalga planı aynı tohumla aynı çıkar');
+// JavaFX WebView uyumluluğu: bunlar Chrome'da çalışır ama burada tuvali siler ya da sayfayı beyaz bırakır
+const fs = require('fs');
+const css = fs.readFileSync(path.join(web, '..', 'css', 'style.css'), 'utf8');
+const gameJs = ['game.js', 'settings.js'].map(f => fs.readFileSync(path.join(web, f), 'utf8')).join('\n')
+    .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');   // yorum satırları sayılmaz
+ok(!/blur\(/.test(css), "css'de blur() filtresi yok (WebView büyük filtre dokusu ayıramıyor, sayfa beyaz kalıyor)");
+ok(!/backdrop-filter/.test(css), "css'de backdrop-filter yok");
+ok(!/globalCompositeOperation\s*=\s*['"]lighter/.test(gameJs), "'lighter' karıştırma modu kullanılmıyor (tuvali siliyor)");
+ok(!/getContext\(['"](webgl|experimental-webgl)/.test(gameJs) && !/AudioContext/.test(gameJs), 'WebGL ve Web Audio kullanılmıyor (WebView desteklemiyor)');
+
 // sonsuz mod: kazandıktan sonra devam eder ve patronlar döngüyle gelir
 w = mk('mercan');
 w.money = 9999;
