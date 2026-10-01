@@ -118,7 +118,6 @@ const perf = { frames: 0, since: 0, fps: 0, drawMs: 0, drawAcc: 0 };
 let endDelay = 0;
 let endShown = false;
 let fx = { floaters: [], rings: [], bubbles: [], flash: 0, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [], meteors: [], chomps: [] };
-let zoneBands = [];
 let ambient = null;
 let res = 1;
 
@@ -420,22 +419,6 @@ function nearestGuardian(x, y) {
     return best;
 }
 
-// yavaşlatma (tangle) bölgelerinin yol üzerindeki çizgileri
-function buildZoneBands() {
-    zoneBands = [];
-    (currentMap.mechanics || []).forEach(m => {
-        if (m.type !== 'tangle') return;
-        m.zones.forEach(z => {
-            world.paths.forEach((path, lane) => {
-                if (z.lane != null && z.lane !== lane) return;
-                const pts = [];
-                for (let d = z.from * path.length; d <= z.to * path.length; d += 10) pts.push(Core.pointAt(path, d));
-                if (pts.length > 1) zoneBands.push({ pts, color: m.color || '40,120,50' });
-            });
-        });
-    });
-}
-
 function spawnBubbles(x, y, n) {
     for (let i = 0; i < n; i++) {
         fx.bubbles.push({
@@ -555,7 +538,6 @@ function selectMap(mapIndex, resumeSnap) {
 
     renderTowerMarket();
     fitCanvas();
-    buildZoneBands();
     canvas.style.transform = '';
     showBanner();
     logStart();
@@ -712,7 +694,6 @@ function draw() {
     const fancy = Settings.get().effects;
     if (fancy) drawAmbientBack();
     drawPath();
-    drawZones();
     drawSpots();
     drawEntities();
     drawMechanics();
@@ -948,28 +929,7 @@ function bakeRail(g) {
 function drawPath() { /* yol arka plana pişirilmiştir (bakeRail) */ }
 
 // ------------------------------------------------------------------ haritaya özel kurallar
-
-function drawZones() {
-    if (!zoneBands.length) return;
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    zoneBands.forEach(b => {
-        ctx.beginPath();
-        ctx.moveTo(b.pts[0].x, b.pts[0].y);
-        for (let i = 1; i < b.pts.length; i++) ctx.lineTo(b.pts[i].x, b.pts[i].y);
-        ctx.strokeStyle = `rgba(${b.color},0.30)`;
-        ctx.lineWidth = 78;
-        ctx.stroke();
-        ctx.setLineDash([3, 13]);
-        ctx.lineDashOffset = -animTime * 12;
-        ctx.strokeStyle = `rgba(${b.color},0.75)`;
-        ctx.lineWidth = 5;
-        ctx.stroke();
-        ctx.setLineDash([]);
-    });
-    ctx.restore();
-}
+// (yavaşlatma bölgeleri artık yolun üzerinde çizilmez; kural metni ve düşmanların yavaşlaması yeterli)
 
 // patronun çenesi: iki yarım elips ve birbirine geçen dişler; gap, çenelerin merkezden uzaklığı
 function drawJaws(x, y, gap, alpha) {
