@@ -320,6 +320,7 @@ function onWorldEvent(type, d) {
             const info = Object.entries(d.counts).map(([t, c]) => `${typeName(t)}: ${c}`).join(', ');
             addLog(`=== DALGA ${d.wave} BAŞLADI === (${info}, Toplam: ${d.total})`);
             sfx('wave_start');
+            saveProgress();
             break;
         }
         case 'spawn':
@@ -381,10 +382,10 @@ function onWorldEvent(type, d) {
             addFloater({ x: d.enemy.x, y: d.enemy.y - 20, text: '-' + d.enemy.damage, color: '#ff5a64', life: 1.2, maxLife: 1.2 });
             break;
         case 'adapt': {
-            const names = Object.entries(d.adapt).map(([t, r]) => `${towerTypeName(t)} −%${Math.round(r * 100)}`);
+            const names = Object.entries(d.adapt).map(([t, r]) => `${towerTypeName(t)} %${Math.round(r * 100)}`);
             uiCache.preview = null;
             if (names.length) {
-                notify(`Düşmanlar alışıyor: ${names.join(', ')} hasarı. Kule türlerini çeşitlendir!`, '#ffd27a');
+                notify(`Düşmanlar alışıyor: ${names.join(', ')} daha az hasar veriyor. Farklı kule türleri kullan!`, '#ffd27a');
                 sfx('click');
             } else {
                 addLog('Düşmanlar alışmayı bıraktı.');
@@ -394,6 +395,7 @@ function onWorldEvent(type, d) {
         case 'waveClear':
             addLog(`Dalga temizlendi! Dalga bonusu: +${d.bonus} Enerji. Toplam Enerji: ${world.money}.`);
             sfx('wave_clear');
+            saveProgress();
             addFloater({ x: W / 2, y: 120, text: `Dalga temizlendi  +${d.bonus}`, color: '#7dffb0', life: 2.0, maxLife: 2.0, big: true });
             break;
         case 'end':
@@ -461,7 +463,62 @@ function buildAmbient(map) {
     return out;
 }
 
-function selectMap(mapIndex) {
+// ------------------------------------------------------------------ kaydet / devam et
+
+let lastSaveAt = 0;
+
+// Yarım kalan oyunu haritaya bağlı olarak kaydeder. Oyun bittiyse ya da hiç başlanmadıysa kayıt tutulmaz.
+function saveProgress() {
+    if (!world || !currentMap) return;
+    lastSaveAt = performance.now();
+    if (world.result) { Settings.clearSave(currentMap.id); return; }
+    if (world.wave === 0 && world.towers.length === 0) return;
+    Settings.setSave(currentMap.id, {
+        snap: world.serialize(),
+        savedAt: Date.now(),
+        wave: world.wave,
+        total: world.totalWaves,
+        health: Math.ceil(world.health),
+        money: world.money,
+        diff: world.diffKey,
+    });
+}
+
+// Java pencere kapanırken çağırır
+window.saveBeforeExit = function () { try { saveProgress(); } catch (e) { /* yoksay */ } };
+
+let pendingResume = null;
+
+function openMap(i) {
+    const m = MAPS[i];
+    const sv = Settings.getSave(m.id);
+    if (!sv || !sv.snap || sv.snap.v !== 1 || !Core.DIFFICULTY[sv.snap.diff]) { selectMap(i); return; }
+    pendingResume = { index: i, save: sv };
+    const d = Core.DIFFICULTY[sv.snap.diff];
+    document.getElementById('resumeTitle').innerText = m.name;
+    document.getElementById('resumeInfo').innerText =
+        `Yarım kalan oyun: ${d.label} · Dalga ${sv.wave}/${sv.total} · Can ${sv.health} · Enerji ${sv.money}`;
+    document.getElementById('resumeModal').classList.remove('hidden');
+}
+
+function closeResume() {
+    pendingResume = null;
+    document.getElementById('resumeModal').classList.add('hidden');
+}
+
+document.getElementById('resumeContinue').onclick = () => {
+    const r = pendingResume;
+    closeResume();
+    if (r) selectMap(r.index, r.save.snap);
+};
+document.getElementById('resumeRestart').onclick = () => {
+    const r = pendingResume;
+    closeResume();
+    if (r) { Settings.clearSave(MAPS[r.index].id); selectMap(r.index); }
+};
+document.getElementById('resumeCancel').onclick = closeResume;
+
+function selectMap(mapIndex, resumeSnap) {
     currentMapIndex = mapIndex;
     currentMap = MAPS[mapIndex];
     W = (currentMap.size && currentMap.size.w) || 1350;
@@ -475,7 +532,13 @@ function selectMap(mapIndex) {
     document.getElementById('gameScreen').classList.remove('hidden');
 
     if (world) logEnd();
-    world = new Core.World(currentMap, { difficulty, seed: Date.now() & 0x7fffffff, onEvent: onWorldEvent });
+    if (resumeSnap) {
+        difficulty = resumeSnap.diff;
+        world = Core.World.restore(currentMap, resumeSnap, { onEvent: onWorldEvent });
+    } else {
+        world = new Core.World(currentMap, { difficulty, seed: Date.now() & 0x7fffffff, onEvent: onWorldEvent });
+    }
+    lastSaveAt = performance.now();
     ambient = buildAmbient(currentMap);
     fx = { floaters: [], rings: [], bubbles: [], flash: 0, tension: 0, shake: 0, alert: null, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [], meteors: [], chomps: [] };
     paused = false;
@@ -496,6 +559,7 @@ function selectMap(mapIndex) {
     canvas.style.transform = '';
     showBanner();
     logStart();
+    if (resumeSnap) addLog(`Kayıtlı oyun yüklendi: dalga ${world.wave}/${world.totalWaves}, can ${Math.ceil(world.health)}, enerji ${world.money}, ${world.towers.length} kule.`);
     uiCache = {};
     updateUI();
     renderTowerList();
@@ -516,13 +580,15 @@ function showBanner() {
     b.classList.add('show');
 }
 
+let MAX_CANVAS_PX = 2700;
+
 function fitCanvas() {
     const box = document.getElementById('canvasContainer');
     const cw = box.clientWidth || W;
     const ch = box.clientHeight || H;
     const scale = Math.min(cw / W, ch / H);
-    // WebKit tuvali 2048 pikselin üstünde sorun çıkarabiliyor
-    const maxRes = Math.min(2048 / W, 2048 / H);
+    // tuvalin uzun kenarı en fazla MAX_CANVAS_PX piksel olur; arka plan resimleri 2700 piksel genişliğinde
+    const maxRes = Math.min(MAX_CANVAS_PX / W, MAX_CANVAS_PX / H);
     const q = { high: 1, medium: 0.75, low: 0.5 }[Settings.get().quality] || 1;
     res = Math.max(0.5, Math.min(maxRes, scale * (window.devicePixelRatio || 1) * q));
     canvas.width = Math.round(W * res);
@@ -580,6 +646,7 @@ function gameLoop(ts, fromJava) {
         world.update(dt * speedMultiplier);
         tensionTick(dt);
         if (performance.now() - lastLogFlush > 1000) flushLog();
+        if (performance.now() - lastSaveAt > 12000) saveProgress();
         updateFx(dt * speedMultiplier);
     }
     if (world.result && !endShown) {
@@ -723,6 +790,7 @@ function drawBackground() {
         bgCache.height = canvas.height;
         bgCache.getContext('2d').drawImage(sprites.bg, 0, 0, bgCache.width, bgCache.height);
         bakeRays(bgCache.getContext('2d'));
+        bakeRail(bgCache.getContext('2d'));
         if (darknessMech()) bakeDarkness(bgCache);
         bgCacheKey = key;
     }
@@ -855,24 +923,29 @@ function drawAmbientFront() {
     }
 }
 
-function drawPath() {
-    // yalnızca 'rail' stili yol çizer; diğer haritalarda yol arka plana işlidir
-    if (currentMap.pathStyle === 'rail') {
-        world.paths.forEach(p => {
-            ctx.beginPath();
-            ctx.moveTo(p.points[0].x, p.points[0].y);
-            for (let i = 1; i < p.points.length; i++) ctx.lineTo(p.points[i].x, p.points[i].y);
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
-            ctx.lineWidth = 11;
-            ctx.stroke();
-            ctx.strokeStyle = 'rgba(255, 210, 100, 0.95)';
-            ctx.lineWidth = 5;
-            ctx.setLineDash([12, 6]);
-            ctx.stroke();
-            ctx.setLineDash([]);
-        });
-    }
+// Yalnızca 'rail' stili yol çizer; diğer haritalarda yol arka plana işlidir. Yol hareket etmediği için
+// arka plan önbelleğine bir kez çizilir (uzun yolu her karede kesikli çizmek Mercan Kanalı'nı yavaşlatıyordu).
+function bakeRail(g) {
+    if (currentMap.pathStyle !== 'rail') return;
+    g.save();
+    g.scale(res, res);
+    world.paths.forEach(p => {
+        g.beginPath();
+        g.moveTo(p.points[0].x, p.points[0].y);
+        for (let i = 1; i < p.points.length; i++) g.lineTo(p.points[i].x, p.points[i].y);
+        g.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+        g.lineWidth = 11;
+        g.stroke();
+        g.strokeStyle = 'rgba(255, 210, 100, 0.95)';
+        g.lineWidth = 5;
+        g.setLineDash([12, 6]);
+        g.stroke();
+        g.setLineDash([]);
+    });
+    g.restore();
 }
+
+function drawPath() { /* yol arka plana pişirilmiştir (bakeRail) */ }
 
 // ------------------------------------------------------------------ haritaya özel kurallar
 
@@ -1230,30 +1303,40 @@ function drawBlizzardStrip() {
 const spotCache = new Map();
 
 function drawSpotShape(g, high, calm, full) {
-    const rgb = high ? '255,205,70' : '0,255,136';
-    g.fillStyle = `rgba(${rgb},${full ? 0.5 : 0.2 * calm})`;
-    g.strokeStyle = full ? `rgb(${rgb})` : `rgba(${rgb},${0.6 * calm})`;
-    g.lineWidth = full ? 3 : 2;
+    const R = Core.BUILD_SPOT_RADIUS;
+    const rgb = high ? '255,205,70' : '90,255,180';
+    // koyu zemin + koyu dış çizgi + parlak halka: açık renkli (kum, kar) ve koyu haritaların hepsinde seçilir
+    g.fillStyle = full ? 'rgba(0,40,55,0.45)' : `rgba(0,30,42,${0.30 * calm})`;
     g.beginPath();
-    g.arc(0, 0, Core.BUILD_SPOT_RADIUS, 0, 6.2832);
+    g.arc(0, 0, R, 0, 6.2832);
     g.fill();
+    g.fillStyle = `rgba(${rgb},${full ? 0.28 : 0.12 * calm})`;
+    g.fill();
+    g.strokeStyle = `rgba(0,12,22,${0.75 * calm})`;
+    g.lineWidth = 6;
+    g.stroke();
+    g.strokeStyle = full ? `rgb(${rgb})` : `rgba(${rgb},${Math.min(1, 1.1 * calm)})`;
+    g.lineWidth = full ? 4 : 2.6;
     g.stroke();
     if (!full && calm >= 1) {
-        g.strokeStyle = `rgba(${rgb},0.4)`;
-        g.lineWidth = 1;
+        g.strokeStyle = `rgba(${rgb},0.7)`;
+        g.lineWidth = 2;
         g.beginPath();
-        g.moveTo(-15, 0);
-        g.lineTo(15, 0);
-        g.moveTo(0, -15);
-        g.lineTo(0, 15);
+        g.moveTo(-14, 0);
+        g.lineTo(14, 0);
+        g.moveTo(0, -14);
+        g.lineTo(0, 14);
         g.stroke();
     }
     if (high) {
-        g.strokeStyle = `rgba(255,215,90,${0.5 * calm})`;
-        g.lineWidth = 2;
-        g.setLineDash([5, 7]);
+        g.setLineDash([6, 8]);
+        g.strokeStyle = `rgba(0,12,22,${0.55 * calm})`;
+        g.lineWidth = 5;
         g.beginPath();
-        g.arc(0, 0, Core.BUILD_SPOT_RADIUS + 6, 0, 6.2832);
+        g.arc(0, 0, R + 7, 0, 6.2832);
+        g.stroke();
+        g.strokeStyle = `rgba(255,215,90,${0.95 * calm})`;
+        g.lineWidth = 2.5;
         g.stroke();
         g.setLineDash([]);
     }
@@ -1269,7 +1352,7 @@ function spotSprite(high, building) {
         const g = c.getContext('2d');
         g.scale(res, res);
         g.translate(R, R);
-        drawSpotShape(g, high, building ? 1 : 0.45, false);
+        drawSpotShape(g, high, building ? 1 : 0.62, false);
         spotCache.set(key, c);
     }
     return c;
@@ -1364,15 +1447,6 @@ function drawEnemy(e) {
         ctx.fillRect(e.x - bw / 2 - 1, by - 1, bw + 2, 8);
         ctx.fillStyle = pct > 0.5 ? '#3ddc6b' : pct > 0.25 ? '#f2c230' : '#ef4b4b';
         ctx.fillRect(e.x - bw / 2, by, bw * pct, 6);
-    }
-    if (e.zoneMul < 0.95) {
-        ctx.strokeStyle = 'rgba(120,200,90,0.85)';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.arc(e.x, e.y + bob, size * 0.5, 0, 6.2832);
-        ctx.stroke();
-        ctx.setLineDash([]);
     }
     if (e.stunTime > 0) {
         ctx.strokeStyle = 'rgba(120,255,235,0.95)';
@@ -2086,8 +2160,8 @@ function renderWavePreview() {
         return `<span class="chip" title="${name}"><img src="${img}" alt="">×${count}</span>`;
     }).join('');
     const advice = world.waveAdvice(next.wave).map(l => `<div class="advice">${l}</div>`).join('');
-    const adapt = Object.entries(world.adapt).map(([t, r]) => `${towerTypeName(t)} −%${Math.round(r * 100)}`);
-    const adaptHtml = adapt.length ? `<div class="adapt-line" title="Bir kuleye çok yaslanırsan düşmanlar ona alışır">Alışma: ${adapt.join(', ')}</div>` : '';
+    const adapt = Object.entries(world.adapt).map(([t, r]) => `${towerTypeName(t)} %${Math.round(r * 100)}`);
+    const adaptHtml = adapt.length ? `<div class="adapt-line" title="Hasarın yarısından fazlasını tek türe yaptırırsan düşmanlar ona alışır; türleri karıştırınca kalkar">Düşmanlar alıştı: ${adapt.join(', ')} daha az hasar veriyor</div>` : '';
     box.innerHTML = `<div class="preview-title">Sıradaki: Dalga ${next.wave}</div><div class="chips">${chips}</div>${advice}${adaptHtml}`;
 }
 
@@ -2129,7 +2203,7 @@ function backToMenuFromMapSelect() {
 }
 
 function stopGame() {
-    if (world) logEnd();
+    if (world) { saveProgress(); logEnd(); }
     stopLoop();
     world = null;
     document.getElementById('towerModal').classList.add('hidden');
@@ -2182,7 +2256,14 @@ function renderMapSelectScreen() {
                 <div class="map-card-desc">${m.desc}</div>
                 <div class="map-card-meta">${(records[m.id + ':endless'] || {}).wave ? 'Sonsuz rekor: ' + records[m.id + ':endless'].wave + ' · ' : ''}Zorluk ${'●'.repeat(m.stars)}${'○'.repeat(5 - m.stars)} · ${Core.totalWavesOf(m)} dalga</div>
             </div>`;
-        card.onclick = () => selectMap(i);
+        card.onclick = () => openMap(i);
+        const sv = Settings.getSave(m.id);
+        if (sv && sv.snap) {
+            const badge = document.createElement('div');
+            badge.className = 'map-card-save';
+            badge.innerText = `▶ Devam: dalga ${sv.wave}`;
+            card.appendChild(badge);
+        }
         grid.appendChild(card);
     });
 }
@@ -2198,6 +2279,7 @@ function startEndless() {
 }
 
 function showEnd() {
+    Settings.clearSave(currentMap.id);
     document.getElementById('towerModal').classList.add('hidden');
     const s = world.stats;
     const statsText = `${s.kills} düşman yok edildi · ${world.towers.length} kule · ${Core.DIFFICULTY[difficulty].label}`;
@@ -2236,6 +2318,7 @@ function toggleInfo() {
 }
 
 function exitGame() {
+    window.saveBeforeExit();
     alert('JAVA_EXIT_APP');
 }
 

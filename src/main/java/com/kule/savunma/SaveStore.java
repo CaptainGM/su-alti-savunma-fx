@@ -1,6 +1,8 @@
 package com.kule.savunma;
 
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.StandardCopyOption;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,10 +27,17 @@ public class SaveStore {
         return null;
     }
 
-    public void write(String json) {
+    /** Önce geçici dosyaya yazılıp yerine taşınır: yazma sırasında kapanma ayarları bozmaz. */
+    public synchronized void write(String json) {
         try {
             Files.createDirectories(file.getParent());
-            Files.writeString(file, json, StandardCharsets.UTF_8);
+            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
+            Files.writeString(tmp, json, StandardCharsets.UTF_8);
+            try {
+                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (IOException e) {
             System.out.println("Kayit yazilamadi: " + e.getMessage());
         }

@@ -945,3 +945,40 @@ body {
     border-left: 3px solid #ffb02e;
     border-radius: 3px;
 }
+
+/* kayıtlı oyun penceresi */
+#resumeModal {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 460px;
+    max-width: 92vw;
+    padding: 26px;
+    background: rgba(10, 25, 41, 0.98);
+    border: 3px solid #00d4ff;
+    border-radius: 20px;
+    text-align: center;
+    z-index: 2600;
+    box-shadow: 0 0 100px rgba(0, 0, 0, 0.8);
+}
+
+#resumeModal h3 { color: #00d4ff; font-size: 1.7em; margin-bottom: 10px; }
+#resumeModal p { color: #d6eef8; margin-bottom: 18px; line-height: 1.5; }
+#resumeModal .resume-buttons { display: flex; gap: 10px; }
+#resumeModal .btn { white-space: normal; font-size: 1.05em; padding: 14px 8px; }
+#resumeRestart { background: #3a4a5a; box-shadow: none; }
+#resumeModal .close-btn { margin-top: 14px; }
+
+.map-card-save {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 3;
+    padding: 3px 9px;
+    font-size: 0.78em;
+    font-weight: 700;
+    color: #06202b;
+    background: #4fe3ff;
+    border-radius: 10px;
+}

@@ -18,8 +18,9 @@
             <p><b>Kuleyi geliştirmek:</b> Kuleye tıkla; yükselt, sat ya da hedef önceliğini değiştir (İlk / Son / En Güçlü / En Yakın). Kuleler 5 seviyedir, 3. ve 5. seviyede yeni yetenek açılır.</p>
             <p><b>Strateji:</b> Rastgele kule dizmek kazandırmaz. Sağ üstteki kutu sıradaki dalganın içeriğini ve hangi kulelerin işe yarayacağını söyler: <b>zırhlılara</b> Ahtapot çok az hasar verir (zırh deler: Yılan, Kılıç, Fener Balığı), <b>uçanları</b> Yılan ve Balon Balığı vuramaz, <b>sürüyü</b> alan hasarı eritir, patronlara Kılıç Balığı %50 fazla vurur.</p>
             <p><b>Eşleşme:</b> Deniz Anası'nın yavaşlattığı düşman her kuleden %20 fazla hasar alır. Uzak ve yüksek (altın halkalı) yerler yalnızca uzun menzilli kulelere uyar.</p>
-            <p><b>Alışma:</b> Hasarın yarısından fazlasını tek bir türe yaptırırsan düşmanlar ona alışır ve o kuleden %30'a kadar az hasar alır. Kutuda turuncu uyarı çıkar; türleri karıştır.</p>
-            <p><b>Fiyatlar:</b> Aynı türden her yeni kule bir öncekinden %12 pahalıdır. Yükseltme çoğu zaman yeni kuleden verimlidir; çubuklar mevcut gücü (mavi) ve yükseltmeyle gelecek kazancı (sarı) gösterir.</p>
+            <p><b>Alışma:</b> 4. dalgadan sonra hasarın yarısından fazlasını tek bir türe yaptırırsan düşmanlar ona alışır ve o türden en fazla %25 az hasar alır (kutuda "Ahtapot %25 daha az hasar veriyor" gibi yazar). Türleri karıştırırsan alışma kalkar.</p>
+            <p><b>Fiyatlar:</b> Kule fiyatları 50 ile 100 arasındadır ve kolay ile normalde sabittir; zorda aynı türden her yeni kule %6 pahalanır. Başlangıç enerjisi kolayda 300, normalde 250, zorda 200'dür. Yükseltme çoğu zaman yeni kuleden verimlidir; çubuklar mevcut gücü (mavi) ve yükseltmeyle gelecek kazancı (sarı) gösterir.</p>
+            <p><b>Kaydetme:</b> Bir oyunu bırakıp haritalara döndüğünde ya da oyunu kapattığında kaydedilir. Haritaya tekrar tıklayınca <b>devam edebilir</b> ya da yeniden başlayabilirsin.</p>
             <p><b>Patronlar:</b> Belirli dalgalarda güçlü bir patron gelir. Patron zaman zaman en yüksek seviyeli yakın kuleni önce çenesini açarak hedef alır, sonra <b>yer</b>: kule yok olur, para iadesi yoktur. Patronu menzil dışında yavaşlatıp önce öldürmek gerekir.</p>
             <p><b>Harita kuralları:</b> Her haritanın kendine özel bir kuralı vardır (haritanın başında ve sağ üst kutuda yazar). Volkanda gökten düşen lav kayası uyarısız bir kuleyi yok edebilir.</p>
             <p class="help-keys">Kısayollar: Boşluk dalga başlat · P duraklat · F hız (1x, 2x, 0,5x) · 1-6 kule seç · F11 tam ekran · Esc geri</p>
@@ -39,6 +40,16 @@
             <button class="btn" id="sellBtn" onclick="sellSelectedTower()">SAT</button>
         </div>
         <button class="close-btn" onclick="closeTowerModal()" style="margin-top:15px;">KAPAT</button>
+    </div>
+
+    <div id="resumeModal" class="hidden">
+        <h3 id="resumeTitle">Kayıtlı oyun var</h3>
+        <p id="resumeInfo"></p>
+        <div class="resume-buttons">
+            <button class="btn" id="resumeContinue">DEVAM ET</button>
+            <button class="btn" id="resumeRestart">YENİDEN BAŞLA</button>
+        </div>
+        <button class="close-btn" id="resumeCancel">VAZGEÇ</button>
     </div>
 
     <div id="menuScreen" class="screen">

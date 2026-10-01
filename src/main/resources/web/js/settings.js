@@ -1,17 +1,20 @@
-// Ayarlar ve kalıcı veriler (rekorlar, zorluk). Java köprüsü varsa ~/.su-alti-savunma/kayit.json'a yazılır,
-// yoksa (tarayıcıda test) localStorage kullanılır.
+// Ayarlar ve kalıcı veriler (rekorlar, zorluk, yarım kalan oyunlar).
+// Uygulamada tek kaynak ~/.su-alti-savunma/kayit.json'dur (Java okur ve yazar). WebView'ın localStorage'ı bilerek
+// kullanılmaz: başka çalıştırmalarla ortak kalıp eski değerleri geri getirebiliyordu (ör. yüksek ses).
+// Java köprüsü yoksa (tarayıcıda geliştirme) localStorage yedek olarak kullanılır.
 'use strict';
 
 const Settings = (function () {
-    const DEFAULTS = { sfx: 1.0, mute: false, fullscreen: false, size: 'auto', quality: 'high', effects: true, floaters: true, fps: 120, showFps: false };
-    const state = { settings: Object.assign({}, DEFAULTS), records: {}, difficulty: 'normal' };
+    const DEFAULTS = { sfx: 0.6, mute: false, fullscreen: false, size: 'auto', quality: 'high', effects: true, floaters: true, fps: 120, showFps: false };
+    const state = { settings: Object.assign({}, DEFAULTS), records: {}, difficulty: 'normal', saves: {} };
     let listeners = [];
 
     function persist() {
         const json = JSON.stringify(state);
-        try {
-            if (window.javaBridge && window.javaBridge.saveData) window.javaBridge.saveData(json);
-        } catch (e) { /* köprü hazır değil */ }
+        if (window.javaBridge && window.javaBridge.saveData) {
+            try { window.javaBridge.saveData(json); } catch (e) { /* köprü hazır değil */ }
+            return;
+        }
         try { window.localStorage.setItem('sas.data', json); } catch (e) { /* localStorage kapalı olabilir */ }
     }
 
@@ -19,14 +22,18 @@ const Settings = (function () {
         if (!obj || typeof obj !== 'object') return;
         if (obj.settings) Object.keys(DEFAULTS).forEach(k => { if (obj.settings[k] !== undefined) state.settings[k] = obj.settings[k]; });
         if (obj.records) Object.assign(state.records, obj.records);
+        if (obj.saves && typeof obj.saves === 'object') state.saves = obj.saves;
         if (obj.difficulty) state.difficulty = obj.difficulty;
     }
 
-    function load() {
+    // yalnızca tarayıcıda: sayfa yüklendikten kısa süre sonra Java köprüsü hâlâ yoksa localStorage'dan oku
+    function loadLocal() {
         try {
             const raw = window.localStorage.getItem('sas.data');
             if (raw) merge(JSON.parse(raw));
         } catch (e) { /* yoksay */ }
+        listeners.forEach(fn => fn());
+        if (typeof refreshAfterLoad === 'function') refreshAfterLoad();
     }
 
     // Java başlangıçta kayıt dosyasının içeriğini buraya yollar
@@ -37,7 +44,7 @@ const Settings = (function () {
         if (typeof refreshAfterLoad === 'function') refreshAfterLoad();
     };
 
-    load();
+    window.addEventListener('load', () => setTimeout(() => { if (!window.javaBridge) loadLocal(); }, 1500));
 
     return {
         get: () => state.settings,
@@ -47,6 +54,10 @@ const Settings = (function () {
         setRecord(key, rec) { state.records[key] = rec; persist(); },
         difficulty: () => state.difficulty,
         setDifficulty(d) { state.difficulty = d; persist(); },
+        // yarım kalan oyunlar (harita başına bir tane)
+        getSave: id => state.saves[id] || null,
+        setSave(id, value) { state.saves[id] = value; persist(); },
+        clearSave(id) { if (state.saves[id]) { delete state.saves[id]; persist(); } },
         onChange(fn) { listeners.push(fn); },
     };
 })();
