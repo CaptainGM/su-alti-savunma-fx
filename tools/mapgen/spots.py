@@ -1,11 +1,16 @@
-"""Kule yerlerini haritaya dengeli dağıtır: yola erişebilen hiçbir bölge boş kalmasın.
+"""Kule yerlerini yolun etrafına, gerçekten işe yarayacak biçimde ve dengeli dağıtır.
 
     python tools/mapgen/spots.py             rapor yazar ve tools/mapgen/spots_preview/ altına önizleme çizer
     python tools/mapgen/spots.py --write     maps.js içindeki buildSpots listelerini günceller
 
-Mevcut (elle yerleştirilmiş) yerler korunur. Yola yeterince yakın olup çevresi boş kalan noktalara, boşluk
-kalmayana kadar en uzak noktadan başlayarak yeni yer eklenir. Yola uzak yerler "yüksek zemin" olur: menzil %20
-artar, ama yalnızca uzun menzilli kuleler yola yetişir. Böylece kule türünü ve yerini birlikte düşünmek gerekir.
+Kurallar:
+  - Yer, yolun ekseninden en az MIN_PATH uzakta olmalı (yol görseli ve kule gövdesi için).
+  - Normal yer yola en çok NORMAL_MAX, yüksek zemin (menzil %20 artar) en çok HIGH_MAX uzakta olabilir.
+  - Her yer, en kısa menzilli kuleyle (200 piksel) yolun en az MIN_COVER pikselini kapsamalı: yani oraya konan kule
+    gerçekten geçen düşmanlara ulaşır. Yola yetişmeyen "boşluk doldurma" yerleri yoktur.
+  - Mevcut (elle yerleştirilmiş) yerlerden bu kurallara uyanlar korunur, uymayanlar silinir.
+  - Yola yakın bölgelerde HOLE'den büyük boşluk kalmayana kadar en uygun noktalara yeni yer eklenir; viraj içleri gibi
+    yolu çok kapsayan noktalar tercih edilir ve arka planın en karmaşık bölgelerinden kaçınılır.
 """
 import json
 import os
@@ -20,12 +25,14 @@ WEB = os.path.join(HERE, '..', '..', 'src', 'main', 'resources', 'web')
 MAPS_JS = os.path.join(WEB, 'js', 'maps.js')
 
 W, H = 1350, 900
-MIN_PATH = 80          # yolun eksenine en az uzaklık (yol görseli ve kule gövdesi)
-MAX_PATH = 350         # bundan uzağa yer koymanın anlamı yok (uzaktakiler Kılıç Balığı / Balon Balığı için)
-NEAR_PATH = 218        # bu uzaklığa kadar olan bölge sık, ötesi seyrek doldurulur
+MIN_PATH = 80          # yolun eksenine en az uzaklık
+NORMAL_MAX = 185       # normal yer için yola en çok uzaklık
+HIGH_MAX = 235         # yüksek zemin için (menzil x1.2)
+SHORTEST_RANGE = 200   # en kısa menzilli kule (Ahtapot 210, Deniz Anası 200, Fener 200)
+HIGH_RANGE = 1.2
+MIN_COVER = 150        # yer, en kısa menzille yolun en az bu kadar pikselini kapsamalı
 MIN_GAP = 124          # iki kule arası (kule yarıçapı 55)
-HOLE = 172             # yola yakın bir noktanın en yakın yere uzaklığı bundan büyükse boşluk sayılır
-FAR_HIGH = 165         # yola bu kadar uzaksa yeni yer yüksek zemin olur
+HOLE = 168             # yola yakın bir noktanın en yakın yere uzaklığı bundan büyükse boşluk sayılır
 MARGIN_X, MARGIN_TOP, MARGIN_BOTTOM = 70, 78, 70
 KEEP_OUT = 96          # koruyucu baş / hazine sandığı çevresi
 
@@ -50,15 +57,34 @@ def catmull(points, per=20):
     return np.array(out)
 
 
-def dist_to(points, xs, ys):
-    d = np.full(xs.shape, 1e9)
-    for px, py in points:
-        d = np.minimum(d, np.hypot(xs - px, ys - py))
-    return d
+def segments(paths):
+    """Yolların küçük parçalarının orta noktaları ve uzunlukları."""
+    mids, lens = [], []
+    for p in paths:
+        pts = catmull(p)
+        d = np.diff(pts, axis=0)
+        mids.append((pts[:-1] + pts[1:]) / 2)
+        lens.append(np.hypot(d[:, 0], d[:, 1]))
+    return np.vstack(mids), np.concatenate(lens)
+
+
+def path_dist(mids, xs, ys):
+    out = np.full(xs.shape, 1e9)
+    for mx, my in mids:
+        out = np.minimum(out, np.hypot(xs - mx, ys - my))
+    return out
+
+
+def cover(mids, lens, xs, ys, r):
+    """(xs, ys) noktasından r menzille yolun kaç pikselinin görüldüğü."""
+    out = np.zeros(xs.shape)
+    for (mx, my), ln in zip(mids, lens):
+        out += ln * (np.hypot(xs - mx, ys - my) <= r)
+    return out
 
 
 def busyness(m):
-    """Arka planın karmaşıklığı (yerel standart sapma): süs eşyalarının, kristallerin ve iskeletlerin üstüne yer koymamak için."""
+    """Arka planın karmaşıklığı (yerel standart sapma): iskelet, büyük kristal öbekleri gibi yerlerden kaçınmak için."""
     from PIL import Image
     from scipy.ndimage import uniform_filter
     g = np.asarray(Image.open(os.path.join(WEB, m['bg'])).convert('L').resize((W, H)), float)
@@ -67,47 +93,72 @@ def busyness(m):
     return np.sqrt(var)
 
 
+def classify(mids, lens, x, y):
+    """Bir noktanın uygun olup olmadığı ve türü: (geçerli mi, 'normal' ya da 'high')."""
+    xs, ys = np.array([float(x)]), np.array([float(y)])
+    d = path_dist(mids, xs, ys)[0]
+    if d < MIN_PATH or d > HIGH_MAX:
+        return False, None
+    kind = 'normal' if d <= NORMAL_MAX else 'high'
+    r = SHORTEST_RANGE * (HIGH_RANGE if kind == 'high' else 1)
+    if cover(mids, lens, xs, ys, r)[0] < MIN_COVER:
+        return False, None
+    return True, kind
+
+
 def solve(m):
+    mids, lens = segments(m['paths'])
     busy = busyness(m)
-    path_pts = np.vstack([catmull(p) for p in m['paths']])
     gx, gy = np.meshgrid(np.arange(MARGIN_X, W - MARGIN_X + 1, 9.0), np.arange(MARGIN_TOP, H - MARGIN_BOTTOM + 1, 9.0))
-    d_path = dist_to(path_pts, gx, gy)
+    d_path = path_dist(mids, gx, gy)
+    cov_n = cover(mids, lens, gx, gy, SHORTEST_RANGE)
+    cov_h = cover(mids, lens, gx, gy, SHORTEST_RANGE * HIGH_RANGE)
     busy_at = busy[gy.astype(int), gx.astype(int)]
-    ok = (d_path >= MIN_PATH) & (d_path <= MAX_PATH)
-    calm_limit = np.percentile(busy_at[ok], 92)      # yalnızca en karmaşık %8 (iskelet, büyük kristal öbekleri) dışarıda kalır
-    ok &= busy_at <= calm_limit
+
+    near_ok = (d_path >= MIN_PATH) & (d_path <= NORMAL_MAX) & (cov_n >= MIN_COVER)
+    far_ok = (d_path > NORMAL_MAX) & (d_path <= HIGH_MAX) & (cov_h >= MIN_COVER)
+    ok = near_ok | far_ok
     for g in m['guardians']:
         ok &= np.hypot(gx - g['x'], gy - g['y']) >= KEEP_OUT
     if m['treasure']:
         ok &= np.hypot(gx - m['treasure']['x'], gy - m['treasure']['y']) >= KEEP_OUT
-    # arayüz düğmelerinin altı
-    ok &= ~((gx < 190) & (gy < 80)) & ~((gx > 1130) & (gy < 80))
+    ok &= ~((gx < 190) & (gy < 80)) & ~((gx > 1130) & (gy < 80))    # arayüz düğmelerinin altı
+    calm_limit = np.percentile(busy_at[ok], 92)
+    ok &= busy_at <= calm_limit
 
-    spots = [dict(s) for s in m['spots']]
+    # mevcut yerlerden uygun olanları koru; yola uzak olanın türünü yüksek zemin yap
+    spots, dropped = [], []
+    for s in m['spots']:
+        valid, kind = classify(mids, lens, s['x'], s['y'])
+        if not valid:
+            dropped.append(s)
+            continue
+        ns = {'x': s['x'], 'y': s['y']}
+        if kind == 'high' or s.get('kind') == 'high':
+            ns['kind'] = 'high'
+        spots.append(ns)
+
+    # yola yakın bölgelerde boşluk kalmayana kadar yeni yer ekle
+    band = (d_path >= MIN_PATH - 20) & (d_path <= HIGH_MAX) & (np.maximum(cov_n, cov_h) >= MIN_COVER)
     for _ in range(80):
-        sx = np.array([s['x'] for s in spots], float)
-        sy = np.array([s['y'] for s in spots], float)
         near = np.full(gx.shape, 1e9)
-        for x, y in zip(sx, sy):
-            near = np.minimum(near, np.hypot(gx - x, gy - y))
-        cand = ok & (near >= MIN_GAP)
-        if not cand.any():
+        for s in spots:
+            near = np.minimum(near, np.hypot(gx - s['x'], gy - s['y']))
+        hole = band & (near > HOLE)
+        cand = ok & (near >= HOLE)
+        if not (cand & hole).any() and not (ok & hole & (near >= MIN_GAP + 20)).any():
             break
-        # boşluk: yola erişebilen ama yeterince yakın yer olmayan noktalar
-        hole = ((d_path >= MIN_PATH - 20) & (d_path <= NEAR_PATH) & (near > HOLE)) | ((d_path > NEAR_PATH) & (d_path <= MAX_PATH) & (near > HOLE + 40))
-        if not (cand & hole).any():
-            break
-        score = np.where(cand & hole, near, -1)
-        # yola yakın olanları hafifçe tercih et (erişilebilir olsun)
-        score = score - 0.35 * np.abs(d_path - 135) - 1.6 * busy_at
-        score = np.where(cand & hole, score, -1e9)
+        use = cand | (ok & hole & (near >= MIN_GAP + 20))
+        score = near + 0.10 * np.where(d_path <= NORMAL_MAX, cov_n, cov_h) - 1.6 * busy_at - 0.25 * np.abs(d_path - 130)
+        score = np.where(use & hole, score, -1e9)
         j = np.unravel_index(np.argmax(score), score.shape)
-        x, y = int(round(gx[j])), int(round(gy[j]))
-        s = {'x': x, 'y': y}
-        if d_path[j] >= FAR_HIGH:
+        if score[j] <= -1e8:
+            break
+        s = {'x': int(round(gx[j])), 'y': int(round(gy[j]))}
+        if d_path[j] > NORMAL_MAX:
             s['kind'] = 'high'
         spots.append(s)
-    return spots, path_pts, (gx, gy, d_path, ok)
+    return spots, dropped, mids
 
 
 def spot_text(spots, per_line=3):
@@ -116,17 +167,21 @@ def spot_text(spots, per_line=3):
     return '\n'.join('                ' + ln for ln in lines)
 
 
-def preview(m, spots, path_pts, folder):
+def preview(m, spots, dropped, folder):
     from PIL import Image, ImageDraw
     bg = Image.open(os.path.join(WEB, m['bg'])).convert('RGB').resize((W, H))
     d = ImageDraw.Draw(bg, 'RGBA')
+    for p in m['paths']:
+        for x, y in catmull(p)[::6]:
+            d.ellipse([x - 3, y - 3, x + 3, y + 3], fill=(255, 255, 255, 160))
     old = {(s['x'], s['y']) for s in m['spots']}
-    for x, y in path_pts[::6]:
-        d.ellipse([x - 3, y - 3, x + 3, y + 3], fill=(255, 255, 255, 140))
+    for s in dropped:
+        d.ellipse([s['x'] - 28, s['y'] - 28, s['x'] + 28, s['y'] + 28], outline=(255, 40, 40, 255), width=4)
+        d.line([s['x'] - 24, s['y'] - 24, s['x'] + 24, s['y'] + 24], fill=(255, 40, 40, 255), width=4)
     for s in spots:
         new = (s['x'], s['y']) not in old
         col = (255, 215, 60, 200) if s.get('kind') == 'high' else (80, 255, 170, 200)
-        d.ellipse([s['x'] - 28, s['y'] - 28, s['x'] + 28, s['y'] + 28], outline=(255, 90, 90, 255) if new else col, width=4, fill=col[:3] + (60,))
+        d.ellipse([s['x'] - 28, s['y'] - 28, s['x'] + 28, s['y'] + 28], outline=(255, 255, 255, 255) if new else col, width=4, fill=col[:3] + (70,))
     os.makedirs(folder, exist_ok=True)
     bg.convert('RGB').resize((900, 600)).save(os.path.join(folder, m['id'] + '.jpg'), quality=82)
 
@@ -137,11 +192,10 @@ def main():
     text = open(MAPS_JS, encoding='utf-8').read()
     folder = os.path.join(HERE, 'spots_preview')
     for m in maps:
-        spots, path_pts, _ = solve(m)
-        added = len(spots) - len(m['spots'])
-        print('%-9s yer %2d -> %2d (+%d)' % (m['id'], len(m['spots']), len(spots), added))
+        spots, dropped, _ = solve(m)
+        print('%-9s yer %2d -> %2d  (silinen %d, eklenen %d)' % (m['id'], len(m['spots']), len(spots), len(dropped), len(spots) - (len(m['spots']) - len(dropped))))
         if not write:
-            preview(m, spots, path_pts, folder)
+            preview(m, spots, dropped, folder)
             continue
         pat = re.compile(r"(id: '%s',.*?buildSpots: \[\n).*?(\n            \],)" % m['id'], re.S)
         if not pat.search(text):
