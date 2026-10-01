@@ -14,7 +14,10 @@ def make_caustics(out_path, size=512, seed=77):
     c = np.clip(a * 0.75 + b * 0.55, 0, 1) ** 1.9
     c = c / c.max()
     alpha = (np.clip(c * 1.25, 0, 1) * 255).astype(np.uint8)
-    rgba = np.zeros((size, size, 4), np.uint8)
+    rgba = np.zeros(alpha.shape + (4,), np.uint8)
     rgba[..., :3] = 255
     rgba[..., 3] = alpha
-    Image.fromarray(rgba, 'RGBA').save(out_path)
+    im = Image.fromarray(rgba, 'RGBA')
+    if im.size[0] != size:
+        im = im.resize((size, size), Image.LANCZOS)
+    im.save(out_path)
