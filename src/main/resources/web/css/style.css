@@ -617,13 +617,13 @@ body {
 #wavePreview { min-height: 46px; padding: 6px 8px; }
 #gameLog { min-height: 90px; }
 
-/* tuval kutuya tam oturmadığında kenarları haritanın bulanık hâliyle doldur (siyah bant yerine) */
+/* tuval kutuya tam oturmadığında kenarları haritanın büyütülmüş küçük resmiyle doldur (siyah bant yerine).
+   Not: CSS filter/blur kullanma, JavaFX WebView büyük bir filtre dokusu ayıramayıp sayfayı beyaz bırakıyor. */
 #canvasBackdrop {
     position: absolute;
-    inset: -40px;
+    inset: 0;
     background-size: cover;
     background-position: center;
-    filter: blur(26px) brightness(0.55) saturate(1.15);
 }
 
 #gameCanvas {

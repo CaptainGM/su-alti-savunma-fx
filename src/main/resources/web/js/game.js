@@ -250,7 +250,8 @@ function selectMap(mapIndex) {
     W = (currentMap.size && currentMap.size.w) || 1350;
     H = (currentMap.size && currentMap.size.h) || 900;
     loadSprites(currentMap);
-    document.getElementById('canvasBackdrop').style.backgroundImage = `url('${currentMap.bg}')`;
+    document.getElementById('canvasBackdrop').style.backgroundImage =
+        `linear-gradient(rgba(0,6,16,0.55), rgba(0,6,16,0.55)), url('${currentMap.thumb || currentMap.bg}')`;
 
     ['menuScreen', 'mapSelectScreen', 'winScreen', 'loseScreen', 'towerModal'].forEach(id =>
         document.getElementById(id).classList.add('hidden'));
