@@ -1,85 +1,143 @@
 package com.kule.savunma;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.SourceDataLine;
-import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
+/**
+ * Tek bir ses hattı üzerinde çalışan yazılımsal mikser.
+ *
+ * Eskiden her ses için ayrı hat açılıyordu; çok sesli savaşlarda hem gecikme hem kısık/kesik ses sorunu vardı.
+ * Şimdi hat bir kez açılır, çalan tüm sesler 10 ms'lik parçalar hâlinde toplanır ve yumuşak sınırlayıcıdan geçirilir.
+ */
 public class SoundPlayer {
-    private static final int SAMPLE_RATE = 44100;
 
-    // Aynı anda en fazla 3 ses çalar, kuyruk dolarsa yeni sesler atlanır.
-    // (Her atışta yeni thread açmak çok kuleli oyunlarda ses kartını boğuyordu.)
-    private static final ExecutorService POOL = new ThreadPoolExecutor(
-            3, 3, 0L, TimeUnit.MILLISECONDS,
-            new ArrayBlockingQueue<>(6),
-            r -> {
-                Thread t = new Thread(r, "ses");
-                t.setDaemon(true);
-                return t;
-            },
-            new ThreadPoolExecutor.DiscardPolicy());
+    private static final int RATE = SoundBank.RATE;
+    private static final int CHUNK = 441;            // 10 ms
+    private static final int MAX_VOICES = 28;
 
-    // Aynı parametreli sesler tekrar tekrar üretilmesin
-    private static final Map<String, byte[]> CACHE = new ConcurrentHashMap<>();
+    private static final class Voice {
+        final float[] data;
+        final float gain;
+        int pos;
 
-    public static void play(double freqStart, double freqEnd, int durationMs, String waveType, double volume) {
-        POOL.execute(() -> {
-            try {
-                String key = freqStart + "|" + freqEnd + "|" + durationMs + "|" + waveType + "|" + volume;
-                byte[] buffer = CACHE.computeIfAbsent(key,
-                        k -> generate(freqStart, freqEnd, durationMs, waveType, volume));
-
-                AudioFormat format = new AudioFormat(SAMPLE_RATE, 16, 1, true, false);
-                try (SourceDataLine line = AudioSystem.getSourceDataLine(format)) {
-                    line.open(format);
-                    line.start();
-                    line.write(buffer, 0, buffer.length);
-                    line.drain();
-                }
-            } catch (Exception e) {
-                System.out.println("Ses calma hatasi: " + e.getMessage());
-            }
-        });
-    }
-
-    private static byte[] generate(double freqStart, double freqEnd, int durationMs, String waveType, double volume) {
-        double durationSec = durationMs / 1000.0;
-        int numSamples = (int) (SAMPLE_RATE * durationSec);
-        byte[] buffer = new byte[numSamples * 2];
-
-        for (int i = 0; i < numSamples; i++) {
-            double t = i / (double) SAMPLE_RATE;
-            double progress = t / durationSec;
-            double freq = freqStart * Math.pow(freqEnd / freqStart, progress);
-            double envelope = Math.exp(-3.0 * progress);
-            double sample = wave(waveType, freq, t) * volume * envelope;
-
-            short pcm = (short) (Math.max(-1.0, Math.min(1.0, sample)) * Short.MAX_VALUE);
-            buffer[2 * i] = (byte) (pcm & 0xFF);
-            buffer[2 * i + 1] = (byte) ((pcm >> 8) & 0xFF);
+        Voice(float[] data, float gain) {
+            this.data = data;
+            this.gain = gain;
         }
-        return buffer;
     }
 
-    private static double wave(String type, double freq, double t) {
-        double phase = freq * t;
-        double frac = phase - Math.floor(phase + 0.5);
+    private static final ConcurrentLinkedQueue<Voice> PENDING = new ConcurrentLinkedQueue<>();
+    private static volatile boolean started;
+    private static volatile boolean broken;
 
-        switch (type) {
-            case "square":
-                return Math.signum(Math.sin(2 * Math.PI * phase));
-            case "sawtooth":
-                return 2 * frac;
-            case "triangle":
-                return 4 * Math.abs(frac) - 1;
-            default:
-                return Math.sin(2 * Math.PI * phase);
+    /** Hattı ve ses bankasını arka planda hazırlar. Açılışta bir kez çağrılır. */
+    public static synchronized void init() {
+        if (started) {
+            return;
+        }
+        started = true;
+        Thread t = new Thread(SoundPlayer::run, "ses-mikseri");
+        t.setDaemon(true);
+        t.setPriority(Thread.MAX_PRIORITY - 1);
+        t.start();
+    }
+
+    /** Hazır bir sesi çalar. volume: 0..~1.5 (ayarlardaki ses düzeyi). */
+    public static void playSfx(String name, double volume) {
+        if (broken || volume <= 0) {
+            return;
+        }
+        init();
+        float[] data = SoundBank.get(name);
+        if (data == null) {
+            return;
+        }
+        PENDING.add(new Voice(data, (float) volume));
+    }
+
+    /** Eski arayüz: tek bir ton çalar (artık oyun kullanmıyor, geriye dönük uyumluluk için duruyor). */
+    public static void play(double freqStart, double freqEnd, int durationMs, String waveType, double volume) {
+        init();
+        int n = (int) (RATE * durationMs / 1000.0);
+        float[] d = new float[n];
+        double dur = durationMs / 1000.0;
+        for (int i = 0; i < n; i++) {
+            double t = i / (double) RATE;
+            double progress = t / dur;
+            double freq = freqStart * Math.pow(freqEnd / freqStart, progress);
+            double ph = freq * t;
+            double frac = ph - Math.floor(ph + 0.5);
+            double w;
+            switch (waveType) {
+                case "square":
+                    w = Math.signum(Math.sin(2 * Math.PI * ph));
+                    break;
+                case "sawtooth":
+                    w = 2 * frac;
+                    break;
+                case "triangle":
+                    w = 4 * Math.abs(frac) - 1;
+                    break;
+                default:
+                    w = Math.sin(2 * Math.PI * ph);
+            }
+            d[i] = (float) (w * Math.exp(-3.0 * progress));
+        }
+        PENDING.add(new Voice(d, (float) Math.min(1.0, volume * 4)));
+    }
+
+    private static void run() {
+        SoundBank.buildAll();
+        AudioFormat format = new AudioFormat(RATE, 16, 1, true, false);
+        SourceDataLine line;
+        try {
+            line = AudioSystem.getSourceDataLine(format);
+            line.open(format, CHUNK * 2 * 8);
+            line.start();
+        } catch (Exception e) {
+            System.out.println("Ses cihazi acilamadi, oyun sessiz calisacak: " + e.getMessage());
+            broken = true;
+            return;
+        }
+
+        List<Voice> active = new ArrayList<>();
+        float[] mix = new float[CHUNK];
+        byte[] out = new byte[CHUNK * 2];
+
+        while (true) {
+            Voice v;
+            while ((v = PENDING.poll()) != null) {
+                if (active.size() >= MAX_VOICES) {
+                    active.remove(0);    // en eskisini kes
+                }
+                active.add(v);
+            }
+
+            java.util.Arrays.fill(mix, 0f);
+            for (int k = active.size() - 1; k >= 0; k--) {
+                Voice a = active.get(k);
+                int len = Math.min(CHUNK, a.data.length - a.pos);
+                for (int i = 0; i < len; i++) {
+                    mix[i] += a.data[a.pos + i] * a.gain;
+                }
+                a.pos += len;
+                if (a.pos >= a.data.length) {
+                    active.remove(k);
+                }
+            }
+
+            for (int i = 0; i < CHUNK; i++) {
+                // yumuşak sınırlayıcı: üst üste binen sesler bozulmadan toplanır
+                double s = Math.tanh(mix[i] * 1.15);
+                short pcm = (short) Math.round(s * 32000);
+                out[2 * i] = (byte) (pcm & 0xFF);
+                out[2 * i + 1] = (byte) ((pcm >> 8) & 0xFF);
+            }
+            line.write(out, 0, out.length);
         }
     }
 }
