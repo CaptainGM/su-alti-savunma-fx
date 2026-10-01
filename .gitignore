@@ -3,3 +3,7 @@ target/
 savunma_gunlugu.txt
 .idea/
 *.iml
+tools/mapgen/__pycache__/
+tools/mapgen/layout_*.png
+tools/mapgen/swatch*.png
+hs_err_pid*.log
