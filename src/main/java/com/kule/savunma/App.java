@@ -62,7 +62,9 @@ public class App extends Application {
             }
         });
 
-        String htmlPath = getClass().getResource("/web/index.html").toExternalForm();
+        // geliştirme kolaylığı: -Dsavunma.hash="#map=2&diff=hard" haritayı doğrudan açar
+        String htmlPath = getClass().getResource("/web/index.html").toExternalForm()
+                + System.getProperty("savunma.hash", "");
         webView.getEngine().load(htmlPath);
 
         StackPane root = new StackPane();
