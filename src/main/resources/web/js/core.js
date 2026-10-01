@@ -29,7 +29,7 @@
         octopus: { name: 'Ahtapot', cost: 50, range: 210, dmg: 9, rate: 0.9, projSpeed: 520, role: 'Hızlı · havayı da vurur · zırha zayıf' },
         eel: { name: 'Yılan Balığı', cost: 80, range: 180, dmg: 28, rate: 2.6, aoe: 62, groundOnly: true, pierce: 0.5, role: 'Alan şoku · zırh deler · havayı vuramaz' },
         jellyfish: { name: 'Deniz Anası', cost: 70, range: 200, dmg: 12, rate: 1.7, slow: 0.5, slowTime: 3, projSpeed: 480, role: 'Yavaşlatır · destek vuruşu' },
-        swordfish: { name: 'Kılıç Balığı', cost: 120, range: 380, dmg: 80, rate: 3.6, projSpeed: 1100, pierce: 0.35, defaultMode: 'strong', role: 'Keskin nişancı · çok uzun menzil · patronlara ölümcül' },
+        swordfish: { name: 'Kılıç Balığı', cost: 130, range: 380, dmg: 50, rate: 3.6, projSpeed: 1100, pierce: 0.3, defaultMode: 'strong', role: 'Keskin nişancı · çok uzun menzil · patronlara ölümcül' },
         angler: { name: 'Fener Balığı', cost: 100, range: 190, dmg: 0, rate: 99, support: true, role: 'Destek · yakındaki kulelere hasar ve hız verir' },
         puffer: { name: 'Balon Balığı', cost: 110, range: 270, dmg: 38, rate: 3.0, aoe: 78, lob: true, groundOnly: true, projSpeed: 300, role: 'Havan topu · kümelere alan hasarı · havayı vuramaz' },
     };
@@ -237,6 +237,9 @@
             this.y = this.path.points[0].y;
             this.lastHit = -10;
             this.didSplit = false;
+            this.stunTime = 0;
+            this.pathMul = world.pathSpeedFn(lane);   // haritaya özel yavaşlatma/hızlandırma bölgeleri
+            this.zoneMul = 1;
         }
 
         get progress() { return this.traveled / this.path.length; }
@@ -250,7 +253,12 @@
                     this.isSlowed = false;
                 }
             }
-            this.traveled += this.speed * dt;
+            if (this.stunTime > 0) {
+                this.stunTime -= dt;
+                return false;
+            }
+            this.zoneMul = this.pathMul ? this.pathMul(this.traveled / this.path.length) : 1;
+            this.traveled += this.speed * this.zoneMul * dt;
             if (this.traveled >= this.path.length) return true;
 
             const d = this.path.dist;
@@ -288,6 +296,7 @@
 
     class Tower {
         constructor(world, type, spot, id) {
+            this.world = world;
             this.id = id;
             this.type = type;
             this.spot = spot;
@@ -305,6 +314,8 @@
             this.auraDmg = 0;
             this.auraRate = 0;
             this.auraRange = 0;
+            this.stun = 0;        // lav patlaması gibi olaylarla geçici susturma (sn)
+            this.dark = false;    // karanlık haritada ışık dışında kalma
             this.derive();
         }
 
@@ -316,7 +327,9 @@
             const lv5 = this.level >= 5;
             const high = this.spot.kind === 'high' ? HIGH_GROUND_RANGE : 1;
             this.dmg = Math.round(st.dmg * (1 + 0.35 * L) * (1 + this.auraDmg));
-            this.range = Math.round(st.range * (1 + 0.07 * L) * high * (1 + this.auraRange));
+            const w = this.world;
+            const envMul = (w ? w.rangeMul : 1) * (this.dark && w ? w.darkMul : 1);
+            this.range = Math.round(st.range * (1 + 0.07 * L) * high * (1 + this.auraRange) * envMul);
             this.rate = +(st.rate * (1 - 0.11 * L) / (1 + this.auraRate)).toFixed(2);
             const aoeMul = this.type === 'puffer' ? (lv5 ? 1.5 : lv3 ? 1.25 : 1) : (lv5 ? 1.8 : lv3 ? 1.4 : 1);
             this.aoe = st.aoe ? Math.round(st.aoe * aoeMul) : 0;
@@ -383,8 +396,14 @@
         constructor(tower, target, aim) {
             this.x = tower.x;
             this.y = tower.y;
-            this.sx = tower.x;
-            this.sy = tower.y;
+            if (tower.type === 'swordfish' && target) {
+                // mermi kılıcın ucundan çıkar
+                const d = Math.hypot(target.x - tower.x, target.y - tower.y) || 1;
+                this.x = tower.x + 4 + ((target.x - tower.x) / d) * 52;
+                this.y = tower.y + 10 + ((target.y - tower.y) / d) * 52;
+            }
+            this.sx = this.x;
+            this.sy = this.y;
             this.target = target;
             this.owner = tower;
             this.type = tower.type;
@@ -424,6 +443,8 @@
             this.totalWaves = totalWavesOf(map);
             this.endless = false;
             this.available = map.towers || Object.keys(TOWER_TYPES);
+            this.rng = mulberry32((this.seed ^ 0x5bd1e995) >>> 0);
+            this.initMechanics();
 
             this.health = this.diff.health;
             this.maxHealth = this.diff.health;
@@ -448,6 +469,217 @@
         planFor(n) {
             if (!this.plans[n]) this.plans[n] = buildWavePlan(this.map, n, this.seed);
             return this.plans[n];
+        }
+
+        // ---- haritaya özel mekanikler (maps.js içindeki `mechanics` listesi)
+
+        initMechanics() {
+            const list = this.map.mechanics || [];
+            this.rangeMul = 1;
+            this.darkMul = 1;
+            this.treasure = null;
+            this.mech = list.map(cfg => {
+                const m = { cfg, phase: 'idle', t: 0, timer: cfg.first != null ? cfg.first : (cfg.interval || 20) * 0.7 };
+                if (cfg.type === 'guardians') {
+                    const g = this.map.guardians || [];
+                    m.guards = g.map((p, i) => ({ x: p.x, y: p.y, timer: (cfg.first || 8) + (i * cfg.interval) / Math.max(1, g.length), warned: false }));
+                }
+                if (cfg.type === 'darkness') this.darkMul = cfg.rangeMul;
+                return m;
+            });
+        }
+
+        // yoldaki yavaşlatma (tangle) ve çekim (pull) bölgeleri için ilerlemeye göre hız çarpanı
+        pathSpeedFn(lane) {
+            const zones = [];
+            let pull = null;
+            for (const m of (this.map.mechanics || [])) {
+                if (m.type === 'tangle') {
+                    for (const z of m.zones) if (z.lane == null || z.lane === lane) zones.push(z);
+                }
+                if (m.type === 'pull') pull = m;
+            }
+            if (!zones.length && !pull) return null;
+            return (p) => {
+                let mul = 1;
+                for (const z of zones) if (p >= z.from && p <= z.to) mul *= z.factor;
+                if (pull && p > pull.from) {
+                    const k = Math.min(1, (p - pull.from) / (1 - pull.from));
+                    mul *= 1 + (pull.factor - 1) * k;
+                }
+                return mul;
+            };
+        }
+
+        // Fener Balığı'nın ışık yarıçapı (karanlık haritada kulelerin cezadan kurtulduğu alan)
+        lightRadius(t) {
+            const d = (this.map.mechanics || []).find(m => m.type === 'darkness');
+            return t.range * (d && d.lightMul ? d.lightMul : 1);
+        }
+
+        setRangeMul(m) {
+            this.rangeMul = m;
+            this.towers.forEach(t => t.derive());
+        }
+
+        // çevre hasarı (zırh saymaz); patronlar yüzde olarak sınırlanır
+        envDamage(e, amount) {
+            if (e.health <= 0) return;
+            if (e.type === 'boss') amount = Math.min(amount, e.maxHealth * 0.05);
+            e.health -= amount;
+            e.lastHit = this.time;
+            if (e.health <= 0) {
+                e.health = 0;
+                this.money += e.reward;
+                this.stats.kills++;
+                this.stats.earned += e.reward;
+                this.emit('kill', { enemy: e, reward: e.reward, env: true });
+            }
+        }
+
+        updateMechanics(dt) {
+            const live = this.enemies.length > 0;
+            for (const m of this.mech) {
+                switch (m.cfg.type) {
+                    case 'eruption': this.tickEruption(m, dt, live); break;
+                    case 'blizzard': this.tickBlizzard(m, dt, live); break;
+                    case 'guardians': this.tickGuardians(m, dt, live); break;
+                    case 'treasure': this.tickTreasure(m, dt, live); break;
+                    default: break;
+                }
+            }
+        }
+
+        // -- lav patlaması: önce uyarı çemberi, sonra düşmanları yakar, yakındaki kuleleri susturur
+        tickEruption(m, dt, live) {
+            const c = m.cfg;
+            if (m.phase === 'idle') {
+                if (!live) return;
+                m.timer -= dt;
+                if (m.timer > 0) return;
+                const pts = this.pickEruptionPoints(c.count || 2, c.radius, c.warn);
+                if (!pts.length) { m.timer = 3; return; }
+                m.phase = 'warn';
+                m.t = c.warn;
+                m.points = pts;
+                this.emit('hazardWarn', { type: 'eruption', points: pts, time: c.warn });
+            } else {
+                m.t -= dt;
+                if (m.t > 0) return;
+                for (const p of m.points) {
+                    this.emit('eruption', { x: p.x, y: p.y, r: p.r });
+                    for (const e of this.enemies) {
+                        if (e.health > 0 && Math.hypot(e.x - p.x, e.y - p.y) <= p.r) {
+                            this.envDamage(e, Math.max(18, c.pct * e.maxHealth));
+                        }
+                    }
+                    for (const t of this.towers) {
+                        if (Math.hypot(t.x - p.x, t.y - p.y) <= p.r + 25) {
+                            t.stun = c.stun;
+                            this.emit('towerStun', { tower: t, time: c.stun });
+                        }
+                    }
+                }
+                m.phase = 'idle';
+                m.timer = c.interval;
+            }
+        }
+
+        pickEruptionPoints(n, r, warn) {
+            const cand = this.enemies.filter(e => e.health > 0 && e.progress > 0.08 && e.progress < 0.92);
+            const pts = [];
+            while (pts.length < n && cand.length) {
+                const e = cand.splice(Math.floor(this.rng() * cand.length), 1)[0];
+                // düşmanın uyarı süresince gideceği yer
+                const q = pointAt(e.path, e.traveled + e.speed * warn);
+                if (pts.every(p => Math.hypot(p.x - q.x, p.y - q.y) > r * 1.4)) pts.push({ x: q.x, y: q.y, r });
+            }
+            return pts;
+        }
+
+        // -- kar fırtınası: kule menzilleri geçici olarak kısalır
+        tickBlizzard(m, dt, live) {
+            const c = m.cfg;
+            if (m.phase === 'idle') {
+                if (!live) return;
+                m.timer -= dt;
+                if (m.timer > 0) return;
+                m.phase = 'warn';
+                m.t = c.warn;
+                this.emit('hazardWarn', { type: 'blizzard', time: c.warn });
+            } else if (m.phase === 'warn') {
+                m.t -= dt;
+                if (m.t > 0) return;
+                m.phase = 'storm';
+                m.t = c.duration;
+                this.setRangeMul(c.rangeMul);
+                this.emit('hazardStart', { type: 'blizzard', time: c.duration });
+            } else {
+                m.t -= dt;
+                if (m.t > 0) return;
+                m.phase = 'idle';
+                m.timer = c.interval;
+                this.setRangeMul(1);
+                this.emit('hazardEnd', { type: 'blizzard' });
+            }
+        }
+
+        get stormActive() { return this.mech.some(m => m.cfg.type === 'blizzard' && m.phase === 'storm'); }
+
+        // -- Atlantis koruyucuları: periyodik darbe, hasar + sersemletme
+        tickGuardians(m, dt, live) {
+            if (!live) return;
+            const c = m.cfg;
+            for (const g of m.guards) {
+                g.timer -= dt;
+                if (!g.warned && g.timer <= 1.0) {
+                    g.warned = true;
+                    this.emit('guardianWarn', { x: g.x, y: g.y, r: c.radius });
+                }
+                if (g.timer > 0) continue;
+                g.timer = c.interval;
+                g.warned = false;
+                let hits = 0;
+                for (const e of this.enemies) {
+                    if (e.health <= 0 || Math.hypot(e.x - g.x, e.y - g.y) > c.radius) continue;
+                    hits++;
+                    this.envDamage(e, c.flat + c.pct * e.maxHealth);
+                    e.stunTime = Math.max(e.stunTime, e.type === 'boss' ? 0.4 : c.stun);
+                }
+                this.emit('guardianPulse', { x: g.x, y: g.y, r: c.radius, hits });
+            }
+        }
+
+        // -- batık hazine: sandık ara sıra parlar, tıklayarak altın alınır
+        tickTreasure(m, dt, live) {
+            const c = m.cfg;
+            if (!this.treasure) {
+                if (!live) return;
+                m.timer -= dt;
+                if (m.timer > 0) return;
+                const pos = this.map.treasure;
+                this.treasure = { x: pos.x, y: pos.y, life: c.life, max: c.life, reward: Math.round((c.reward + 6 * this.wave) * this.diff.reward) };
+                this.emit('treasureOpen', this.treasure);
+            } else {
+                this.treasure.life -= dt;
+                if (this.treasure.life <= 0) {
+                    this.treasure = null;
+                    m.timer = c.interval;
+                    this.emit('treasureClose', {});
+                }
+            }
+        }
+
+        collectTreasure() {
+            const t = this.treasure;
+            if (!t) return false;
+            this.money += t.reward;
+            this.stats.earned += t.reward;
+            this.treasure = null;
+            const m = this.mech.find(x => x.cfg.type === 'treasure');
+            if (m) m.timer = m.cfg.interval;
+            this.emit('treasureTaken', { x: t.x, y: t.y, reward: t.reward });
+            return true;
         }
 
         // ---- kule işlemleri
@@ -513,6 +745,7 @@
                         }
                     }
                 }
+                t.dark = !t.support && this.darkMul < 1 && !supports.some(s => Math.hypot(s.x - t.x, s.y - t.y) <= this.lightRadius(s));
                 t.auraDmg = Math.min(0.6, d);
                 t.auraRate = Math.min(0.4, r);
                 t.auraRange = Math.min(0.25, g);
@@ -583,8 +816,11 @@
                 }
             }
 
+            this.updateMechanics(dt);
+
             for (const t of this.towers) {
                 if (t.support) continue;
+                if (t.stun > 0) { t.stun -= dt; t.target = null; continue; }
                 t.lastFire += dt;
                 t.target = t.pick(this.enemies);
                 if (t.target && t.lastFire >= t.rate) {

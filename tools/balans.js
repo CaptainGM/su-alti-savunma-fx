@@ -3,6 +3,7 @@
 //   node tools/balans.js mercan hard  -> tek harita, tek zorluk
 //   node tools/balans.js "" all       -> tüm haritalar, üç zorluk
 //   HPSCALE=1.4 node tools/balans.js yosun  -> haritanın hpScale değerini denemek için
+//   NOMECH=1 node tools/balans.js buz       -> haritanın özel kuralı olmadan (kuralın etkisini ölçmek için)
 //
 // "spam" her yere tek tür kule dikip yükselten oyuncuyu, "karisik" ise türleri dengeli kullanan oyuncuyu temsil eder.
 // Amaç: spam stratejisi karışık stratejiden belirgin şekilde kötü sonuç versin.
@@ -57,16 +58,31 @@ const BOTS = {
         }
     },
 
-    // haritadaki türleri tercih sırasıyla döngüyle kullanır, 7 kuleden sonra yükseltmeye ağırlık verir
+    // haritadaki türleri tercih sırasıyla döngüyle kullanır, 7 kuleden sonra yükseltmeye ağırlık verir.
+    // Karanlık haritada gerçek oyuncu gibi önce Fener Balığı koyar ve diğer kuleleri ışığın içine dizer.
     karisik(world) {
         const spots = rankedSpots(world);
+        const dark = world.darkMul < 1;
         const order = PREFERENCE.filter(t => world.available.includes(t));
         for (;;) {
-            const frees = spots.filter(s => !s.tower);
-            const free = frees[0];
+            let frees = spots.filter(s => !s.tower);
             const n = world.towers.length;
-            const type = order[n % order.length];
-            const spot = type === 'angler' ? bestSupportSpot(world, frees) : free;
+            let type = order[n % order.length];
+            let spot;
+            if (dark) {
+                const lantern = world.towers.find(t => t.support);
+                if (!lantern) {
+                    type = 'angler';
+                    // en çok boş yeri ışığına alan konum
+                    spot = frees.slice().sort((a, b) => lit(world, b, frees) - lit(world, a, frees))[0];
+                } else {
+                    if (type === 'angler') type = order.find(t => t !== 'angler');
+                    const inLight = frees.filter(s => Math.hypot(s.x - lantern.x, s.y - lantern.y) <= world.lightRadius(lantern));
+                    spot = (inLight.length ? inLight : frees)[0];
+                }
+            } else {
+                spot = type === 'angler' ? bestSupportSpot(world, frees) : frees[0];
+            }
             const ups = world.towers.filter(t => t.upgradeCost() !== null && world.money >= t.upgradeCost())
                 .sort((a, b) => (a.support - b.support) || a.level - b.level || b.id - a.id);
             if (spot && n < 7 && world.money >= world.towerCost(type)) { world.placeTower(type, spot); continue; }
@@ -76,6 +92,11 @@ const BOTS = {
         }
     },
 };
+
+function lit(world, spot, frees) {
+    const r = Core.TOWER_TYPES.angler.range * 1.4;
+    return frees.filter(s => Math.hypot(s.x - spot.x, s.y - spot.y) <= r).length;
+}
 
 function play(map, botName, diff, seed) {
     const world = new Core.World(map, { difficulty: diff, seed });
@@ -103,7 +124,9 @@ function play(map, botName, diff, seed) {
 }
 
 const [mapArg, diffArg] = process.argv.slice(2);
-const maps = MAPS.filter(m => !mapArg || m.id === mapArg).map(m => (process.env.HPSCALE ? Object.assign({}, m, { hpScale: +process.env.HPSCALE }) : m));
+const maps = MAPS.filter(m => !mapArg || m.id === mapArg)
+    .map(m => (process.env.HPSCALE ? Object.assign({}, m, { hpScale: +process.env.HPSCALE }) : m))
+    .map(m => (process.env.NOMECH ? Object.assign({}, m, { mechanics: [] }) : m));
 const diffs = diffArg === 'all' ? ['easy', 'normal', 'hard'] : [diffArg || 'normal'];
 const SEEDS = [11, 23, 37];
 
