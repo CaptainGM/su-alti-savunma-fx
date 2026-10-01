@@ -17,13 +17,22 @@ MAPS.forEach(m => {
     ok(m.towers.filter(t => !Core.TOWER_TYPES[t].groundOnly).length >= 2, `${m.id}: en az iki kule havayı vurabiliyor`);
 });
 
-// kule fiyatı her alımda artar, harita dışı kule alınamaz
+// kule fiyatı kolay ve normalde sabittir, yalnızca zorda aynı türden her kule pahalanır; harita dışı kule alınamaz
 let w = mk('mercan');
 w.money = 9999;
 const c1 = w.towerCost('octopus');
 w.placeTower('octopus', w.spots[0]);
-ok(w.towerCost('octopus') > c1, 'aynı türden kule pahalanır');
+ok(w.towerCost('octopus') === c1, 'normalde aynı türden kule pahalanmaz');
+ok(mk('mercan', { difficulty: 'easy' }).towerCost('octopus') === c1, 'kolayda da pahalanmaz');
+const hw = mk('mercan', { difficulty: 'hard' });
+hw.money = 9999;
+const hc1 = hw.towerCost('octopus');
+hw.placeTower('octopus', hw.spots[0]);
+ok(hw.towerCost('octopus') > hc1, 'zorda aynı türden kule pahalanır');
 ok(w.placeTower('angler', w.spots[1]).reason === 'unavailable', 'haritada olmayan kule alınamaz');
+const costs = Object.values(Core.TOWER_TYPES).map(t => t.cost).sort((a, b) => a - b);
+ok(costs[0] === 50 && costs[costs.length - 1] <= 100, 'kule fiyatları 50-100 arasında, birbirine yakın');
+ok(MAPS.every(m => m.startMoney >= 250), 'her harita en az 250 enerjiyle başlar');
 
 // fener balığı normal haritalarda düz bir kule gibi ateş eder (yardımcı bonus vermez)
 w = mk('yosun');
@@ -43,6 +52,7 @@ ok(anglerShot, 'fener balığı düşmana ateş etti');
 const easy = mk('mercan', { difficulty: 'easy' });
 const hard = mk('mercan', { difficulty: 'hard' });
 ok(easy.money > hard.money && easy.health > hard.health, 'başlangıç enerjisi ve üs canı zorluğa göre değişir');
+ok(mk('mercan').money === 250 && easy.money === 300 && hard.money === 200, 'başlangıç enerjisi yuvarlak sayılar: 300 / 250 / 200');
 const e1 = new Core.Enemy(easy, 'standard', 0, 1, 3, {});
 const e2 = new Core.Enemy(hard, 'standard', 0, 1, 3, {});
 ok(e2.maxHealth > e1.maxHealth && e2.speed > e1.speed, 'düşman canı ve hızı zorluğa göre değişir');
@@ -297,5 +307,25 @@ w.startWave();
 ok(w.wave === 11, 'sonsuz modda 11. dalga başladı');
 const plan20 = Core.buildWavePlan(mapOf('mercan'), 20, 3);
 ok(plan20.some(it => it.type === 'boss' && !it.mini), '20. dalgada yine patron var');
+// kaydet / devam et: oyun durumu JSON'dan geri kurulur ve aynı şekilde sürer
+w = mk('mercan', { seed: 7, difficulty: 'hard' });
+w.money = 9999;
+w.placeTower('octopus', w.spots[2]);
+const tw = w.placeTower('eel', w.spots[3]).tower;
+w.upgradeTower(tw); w.upgradeTower(tw);
+tw.mode = 'strong';
+w.startWave();
+for (let i = 0; i < 300; i++) w.update(1 / 30);
+const snap = JSON.parse(JSON.stringify(w.serialize()));
+const r = Core.World.restore(mapOf('mercan'), snap, {});
+ok(r.wave === w.wave && r.money === w.money && Math.abs(r.health - w.health) < 0.01 && r.diffKey === 'hard', 'kayıttan dalga, enerji, can ve zorluk geri geldi');
+ok(r.towers.length === 2 && r.towers.find(t => t.type === 'eel').level === 3 && r.towers.find(t => t.type === 'eel').mode === 'strong', 'kuleler seviye ve hedef moduyla geri geldi');
+ok(r.enemies.length === w.enemies.length && r.queue.length === w.queue.length, 'ekrandaki ve sırada bekleyen düşmanlar geri geldi');
+const sample = w.enemies[0], rs = r.enemies.find(e => e.id === sample.id);
+ok(rs && Math.abs(rs.x - sample.x) < 0.5 && Math.abs(rs.health - sample.health) < 0.01 && rs.maxHealth === sample.maxHealth, 'düşmanın yeri ve canı aynı');
+for (let i = 0; i < 900; i++) { w.update(1 / 30); r.update(1 / 30); }
+ok(Math.abs(r.money - w.money) < 60 && Math.abs(r.stats.kills - w.stats.kills) <= 3, 'devam edilen oyun orijinaline yakın ilerliyor');
+ok(r.serialize().towers.length === 2, 'geri kurulan oyun yeniden kaydedilebiliyor');
+
 console.log(fails ? `${fails} BASARISIZ` : 'HEPSI GECTI');
 process.exit(fails ? 1 : 0);
