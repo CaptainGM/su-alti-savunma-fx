@@ -1,16 +1,11 @@
 name: Sürüm yayınla
 
-# Herkesin giriş yapmadan indirebileceği "Sürüm" (Release) sayfası üretir: Windows uygulaması (zip) ve imzalı Android APK'sı.
-# Dosya adları sürümden bağımsızdır; bu yüzden şu bağlantılar her zaman EN YENİ sürümü indirir:
-#   https://github.com/CaptainGM/su-alti-savunma-fx/releases/latest/download/SuAltiSavunma.apk
-#   https://github.com/CaptainGM/su-alti-savunma-fx/releases/latest/download/SuAltiSavunma-Windows.zip
-#
-# Üç yolla çalışır:
-#   1) Kendiliğinden: pom.xml'deki sürümü yükseltip main'e gönderince, o sürüm için henüz sürüm sayfası yoksa yayınlar
-#      (sürüm sayfası zaten varsa hiçbir şey yapmaz; her gönderimde yalnızca birkaç saniyelik bir denetim çalışır).
-#   2) Elle etiketle:  git tag v2.2.0 && git push origin v2.2.0
-#   3) Denemek için:   Actions > "Sürüm yayınla" > Run workflow  (TASLAK oluşturur; Releases sayfasında kontrol edip
-#                      "Publish release" dersin ya da silersin)
+# Releases sayfasina Windows zip'i ve imzali APK'yi koyar.
+# Dosya adlari surumden bagimsiz, boylece releases/latest/download/SuAltiSavunma.apk hep son surumu indirir.
+# Calisma sekilleri:
+#   - pom.xml'deki surum artip main'e push edilirse ve o surum icin release yoksa kendiliginden
+#   - v2.2.0 gibi bir etiket push edilirse
+#   - Actions sekmesinden elle (taslak release olusturur)
 on:
   push:
     branches: [main]
@@ -41,7 +36,7 @@ jobs:
           SURUM=$(sed -n 's:.*<version>\([0-9]*\.[0-9]*\.[0-9]*\)</version>.*:\1:p' pom.xml | head -1)
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then ETIKET="${GITHUB_REF_NAME}"; else ETIKET="v${SURUM}"; fi
           YAYINLA=true
-          # main'e yapılan push'ta yalnızca o sürüm için sürüm sayfası yoksa yayınla (pom.xml'in başka bir yerinin değişmesi yeni sürüm üretmesin)
+          # main'e push edilince sadece o surum icin release yoksa yayinla
           if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF_TYPE}" = "branch" ]; then
             if gh release view "${ETIKET}" >/dev/null 2>&1; then YAYINLA=false; fi
           fi
@@ -124,7 +119,6 @@ jobs:
         run: |
           SURUM=$(sed -n 's:.*<version>\([0-9]*\.[0-9]*\.[0-9]*\)</version>.*:\1:p' pom.xml | head -1)
           if [ "${ETIKET}" != "v${SURUM}" ]; then echo "::warning::Etiket (${ETIKET}) pom.xml sürümüyle (v${SURUM}) aynı değil."; fi
-          # Dosya adları sürümden bağımsızdır: .../releases/latest/download/SuAltiSavunma.apk her zaman en yeni APK'ya gider
           cp dosyalar/windows-zip/SuAltiSavunma-windows.zip SuAltiSavunma-Windows.zip
           cp dosyalar/android-apk/SuAltiSavunma.apk SuAltiSavunma.apk
           sha256sum SuAltiSavunma-Windows.zip SuAltiSavunma.apk > SHA256.txt
