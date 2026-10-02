@@ -17,6 +17,22 @@ MAPS.forEach(m => {
     ok(m.towers.filter(t => !Core.TOWER_TYPES[t].groundOnly).length >= 2, `${m.id}: en az iki kule havayı vurabiliyor`);
 });
 
+// kule yerleri yola değmez ve yolu gerçekten vurur (kule halkası yarıçapı 55)
+MAPS.forEach(m => {
+    const w0 = new Core.World(m, { seed: 1 });
+    const pts = w0.paths.flatMap(p => p.points);
+    const dist = sp => Math.min(...pts.map(q => Math.hypot(q.x - sp.x, q.y - sp.y)));
+    const cover = (sp, r) => {
+        let c = 0;
+        for (const p of w0.paths) for (let i = 1; i < p.points.length; i++) if (Math.hypot(p.points[i].x - sp.x, p.points[i].y - sp.y) <= r) c += p.dist[i] - p.dist[i - 1];
+        return c;
+    };
+    const tooClose = m.padSpots ? [] : m.buildSpots.filter(sp => dist(sp) < m.roadHalf + Core.BUILD_SPOT_RADIUS - 2);
+    ok(tooClose.length === 0, `${m.id}: hiçbir kule yeri yola değmiyor (en az ${m.roadHalf + Core.BUILD_SPOT_RADIUS} piksel uzak)`);
+    const useless = m.buildSpots.filter(sp => cover(sp, 200 * (sp.kind === 'high' ? 1.2 : 1)) < 120);
+    ok(useless.length === 0, `${m.id}: her kule yeri yolun en az 120 pikselini kapsıyor`);
+});
+
 // kule fiyatı kolay ve normalde sabittir, yalnızca zorda aynı türden her kule pahalanır; harita dışı kule alınamaz
 let w = mk('mercan');
 w.money = 9999;
