@@ -1,0 +1,242 @@
+/* Telefon ve küçük ekran düzeni.
+ *
+ * Masaüstünde (html.compact yok) bu dosya hiçbir şeyi değiştirmez. Pencere 1100 px'ten dar ya da 640 px'ten kısa olunca
+ * (telefon yatay, küçük tarayıcı penceresi) platform.js <html> öğesine `compact` sınıfını ekler:
+ *   - sağ panel kalkar; oyun alanının solunda dar bir kule çubuğu, sağında dar bir komut çubuğu durur (oyun alanını kapatmazlar)
+ *   - menüler, ayarlar, rehber ve pencereler küçük ekrana göre sıkılaşır; dokunma hedefleri en az ~40 px
+ * `is-touch` dokunmatik ekranı, `is-mobile` telefon/tablet tarayıcısını, `is-android-app` Android uygulamasını belirtir. */
+
+html, body {
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+}
+html.is-touch #gameCanvas { touch-action: none; }
+html.is-touch * { -webkit-user-select: none; user-select: none; }
+
+.menu-buttons { display: flex; flex-direction: column; align-items: center; }
+
+/* yalnızca bazı ortamlarda görünen öğeler */
+.exit-btn { display: none; }
+html.can-exit .exit-btn { display: block; }
+.java-only { display: none !important; }
+html.is-java .java-only { display: flex !important; }
+html.is-android-app .fs-row { display: none !important; }
+.compact-only { display: none; }
+html.compact .compact-only { display: block; }
+
+/* dikey tutulursa: yatay çevirme uyarısı (yalnızca telefon/tablet) */
+#rotateHint {
+    display: none; position: fixed; inset: 0; z-index: 99999; background: #020a12; color: #cfe9f5;
+    flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; font-size: 1.15em; line-height: 1.5;
+}
+.rotate-phone {
+    width: 54px; height: 92px; border: 4px solid #00d4ff; border-radius: 12px; margin-bottom: 18px; position: relative;
+    animation: telefonDon 2.4s ease-in-out infinite;
+}
+.rotate-phone::after { content: ''; position: absolute; left: 50%; bottom: 6px; width: 16px; height: 4px; margin-left: -8px; border-radius: 2px; background: #00d4ff; }
+@keyframes telefonDon { 0%, 20% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+@media (orientation: portrait) {
+    html.is-mobile #rotateHint { display: flex; }
+}
+
+/* ======================================================================= küçük ekran düzeni */
+
+html.compact body { font-size: 14px; }
+
+/* ---- menü */
+html.compact #menuScreen { padding: 8px 12px; }
+html.compact #menuLogo { width: min(13vh, 70px); height: min(13vh, 70px); margin-bottom: 2px; }
+html.compact #menuScreen h1 {
+    font-size: clamp(22px, 8.5vh, 54px); padding: 6px 22px; margin-bottom: 10px; border-radius: 18px; border-width: 2px; max-width: 96vw; text-align: center;
+}
+html.compact .menu-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; width: min(520px, 92vw); }
+html.compact .menu-buttons .menu-button { margin: 0; padding: 0 10px; min-height: 48px; font-size: clamp(15px, 5vh, 22px); border-radius: 26px; box-shadow: 0 4px 14px rgba(0, 212, 255, 0.4); width: 100%; }
+html.compact .menu-buttons .menu-button:hover { transform: none; }
+
+/* ---- harita seçimi */
+html.compact #mapSelectScreen { justify-content: flex-start; padding: 8px 10px; }
+html.compact .select-title { font-size: clamp(18px, 6vh, 30px); padding: 4px 22px; margin-bottom: 6px; border-radius: 16px; border-width: 2px; }
+html.compact #difficultyPills { gap: 6px; margin-bottom: 6px; }
+html.compact .pill { padding: 6px 16px; font-size: 14px; min-height: 36px; }
+html.compact #difficultyInfo { font-size: 12px; padding: 3px 12px; margin: 0 0 6px; }
+html.compact #mapGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-height: none; flex: 1; min-height: 0; width: min(900px, 96vw); padding: 2px; overflow-y: auto; -webkit-overflow-scrolling: touch; align-content: start; }
+html.compact .map-card { height: clamp(78px, 24vh, 110px); border-radius: 12px; }
+html.compact .map-card:hover { transform: none; }
+html.compact .map-card-text { left: 8px; right: 8px; bottom: 6px; }
+html.compact .map-card-name { font-size: 14px; }
+html.compact .map-card-desc { font-size: 10px; margin: 0 0 2px; }
+html.compact .map-card-meta { font-size: 10px; }
+html.compact .map-card-earned { top: 4px; right: 8px; font-size: 13px; }
+html.compact #mapSelectScreen > .menu-button { margin: 6px 0 0 !important; padding: 6px 36px !important; font-size: 15px !important; min-height: 40px; }
+
+/* ---- oyun ekranı: solda kule çubuğu, ortada oyun alanı, sağda komut çubuğu */
+html.compact .game-layout { display: flex; flex-direction: row; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); background: #02101c; }
+html.compact .canvas-container { order: 2; min-width: 0; }
+html.compact .sidebar { display: contents; }
+html.compact .sidebar .panel { border-radius: 0; background: #0a1929; padding: 6px 5px; margin: 0; overflow-x: hidden; overflow-y: auto; }
+html.compact .sidebar .panel h3 { display: none; }
+html.compact #placedPanel { display: none !important; }
+html.compact #towerHint, html.compact #ruleLine, html.compact #wavePreview { display: none !important; }
+
+/* kule çubuğu */
+html.compact #marketPanel { order: 1; flex: none; width: 66px; border: 0; border-right: 2px solid #00d4ff; display: flex; flex-direction: column; justify-content: center; }
+html.compact #towerMarketContainer { display: flex; flex-direction: column; gap: 4px; }
+html.compact #towerMarketContainer .tower-button {
+    flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 3px 2px; min-height: 52px; width: 100%; border-radius: 10px; cursor: pointer;
+}
+html.compact #towerMarketContainer .tower-button:hover { background: rgba(0, 0, 0, 0.3); border-color: #444; }
+html.compact #towerMarketContainer .tower-button.armed { border-color: #00ff88; background: rgba(0, 255, 136, 0.16); }
+html.compact #towerMarketContainer .tower-icon-box { width: 32px; height: 32px; margin: 0; }
+html.compact #towerMarketContainer .tower-icon-box img { width: 30px; height: 30px; }
+html.compact #towerMarketContainer .tower-info { text-align: center; width: 100%; }
+html.compact #towerMarketContainer .tower-info strong { display: none; }
+html.compact #towerMarketContainer .tower-cost { font-size: 0; line-height: 1; }
+html.compact #towerMarketContainer .tower-cost .cost-val { font-size: 12px; font-weight: bold; color: #ffd45a; }
+
+/* komut çubuğu */
+html.compact #statusPanel { order: 3; flex: none; width: 118px; border: 0; border-left: 2px solid #ffcc00; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding-bottom: 46px; }
+html.compact #hudStats p { font-size: 13px; margin: 0 0 1px; line-height: 1.25; }
+html.compact #hudStats .hp-track { margin: 1px 0 3px; }
+html.compact #hudActions { display: flex; flex-direction: column; gap: 5px; }
+html.compact #hudActions .btn { margin: 0; width: 100%; border-radius: 9px; min-height: 36px; padding: 6px 4px; font-size: 11px; line-height: 1.15; box-shadow: none; }
+html.compact #waveButton { min-height: 48px !important; font-size: 12px !important; background: linear-gradient(135deg, #ff4757, #c44569); }
+html.compact #hudActions .hud-row { display: flex; flex-direction: column; gap: 5px !important; margin-top: 0 !important; }
+html.compact #hudActions .hud-row .btn { font-size: 11px !important; padding: 6px 4px !important; }
+html.compact #hintBtnC { background: rgba(95, 224, 143, 0.2) !important; border: 1px solid #3f9a66; color: #7dffb0; }
+html.compact #hintBtnC.pulse { animation: hintPulse 1.1s ease-in-out infinite; }
+
+/* oyun alanının üstündeki üç düğme komut çubuğunun altına yerleşir (yalnızca simge) */
+html.compact #backToMapSelectBtn, html.compact #settingsBtn, html.compact #guideBtn {
+    position: fixed; top: auto; bottom: calc(6px + env(safe-area-inset-bottom)); z-index: 600; width: 34px; height: 34px; padding: 0; border-radius: 9px;
+    font-size: 0; display: flex; align-items: center; justify-content: center; border-width: 2px;
+}
+html.compact #backToMapSelectBtn::before, html.compact #settingsBtn::before, html.compact #guideBtn::before { font-size: 17px; line-height: 1; color: #fff; }
+html.compact #backToMapSelectBtn { left: auto; right: calc(82px + env(safe-area-inset-right)); }
+html.compact #settingsBtn { left: auto; right: calc(44px + env(safe-area-inset-right)); }
+html.compact #guideBtn { left: auto; right: calc(6px + env(safe-area-inset-right)); }
+html.compact #backToMapSelectBtn::before { content: '←'; }
+html.compact #settingsBtn::before { content: '⚙'; }
+html.compact #guideBtn::before { content: '?'; font-weight: bold; }
+
+html.compact #mapBanner { padding: 8px 18px; }
+html.compact #mapBanner .banner-name { font-size: 22px; }
+html.compact #mapBanner .banner-sub { font-size: 13px; }
+html.compact #mapBanner .banner-rule { font-size: 12px; }
+
+/* ---- pencereler */
+html.compact #towerModal {
+    width: min(360px, 62vw); max-height: 94vh; overflow-y: auto; padding: 10px 14px; border-radius: 16px; border-width: 2px; font-size: 13px;
+}
+html.compact #towerModalName { font-size: 18px !important; margin-bottom: 6px !important; }
+html.compact #towerModal .btn { padding: 9px 6px; font-size: 14px; min-height: 40px; margin-top: 2px; }
+html.compact #towerModal .close-btn { padding: 7px; min-height: 36px; margin-top: 8px !important; }
+html.compact #resumeModal { width: min(420px, 90vw); padding: 14px; border-radius: 16px; }
+html.compact #resumeModal h3 { font-size: 20px; margin-bottom: 6px; }
+html.compact #resumeModal p { margin-bottom: 10px; }
+html.compact #resumeModal .btn { min-height: 44px; padding: 8px 6px; }
+html.compact .perk-cards { gap: 8px; }
+
+/* ---- kazanma / kaybetme */
+html.compact #winScreen, html.compact #loseScreen { padding: 8px; }
+html.compact #winScreen h2, html.compact #loseScreen h2 { font-size: clamp(22px, 8vh, 40px); margin-bottom: 4px; }
+html.compact .end-line { font-size: 15px; margin: 2px 0; }
+html.compact .end-sub { font-size: 12px; max-width: 92vw; }
+html.compact .end-buttons .menu-button { margin: 4px 6px; padding: 0 18px; min-height: 44px; font-size: 15px; border-radius: 24px; }
+
+/* ---- ayarlar */
+html.compact .settings-card { width: min(640px, 96vw); max-height: 96vh; padding: 10px 16px; border-radius: 16px; border-width: 2px; }
+html.compact .settings-card h2 { font-size: 20px; margin-bottom: 4px; }
+html.compact .set-group { margin-bottom: 6px; padding-bottom: 4px; }
+html.compact .set-row { font-size: 13px; min-height: 36px; padding: 2px 0; }
+html.compact .settings-buttons .menu-button { margin: 4px 8px; padding: 0 22px; min-height: 40px; font-size: 15px; }
+html.compact .set-row input[type=range] { width: 110px; }
+
+/* ---- rehber */
+html.compact .guide-card { width: 100vw; height: 100vh; border-radius: 0; border-width: 0; }
+html.compact .guide-head { padding: 4px 8px; gap: 8px; }
+html.compact .guide-head h2 { font-size: 18px; }
+html.compact .g-tab { padding: 5px 10px; font-size: 12px; border-width: 1px; min-height: 32px; }
+html.compact .guide-close { padding: 5px 10px; font-size: 12px; min-height: 32px; }
+html.compact .guide-tabs { flex-wrap: nowrap; overflow-x: auto; }
+html.compact #guideList { width: 112px; padding: 4px; gap: 4px; }
+html.compact .g-nav { padding: 3px 5px; gap: 5px; border-width: 1px; }
+html.compact .g-nav b { font-size: 11px; }
+html.compact .g-nav small { display: none; }
+html.compact .g-ico { width: 26px; height: 26px; }
+html.compact .g-thumb { width: 38px; height: 26px; }
+html.compact .g-glyph { width: 26px; height: 26px; font-size: 1.1em; }
+html.compact #guideMain { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; padding: 8px 10px; overflow: hidden; }
+html.compact .guide-stage { overflow-y: auto; max-height: 100%; align-self: stretch; }
+html.compact #guideText { font-size: 12px; line-height: 1.4; overflow-y: auto; }
+html.compact #guideText h3 { font-size: 17px; }
+html.compact #guideCaption { font-size: 11px; min-height: 0; }
+html.compact .g-chip { font-size: 11px; padding: 2px 8px; }
+html.compact .g-perk { font-size: 10.5px; padding: 5px 7px; }
+html.compact .g-lv { width: 32px; height: 28px; }
+
+/* ---- ipucu */
+html.compact .hint-card { width: 94vw; max-height: 94vh; padding: 10px 14px; border-width: 2px; }
+html.compact .hint-head h3 { font-size: 18px; }
+html.compact .hint-close { padding: 5px 10px; min-height: 36px; }
+html.compact .hint-row { padding: 6px 8px; gap: 8px; }
+html.compact .hint-enemy { width: 40px; height: 40px; }
+html.compact .hint-name { font-size: 14px; }
+html.compact .hint-lead, html.compact .hint-line, html.compact .hint-note { font-size: 11px; }
+html.compact .hint-line b { min-width: 90px; }
+html.compact .hint-t img { width: 20px; height: 20px; }
+html.compact .hint-go { min-height: 34px; }
+
+/* ---- dokunmatik: sürüklenen kule simgesi, menüde tek kalan düğme, kule penceresinin yeri */
+.touch-ghost {
+    position: fixed; z-index: 4000; width: 54px; height: 54px; margin: -27px 0 0 -27px; pointer-events: none; opacity: 0.92;
+    border-radius: 12px; background: rgba(0, 20, 34, 0.7); border: 2px solid #00ff88; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+}
+.touch-ghost img { width: 44px; height: 44px; object-fit: contain; }
+html.is-touch .tower-button { touch-action: none; }
+html.compact:not(.can-exit) .menu-buttons .menu-button:nth-child(3) { grid-column: 1 / -1; justify-self: center; width: 50%; }
+html.compact #towerModal { top: 50%; left: auto; right: 128px; transform: translateY(-50%); width: min(300px, 42vw); }
+html.compact #towerModal.dock-left { left: 76px; right: auto; }
+
+/* ---- kule penceresi küçük ekranda sıkı (ekrana sığar, kaydırma gerektirmez) */
+html.compact #towerModal { padding: 8px 12px; }
+html.compact #towerModalName { font-size: 16px !important; margin-bottom: 2px !important; }
+html.compact #towerModalStats { margin: 0 0 3px; }
+html.compact .stat-row { margin: 4px 0; gap: 6px; }
+html.compact .stat-name { width: 54px; font-size: 11px; }
+html.compact .stat-bar, html.compact .lv-bar i { height: 9px; }
+html.compact #towerModalPerk { margin: 2px 0 5px; }
+html.compact .perk-line, html.compact .perk-hint { font-size: 10.5px; margin: 3px 0; line-height: 1.25; }
+html.compact #modeBtn { padding: 6px !important; font-size: 12px !important; margin-bottom: 5px !important; min-height: 34px; }
+html.compact #towerModal .btn { font-size: 12px; padding: 5px 4px; min-height: 36px; line-height: 1.15; }
+html.compact #towerModal .close-btn { padding: 5px; min-height: 32px; margin-top: 5px !important; font-size: 12px; }
+html.compact #perkChoice h4 { font-size: 14px; margin-bottom: 2px; }
+html.compact #perkChoice p { font-size: 11px; margin-bottom: 6px; }
+html.compact .perk-cards { gap: 6px; }
+html.compact .perk-card { padding: 7px 9px; }
+html.compact .perk-card b { font-size: 12.5px; margin-bottom: 2px; }
+html.compact .perk-card .perk-desc { font-size: 10.5px; }
+
+/* ---- daha yüksek ekranlar (tablet, büyük pencere): çubuklar ve düğmeler büyür */
+@media (min-height: 560px) {
+    html.compact #marketPanel { width: 90px; }
+    html.compact #towerMarketContainer { gap: 8px; }
+    html.compact #towerMarketContainer .tower-button { min-height: 74px; }
+    html.compact #towerMarketContainer .tower-icon-box { width: 50px; height: 50px; }
+    html.compact #towerMarketContainer .tower-icon-box img { width: 46px; height: 46px; }
+    html.compact #towerMarketContainer .tower-cost .cost-val { font-size: 16px; }
+    html.compact #statusPanel { width: 168px; gap: 8px; padding-bottom: 56px; }
+    html.compact #hudStats p { font-size: 17px; }
+    html.compact #hudActions { gap: 8px; }
+    html.compact #hudActions .btn, html.compact #hudActions .hud-row .btn { font-size: 14px !important; min-height: 46px; }
+    html.compact #waveButton { min-height: 66px !important; font-size: 16px !important; }
+    html.compact #backToMapSelectBtn, html.compact #settingsBtn, html.compact #guideBtn { width: 44px; height: 44px; }
+    html.compact #backToMapSelectBtn { right: calc(106px + env(safe-area-inset-right)); }
+    html.compact #settingsBtn { right: calc(56px + env(safe-area-inset-right)); }
+    html.compact #backToMapSelectBtn::before, html.compact #settingsBtn::before, html.compact #guideBtn::before { font-size: 21px; }
+    html.compact #towerModal { right: 186px; width: min(340px, 40vw); }
+    html.compact #towerModal.dock-left { left: 100px; right: auto; }
+    html.compact #towerModal, html.compact #towerModal .btn { font-size: 14px; }
+}
