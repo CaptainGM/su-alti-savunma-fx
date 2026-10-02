@@ -109,6 +109,7 @@ function glowSprite(rgb, r) {
 }
 
 function clearSpriteCache() {
+    snowCache = null;
     levelBarCache.clear();
     frostCache = null;
     swirlCache = null;
@@ -158,14 +159,18 @@ let fx = { floaters: [], rings: [], bubbles: [], flash: 0, warns: [], sparks: []
 let ambient = null;
 let res = 1;
 
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+// Rehber (js/rehber.js) canlı gösterimlerde bu iki değeri geçici olarak kendi tuvaliyle değiştirir, bu yüzden `let`
+let canvas = document.getElementById('gameCanvas');
+let ctx = canvas.getContext('2d');
+// Rehber gösterimi çalışırken true: günlük, kayıt ve arayüz listeleri gerçek oyuna dokunmaz
+let inDemo = false;
 
 // ------------------------------------------------------------------ Java köprüsü
 
 // Sesler Java tarafında (SoundBank) üretilir; burada yalnızca adı ve sıklığı belirlenir.
 const lastSfx = {};
 function sfx(name, minGapMs = 0, gain = 1) {
+    if (inDemo) gain *= 0.55;
     const st = Settings.get();
     if (st.mute || st.sfx <= 0) return;
     const now = performance.now();
@@ -212,6 +217,7 @@ function logStart() {
 }
 
 function addLog(msg) {
+    if (inDemo) return;
     logQueue.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
 }
 
@@ -295,7 +301,7 @@ function onWorldEvent(type, d) {
             break;
         case 'towerDestroyed': {
             const tw = d.tower;
-            if (selectedTower === tw) closeTowerModal();
+            if (!inDemo && selectedTower === tw) closeTowerModal();
             renderTowerList();
             if (d.cause === 'patron') {
                 // yeme animasyonu çizimde (drawChomps); çene kapandığında ses ve parçalar çıkar
@@ -418,6 +424,21 @@ function onWorldEvent(type, d) {
                 fx.sparks.push({ x: d.enemy.x + Math.cos(a) * rr, y: d.enemy.y + Math.sin(a) * rr, vx: 0, vy: -50, life: 0.9, max: 0.9, r: 3.2, c: '130,255,170' });
             }
             break;
+        case 'bossPhase': {
+            const e = d.enemy;
+            sfx('roar');
+            fx.shake = Math.max(fx.shake || 0, 0.6);
+            fx.flash = Math.max(fx.flash, 0.5);
+            fx.rings.push({ x: e.x, y: e.y, r: 30, max: 190, life: 0.8, maxLife: 0.8, color: '255,70,90', fill: true });
+            fx.rings.push({ x: e.x, y: e.y, r: 20, max: 120, life: 0.55, maxLife: 0.55, color: '255,200,120' });
+            for (let i = 0; i < 24; i++) {
+                const a = Math.random() * 6.2832;
+                fx.sparks.push({ x: e.x, y: e.y, vx: Math.cos(a) * 240, vy: Math.sin(a) * 240, life: 0.7, max: 0.7, r: 3, c: '255,110,110' });
+            }
+            fx.alert = { text: e.mini ? 'ARA PATRON ÖFKELENDİ' : 'PATRON ÖFKELENDİ', life: 2.0, max: 2.0 };
+            notify(`${e.name} kalkan kazandı ve öfkelendi: bir süre hızlı ve sersemletilemez!`, '#ff9a9a');
+            break;
+        }
         case 'shieldBreak':
             sfx('shield_break');
             fx.shake = Math.max(fx.shake || 0, 0.25);
@@ -617,7 +638,7 @@ let lastSaveAt = 0;
 
 // Yarım kalan oyunu haritaya bağlı olarak kaydeder. Oyun bittiyse ya da hiç başlanmadıysa kayıt tutulmaz.
 function saveProgress() {
-    if (!world || !currentMap) return;
+    if (inDemo || !world || !currentMap) return;
     lastSaveAt = performance.now();
     if (world.result) { Settings.clearSave(currentMap.id); return; }
     if (world.wave === 0 && world.towers.length === 0) return;
@@ -1312,18 +1333,12 @@ function drawMechanics() {
         ctx.fill();
     });
 
-    // karanlık harita: fenerlerin sıcak parıltısı ve ışık sınırında dalgalanan halka
+    // karanlık harita: fenerlerin sıcak parıltısı. (Işık sınırında dalgalanan büyük bir halka çizmek her karede ekranın
+    // büyük kısmını yeniden boyatıyordu ve FPS'i yarıya indiriyordu; sınır zaten arka plana pişirilmiş karartmayla görünür.)
     if (darknessMech()) {
         activeLights().forEach((l, i) => {
-            const R = world.lightRadius(l);
             ctx.globalAlpha = 0.32 + 0.1 * Math.sin(animTime * 2.6 + i * 2);
             ctx.drawImage(glowSprite('255,236,160', 90), l.x - 100, l.y - 100, 200, 200);
-            ctx.globalAlpha = 0.16 + 0.06 * Math.sin(animTime * 1.3 + i);
-            ctx.strokeStyle = 'rgb(150,240,255)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(l.x, l.y, R * (0.985 + 0.012 * Math.sin(animTime * 1.8 + i)), 0, 6.2832);
-            ctx.stroke();
         });
         ctx.globalAlpha = 1;
     }
@@ -1432,70 +1447,94 @@ function drawMechanics() {
         ctx.textAlign = 'left';
     }
 
-    // kar fırtınası: kenarlarda buzlanma, rüzgârla savrulan kar çizgileri ve iri taneler; gelip gider
+    // kar fırtınası: kenarlarda buzlanma, rüzgârla savrulan kar çizgileri ve iri taneler; gelip gider.
+    // Önemli: bu WebView'da geniş alana yayılan tek bir yol (90 çizgilik stroke) her karede tuvalin tamamı kadar maske
+    // üretiyordu (fırtınada FPS 180 -> 70). Bu yüzden çizgiler ve taneler küçük sprite olarak tek tek basılır.
     if (fx.storm > 0.02) {
+        const sn = snowSprites();
         ctx.globalAlpha = fx.storm * (0.75 + 0.25 * Math.sin(animTime * 1.7));
         ctx.drawImage(frostSprite(), 0, 0, W, H);
-        ctx.globalAlpha = fx.storm * 0.14;
-        ctx.fillStyle = 'rgb(205,228,248)';
-        ctx.fillRect(0, 0, W, H);
         ctx.globalAlpha = fx.storm * 0.8;
-        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
         for (let i = 0; i < 90; i++) {
             const x = W + 60 - ((i * 97 + animTime * 560) % (W + 160));
             const y = ((i * 53 + animTime * 300 + i * i * 7) % (H + 80)) - 40;
-            ctx.moveTo(x, y);
-            ctx.lineTo(x + 32, y - 9);
+            ctx.drawImage(sn.streak, x - 2, y - 12, 38, 14);
         }
-        ctx.stroke();
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';
         for (let i = 0; i < 26; i++) {
             const x = W + 20 - ((i * 211 + animTime * 340) % (W + 60));
             const y = ((i * 131 + animTime * 150 + i * i * 11) % (H + 40)) - 20;
-            ctx.beginPath();
-            ctx.arc(x, y, 2 + (i % 3), 0, 6.2832);
-            ctx.fill();
+            const r = 2 + (i % 3);
+            ctx.drawImage(sn.dot, x - r, y - r, r * 2, r * 2);
         }
         ctx.globalAlpha = 1;
     }
 }
 
+let snowCache = null;
+function snowSprites() {
+    if (!snowCache) {
+        const mk = (w, h, fn) => { const c = document.createElement('canvas'); c.width = Math.ceil(w * 2); c.height = Math.ceil(h * 2); const g = c.getContext('2d'); g.scale(2, 2); fn(g); return c; };
+        snowCache = {
+            streak: mk(38, 14, g => {
+                g.strokeStyle = 'rgba(255,255,255,0.9)';
+                g.lineWidth = 2;
+                g.lineCap = 'round';
+                g.beginPath();
+                g.moveTo(3, 12);
+                g.lineTo(35, 3);
+                g.stroke();
+            }),
+            dot: mk(10, 10, g => {
+                g.fillStyle = 'rgba(255,255,255,0.95)';
+                g.beginPath();
+                g.arc(5, 5, 4.5, 0, 6.2832);
+                g.fill();
+            }),
+            crystals: mk(80, 40, g => {
+                g.fillStyle = 'rgba(210,240,255,0.95)';
+                g.strokeStyle = 'rgba(90,150,200,0.9)';
+                g.lineWidth = 1.6;
+                for (let i = 0; i < 5; i++) {
+                    const a = 0.4 + i * 1.25;
+                    const px = 40 + Math.cos(a) * 34;
+                    const py = 14 + Math.sin(a) * 14;
+                    g.beginPath();
+                    g.moveTo(px, py - 9); g.lineTo(px + 4.5, py); g.lineTo(px, py + 5); g.lineTo(px - 4.5, py);
+                    g.closePath();
+                    g.fill();
+                    g.stroke();
+                }
+            }),
+        };
+    }
+    return snowCache;
+}
+
 // buzlanma kenarlığı: ortası saydam, kenarları beyaz-mavi (bir kez çizilir, büyütülerek kullanılır)
 let frostCache = null;
 function frostSprite() {
-    if (!frostCache) {
+    // tuvalin gerçek piksel boyutunda çizilir: büyütme yapılmadan 1:1 basılır (büyütülen sprite daha yavaştı)
+    if (!frostCache || frostCache.width !== canvas.width) {
         frostCache = document.createElement('canvas');
-        frostCache.width = 270;
-        frostCache.height = 180;
+        frostCache.width = canvas.width;
+        frostCache.height = canvas.height;
         const g = frostCache.getContext('2d');
-        const grad = g.createRadialGradient(135, 90, 55, 135, 90, 165);
-        grad.addColorStop(0, 'rgba(225,244,255,0)');
+        const cw = frostCache.width;
+        const ch = frostCache.height;
+        const grad = g.createRadialGradient(cw / 2, ch / 2, ch * 0.30, cw / 2, ch / 2, ch * 0.92);
+        grad.addColorStop(0, 'rgba(215,236,252,0.14)');
         grad.addColorStop(0.6, 'rgba(225,244,255,0.22)');
         grad.addColorStop(1, 'rgba(240,250,255,0.78)');
         g.fillStyle = grad;
-        g.fillRect(0, 0, 270, 180);
+        g.fillRect(0, 0, cw, ch);
     }
     return frostCache;
 }
 
-// fırtınada kulelerin etrafında buz kristalleri
+// fırtınada kulelerin etrafında buz kristalleri (tek sprite)
 function drawFrost(t) {
     ctx.globalAlpha = Math.min(1, fx.storm * 1.2);
-    ctx.fillStyle = 'rgba(210,240,255,0.95)';
-    ctx.strokeStyle = 'rgba(90,150,200,0.9)';
-    ctx.lineWidth = 1.6;
-    for (let i = 0; i < 5; i++) {
-        const a = 0.4 + i * 1.25 + t.id;
-        const px = t.x + Math.cos(a) * 34;
-        const py = t.y + 22 + Math.sin(a) * 14;
-        ctx.beginPath();
-        ctx.moveTo(px, py - 9); ctx.lineTo(px + 4.5, py); ctx.lineTo(px, py + 5); ctx.lineTo(px - 4.5, py);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-    }
+    ctx.drawImage(snowSprites().crystals, t.x - 40, t.y + 20 - 14, 80, 40);
     ctx.globalAlpha = 1;
 }
 
@@ -1545,6 +1584,21 @@ function drawBossBar() {
     g.addColorStop(1, '#ff4a60');
     ctx.fillStyle = g;
     ctx.fillRect(x, y, bw * pct, 14);
+    // evre işaretleri: can bu çizgilerin altına inince patron kalkan kazanıp öfkelenir
+    const marks = boss.mini ? Core.MINI_PHASES : Core.BOSS_PHASES;
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    marks.forEach(m => ctx.fillRect(x + bw * m - 1, y - 3, 2, 20));
+    if (boss.shield > 0) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(x, y + 16, bw, 5);
+        ctx.fillStyle = '#6fd6ff';
+        ctx.fillRect(x, y + 16, bw * Math.min(1, boss.shield / (boss.shieldMax || 1)), 5);
+    }
+    if (boss.rageT > 0) {
+        ctx.fillStyle = `rgba(255,70,70,${0.5 + 0.4 * Math.sin(animTime * 18)})`;
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText('ÖFKE', W / 2 + bw / 2 - 28, y - 8);
+    }
     ctx.restore();
 }
 
@@ -1715,6 +1769,24 @@ function drawEnemy(e) {
         ctx.fill();
     }
     drawShadow(e.x, e.y + size * 0.36, size * 0.34, size * 0.1, 0.22);
+    if (e.rageT > 0) {
+        // öfke: nabız gibi atan kızıl hale ve arkada hız çizgileri
+        ctx.globalAlpha = 0.5 + 0.3 * Math.sin(animTime * 16);
+        ctx.drawImage(glowSprite('255,60,70', 80), e.x - size * 0.95, e.y - size * 0.95, size * 1.9, size * 1.9);
+        ctx.globalAlpha = 0.55;
+        ctx.strokeStyle = 'rgba(255,170,150,0.9)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let i = 0; i < 4; i++) {
+            const off = (i - 1.5) * size * 0.22;
+            const bx = e.x - Math.cos(e.angle) * size * 0.55 + Math.sin(e.angle) * off;
+            const by = e.y - Math.sin(e.angle) * size * 0.55 - Math.cos(e.angle) * off;
+            ctx.moveTo(bx, by);
+            ctx.lineTo(bx - Math.cos(e.angle) * size * 0.4, by - Math.sin(e.angle) * size * 0.4);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
 
     const img = enemySprite(e);
     // gizlenen kalamar: görünürlük yumuşakça değişir (ışıkta/vurulunca yarı saydam görünür)
@@ -2248,22 +2320,65 @@ function drawScorch() {
     ctx.globalAlpha = 1;
 }
 
+// tek renkli yuvarlak parçacık sprite'ı (renk -> sprite)
+const dotCache = new Map();
+function dotSprite(rgb) {
+    let c = dotCache.get(rgb);
+    if (!c) {
+        c = document.createElement('canvas');
+        c.width = c.height = 32;
+        const g = c.getContext('2d');
+        g.fillStyle = `rgb(${rgb})`;
+        g.beginPath();
+        g.arc(16, 16, 15, 0, 6.2832);
+        g.fill();
+        dotCache.set(rgb, c);
+    }
+    return c;
+}
+
+// konturlu yazı sprite'ı (metin, boyut, renk): kazanç/hasar yazıları aynı metinlerle tekrar eder
+const textCache = new Map();
+function textSprite(text, size, color) {
+    const key = `${size}|${color}|${text}`;
+    let t = textCache.get(key);
+    if (!t) {
+        const c = document.createElement('canvas');
+        const g = c.getContext('2d');
+        g.font = `bold ${size}px sans-serif`;
+        const w = Math.ceil(g.measureText(text).width) + 10;
+        const h = Math.ceil(size * 1.4) + 6;
+        const k = 2;
+        c.width = w * k;
+        c.height = h * k;
+        g.scale(k, k);
+        g.font = `bold ${size}px sans-serif`;
+        g.textAlign = 'center';
+        g.lineWidth = 4;
+        g.lineJoin = 'round';
+        g.strokeStyle = 'rgba(0,0,0,0.7)';
+        g.strokeText(text, w / 2, size * 1.05 + 3);
+        g.fillStyle = color;
+        g.fillText(text, w / 2, size * 1.05 + 3);
+        t = { c, w, h };
+        if (textCache.size > 400) textCache.clear();
+        textCache.set(key, t);
+    }
+    return t;
+}
+
 function drawFx() {
     drawArcs();
+    // Küçük parçacıklar (duman, kıvılcım) ve yazılar her karede yol/metin olarak çizilmez, önbellekteki sprite olarak basılır:
+    // yüzlerce küçük dolgu ve metin çizimi lav patlamalarında FPS'i 160'tan 100'e düşürüyordu.
     fx.smoke.forEach(p => {
         ctx.globalAlpha = 0.34 * Math.max(0, p.life / p.max);
-        ctx.fillStyle = 'rgb(34,28,28)';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, 6.2832);
-        ctx.fill();
+        ctx.drawImage(dotSprite('34,28,28'), p.x - p.r, p.y - p.r, p.r * 2, p.r * 2);
     });
     ctx.globalAlpha = 1;
     fx.sparks.forEach(p => {
         ctx.globalAlpha = Math.max(0, p.life / p.max);
-        ctx.fillStyle = `rgb(${p.c})`;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, 6.2832);
-        ctx.fill();
+        ctx.drawImage(dotSprite(p.c), p.x - p.r, p.y - p.r, p.r * 2, p.r * 2);
     });
     ctx.globalAlpha = 1;
     fx.rings.forEach(r => {
@@ -2299,18 +2414,12 @@ function drawFx() {
         ctx.globalAlpha = 1;
     });
 
-    ctx.textAlign = 'center';
     fx.floaters.forEach(f => {
         ctx.globalAlpha = Math.min(1, f.life / (f.maxLife * 0.5));
-        ctx.font = f.big ? 'bold 34px sans-serif' : 'bold 20px sans-serif';
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-        ctx.strokeText(f.text, f.x, f.y);
-        ctx.fillStyle = f.color;
-        ctx.fillText(f.text, f.x, f.y);
+        const ts = textSprite(f.text, f.big ? 34 : 20, f.color);
+        ctx.drawImage(ts.c, f.x - ts.w / 2, f.y - ts.h * 0.72, ts.w, ts.h);
     });
     ctx.globalAlpha = 1;
-    ctx.textAlign = 'left';
 
     if (fx.flash > 0) {
         const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.9);
@@ -2490,6 +2599,7 @@ canvas.addEventListener('click', (e) => {
 
 document.addEventListener('keydown', (e) => {
     if (!world || document.getElementById('gameScreen').classList.contains('hidden')) return;
+    if (!document.getElementById('guideScreen').classList.contains('hidden')) return;      // Rehber açıkken oyun kısayolları kapalı
     if (!document.getElementById('settingsScreen').classList.contains('hidden')) {
         if (e.key === 'Escape') closeSettings();
         return;
@@ -2664,6 +2774,7 @@ function sellSelectedTower() {
 }
 
 function renderTowerList() {
+    if (inDemo) return;
     const container = document.getElementById('towerList');
     if (world.towers.length === 0) {
         container.innerHTML = '<p style="color:#888; font-size:0.95em;">Henüz kule yerleştirilmedi.</p>';
@@ -2759,12 +2870,19 @@ function renderWavePreview() {
     const chips = Object.entries(next.counts).map(([type, count]) => {
         const img = SPRITE_FILES.enemies[enemyKey(type, currentMap.boss)];
         const name = typeName(type);
-        return `<span class="chip" title="${name}"><img src="${img}" alt="">×${count}</span>`;
+        return `<span class="chip" title="${name} (tıkla: Rehber)" onclick="openGuide('enemies','${type === 'boss' ? 'boss_' + (currentMap.boss || 'shark') : type}')"><img src="${img}" alt="">×${count}</span>`;
     }).join('');
-    const advice = world.waveAdvice(next.wave).map(l => `<div class="advice">${l}</div>`).join('');
+    // ipuçları: düşman simgesi, iyi kuleler (yeşil tik) ve kötü kuleler (kırmızı çarpı); tıklayınca Rehber ilgili düşmanı açar
+    const icon = t => `<img class="adv-tower" src="${SPRITE_FILES.towers[t]}" title="${towerTypeName(t)}" alt="">`;
+    const advice = world.waveAdviceItems(next.wave).map(it => {
+        const img = SPRITE_FILES.enemies[enemyKey(it.enemy, currentMap.boss)];
+        const good = it.good.length ? `<span class="adv-good">✓</span>${it.good.map(icon).join('')}` : '';
+        const bad = it.bad.length ? `<span class="adv-bad">✗</span>${it.bad.map(icon).join('')}` : '';
+        return `<div class="advice-row" title="${it.note}" onclick="openGuide('enemies','${it.enemy === 'boss' ? 'boss_' + (currentMap.boss || 'shark') : it.enemy}')"><img class="adv-enemy" src="${img}" alt="">${good}${bad}</div>`;
+    }).join('');
     const adapt = Object.entries(world.adapt).map(([t, r]) => `${towerTypeName(t)} %${Math.round(r * 100)}`);
     const adaptHtml = adapt.length ? `<div class="adapt-line" title="Hasarın yarısından fazlasını tek türe yaptırırsan düşmanlar ona alışır; türleri karıştırınca kalkar">Düşmanlar alıştı: ${adapt.join(', ')} daha az hasar veriyor</div>` : '';
-    box.innerHTML = `<div class="preview-title">Sıradaki: Dalga ${next.wave}</div><div class="chips">${chips}</div>${advice}${adaptHtml}`;
+    box.innerHTML = `<div class="preview-title">Sıradaki: Dalga ${next.wave} <button class="guide-link" onclick="openGuide()" title="Rehber: kuleler, düşmanlar, haritalar">? Rehber</button></div><div class="chips">${chips}</div>${advice ? '<div class="advice-box"><div class="advice-title">Bu dalgaya karşı <span class="adv-good">✓</span> iyi <span class="adv-bad">✗</span> kötü kuleler</div>' + advice + '</div>' : ''}${adaptHtml}`;
 }
 
 function togglePause() {
@@ -2918,7 +3036,7 @@ function showEnd() {
 }
 
 function toggleInfo() {
-    document.getElementById('infoModal').classList.toggle('hidden');
+    openGuide('start');
 }
 
 function exitGame() {
