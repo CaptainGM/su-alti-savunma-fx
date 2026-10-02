@@ -107,6 +107,8 @@ function glowSprite(rgb, r) {
 }
 
 function clearSpriteCache() {
+    frostCache = null;
+    swirlCache = null;
     glowCache.clear();
     spriteCache.clear();
     if (typeof darkSpriteCache !== 'undefined') darkSpriteCache.clear();
@@ -149,7 +151,7 @@ let frameDue = 0;
 const perf = { frames: 0, since: 0, fps: 0, drawMs: 0, drawAcc: 0 };
 let endDelay = 0;
 let endShown = false;
-let fx = { floaters: [], rings: [], bubbles: [], flash: 0, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [], meteors: [], chomps: [], arcs: [] };
+let fx = { floaters: [], rings: [], bubbles: [], flash: 0, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [], meteors: [], chomps: [], arcs: [], smoke: [], scorch: [], storm: 0 };
 let ambient = null;
 let res = 1;
 
@@ -268,11 +270,16 @@ function onWorldEvent(type, d) {
             fx.shake = Math.max(fx.shake || 0, 0.9);
             fx.rings.push({ x: d.x, y: d.y, r: 10, max: d.r * 1.25, life: 0.7, maxLife: 0.7, color: '255,120,30', fill: true });
             fx.rings.push({ x: d.x, y: d.y, r: 10, max: d.r * 0.8, life: 0.45, maxLife: 0.45, color: '255,220,120', fill: true });
-            for (let i = 0; i < 40; i++) {
-                const a = Math.random() * 6.2832;
-                const sp = 80 + Math.random() * 260;
-                fx.sparks.push({ x: d.x, y: d.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 60, life: 0.7 + Math.random() * 0.8, max: 1.5, r: 2 + Math.random() * 3.5, c: Math.random() < 0.5 ? '255,160,40' : '255,90,30' });
+            // lav çeşmesi: yukarı fırlayıp yerçekimiyle düşen parçalar
+            for (let i = 0; i < 46; i++) {
+                const a = -1.5708 + (Math.random() - 0.5) * 1.9;
+                const sp = 150 + Math.random() * 330;
+                fx.sparks.push({ x: d.x + (Math.random() - 0.5) * 24, y: d.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.9 + Math.random() * 0.9, max: 1.8, r: 2 + Math.random() * 3.8, c: Math.random() < 0.45 ? '255,190,70' : '255,90,30' });
             }
+            for (let i = 0; i < 14; i++) {
+                fx.smoke.push({ x: d.x + (Math.random() - 0.5) * d.r * 0.8, y: d.y + (Math.random() - 0.5) * 20, vx: (Math.random() - 0.5) * 26, vy: -28 - Math.random() * 40, r: 12 + Math.random() * 12, life: 2.4 + Math.random(), max: 3.4 });
+            }
+            fx.scorch.push({ x: d.x, y: d.y, r: d.r * 0.85, life: 14, max: 14 });
             break;
         }
         case 'towerStun':
@@ -319,6 +326,11 @@ function onWorldEvent(type, d) {
         }
         case 'guardianPulse':
             sfx('gong');
+            (d.hitsAt || []).forEach(p => fx.arcs.push({ pts: [{ x: d.x, y: d.y }, p], life: 0.4, max: 0.4, color: '140,255,235', seed: Math.random() * 100 }));
+            for (let i = 0; i < 18; i++) {
+                const a = i / 18 * 6.2832;
+                fx.sparks.push({ x: d.x, y: d.y, vx: Math.cos(a) * 230, vy: Math.sin(a) * 230, life: 0.5, max: 0.5, r: 3, c: '170,255,240' });
+            }
             fx.shake = Math.max(fx.shake || 0, d.hits ? 0.35 : 0.15);
             fx.rings.push({ x: d.x, y: d.y, r: 20, max: d.r, life: 0.9, maxLife: 0.9, color: '120,255,230', fill: true });
             if (d.hits) addLog(`Koruyucu küre vurdu: ${d.hits} düşman hasar aldı ve sersemledi.`);
@@ -330,6 +342,12 @@ function onWorldEvent(type, d) {
             break;
         case 'treasureTaken':
             sfx('sell');
+            for (let i = 0; i < 22; i++) {
+                const a = -1.5708 + (Math.random() - 0.5) * 2.6;
+                const sp = 120 + Math.random() * 240;
+                fx.sparks.push({ x: d.x, y: d.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.9, max: 0.9, r: 3.2, c: Math.random() < 0.5 ? '255,215,70' : '255,245,170' });
+            }
+            fx.rings.push({ x: d.x, y: d.y, r: 10, max: 110, life: 0.6, maxLife: 0.6, color: '255,215,80' });
             addFloater({ x: d.x, y: d.y - 30, text: '+' + d.reward, color: '#ffd84a', life: 1.4, maxLife: 1.4, big: true, important: true });
             addLog(`Hazine toplandı: +${d.reward} Enerji.`);
             break;
@@ -636,11 +654,13 @@ function selectMap(mapIndex, resumeSnap) {
     }
     lastSaveAt = performance.now();
     ambient = buildAmbient(currentMap);
-    fx = { floaters: [], rings: [], bubbles: [], flash: 0, tension: 0, shake: 0, alert: null, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [], meteors: [], chomps: [], arcs: [] };
+    fx = { floaters: [], rings: [], bubbles: [], flash: 0, tension: 0, shake: 0, alert: null, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [], meteors: [], chomps: [], arcs: [], smoke: [], scorch: [], storm: 0 };
     paused = false;
     speedMultiplier = 1;
     selectedTower = null;
     hoverSpot = null;
+    pullFrom = ((currentMap.mechanics || []).find(m => m.type === 'pull') || {}).from;
+    if (pullFrom === undefined) pullFrom = null;
     armedType = null;
     draggedType = null;
     endShown = false;
@@ -791,6 +811,11 @@ function updateFx(dt) {
     fx.chomps = fx.chomps.filter(c => c.life > 0);
     fx.arcs.forEach(a => { a.life -= dt; });
     fx.arcs = fx.arcs.filter(a => a.life > 0);
+    fx.smoke.forEach(p => { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.r += 9 * dt; });
+    fx.smoke = fx.smoke.filter(p => p.life > 0);
+    fx.scorch.forEach(c => { c.life -= dt; });
+    fx.scorch = fx.scorch.filter(c => c.life > 0);
+    fx.storm += ((world.stormActive ? 1 : 0) - fx.storm) * Math.min(1, dt * 2.2);   // fırtına yumuşakça gelir ve gider
     fx.sparks.forEach(p => { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 260 * dt; p.vx *= 0.985; });
     fx.sparks = fx.sparks.filter(p => p.life > 0);
     for (let i = 0; i < fx.guardGlow.length; i++) fx.guardGlow[i] = Math.max(0, (fx.guardGlow[i] || 0) - dt * 1.1);
@@ -819,6 +844,7 @@ function draw() {
     drawPath();
     drawSpots();
     drawGas();
+    drawScorch();
     drawEntities();
     drawMechanics();
     drawChomps();
@@ -990,12 +1016,15 @@ function drawAmbientFront() {
     if (!a) return;
 
     const down = a.moteDir === 'down';   // kar taneleri aşağı, kıvılcımlar yukarı
+    const darkMap = !!darknessMech();    // karanlık haritada planktonlar yalnızca fenerin ışığında parlak
+    const lights = darkMap ? activeLights().map(l => ({ x: l.x, y: l.y, R: world.lightRadius(l) })) : [];
     ambient.motes.forEach(m => {
         m.y += (down ? 1 : -1) * m.sp * 0.016;
         m.x += Math.sin(animTime * 0.6 + m.ph) * (down ? 0.3 : 0.12);
         if (m.y < -4) { m.y = H + 4; m.x = Math.random() * W; }
         if (m.y > H + 4) { m.y = -4; m.x = Math.random() * W; }
-        const tw = down ? 0.7 : 0.35 + 0.35 * Math.sin(animTime * 1.7 + m.ph);
+        let tw = down ? 0.7 : 0.35 + 0.35 * Math.sin(animTime * 1.7 + m.ph);
+        if (darkMap) tw *= lights.some(l => Math.hypot(l.x - m.x, l.y - m.y) <= l.R) ? 1.7 : 0.35;
         ctx.fillStyle = `rgba(${a.moteColor || '220,255,255'},${tw})`;
         ctx.beginPath();
         ctx.arc(m.x, m.y, m.r * (a.moteSize || 1), 0, 6.2832);
@@ -1054,6 +1083,33 @@ function drawPath() { /* yol arka plana pişirilmiştir (bakeRail) */ }
 
 // ------------------------------------------------------------------ haritaya özel kurallar
 // (yavaşlatma bölgeleri artık yolun üzerinde çizilmez; kural metni ve düşmanların yavaşlaması yeterli)
+
+// girdap sarmalı: üç kollu, dışa doğru sönen spiral (bir kez çizilir)
+let swirlCache = null;
+function swirlSprite() {
+    if (!swirlCache) {
+        swirlCache = document.createElement('canvas');
+        swirlCache.width = swirlCache.height = 340;
+        const g = swirlCache.getContext('2d');
+        g.translate(170, 170);
+        g.lineCap = 'round';
+        for (let arm = 0; arm < 3; arm++) {
+            for (let i = 0; i < 90; i++) {
+                const th = i * 0.075 + arm * 2.0944;
+                const r = 8 + i * 1.75;
+                const th2 = (i + 1) * 0.075 + arm * 2.0944;
+                const r2 = 8 + (i + 1) * 1.75;
+                g.strokeStyle = `rgba(210,240,255,${0.5 * (1 - i / 90)})`;
+                g.lineWidth = 5 - 3 * (i / 90);
+                g.beginPath();
+                g.moveTo(Math.cos(th) * r, Math.sin(th) * r);
+                g.lineTo(Math.cos(th2) * r2, Math.sin(th2) * r2);
+                g.stroke();
+            }
+        }
+    }
+    return swirlCache;
+}
 
 // patronun çenesi: iki yarım elips ve birbirine geçen dişler; gap, çenelerin merkezden uzaklığı
 function drawJaws(x, y, gap, alpha) {
@@ -1217,14 +1273,59 @@ function drawMechanics() {
         ctx.fill();
     });
 
+    // karanlık harita: fenerlerin sıcak parıltısı ve ışık sınırında dalgalanan halka
+    if (darknessMech()) {
+        activeLights().forEach((l, i) => {
+            const R = world.lightRadius(l);
+            ctx.globalAlpha = 0.32 + 0.1 * Math.sin(animTime * 2.6 + i * 2);
+            ctx.drawImage(glowSprite('255,236,160', 90), l.x - 100, l.y - 100, 200, 200);
+            ctx.globalAlpha = 0.16 + 0.06 * Math.sin(animTime * 1.3 + i);
+            ctx.strokeStyle = 'rgb(150,240,255)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(l.x, l.y, R * (0.985 + 0.012 * Math.sin(animTime * 1.8 + i)), 0, 6.2832);
+            ctx.stroke();
+        });
+        ctx.globalAlpha = 1;
+    }
+
+    // girdap: merkezde yavaşça dönen çekim sarmalı
+    const pull = mech.find(m => m.type === 'pull');
+    if (pull) {
+        const P = world.paths[0];
+        const c = Core.pointAt(P, P.length);
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(animTime * 0.9);
+        ctx.globalAlpha = 0.55;
+        ctx.drawImage(swirlSprite(), -170, -170, 340, 340);
+        ctx.restore();
+        ctx.globalAlpha = 1;
+    }
+
     // lav patlaması uyarıları
     fx.warns.forEach(w => {
         const k = 1 - w.life / w.max;
         const pulse = 0.5 + 0.5 * Math.sin(animTime * 14);
-        ctx.fillStyle = `rgba(255,80,20,${0.14 + 0.16 * k + 0.08 * pulse})`;
+        ctx.globalAlpha = Math.min(1, 0.35 + 0.5 * k + 0.15 * pulse);
+        ctx.drawImage(glowSprite('255,100,30', 110), w.x - w.r * 1.15, w.y - w.r * 1.15, w.r * 2.3, w.r * 2.3);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = `rgba(255,80,20,${0.10 + 0.14 * k + 0.06 * pulse})`;
         ctx.beginPath();
         ctx.arc(w.x, w.y, w.r, 0, 6.2832);
         ctx.fill();
+        // yerde açılan lav çatlakları: uyarı ilerledikçe uzar
+        ctx.strokeStyle = `rgba(255,${Math.round(150 + 80 * pulse)},60,${0.55 + 0.4 * k})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (let i = 0; i < 7; i++) {
+            const a = i * 0.8976 + w.x * 0.013;
+            const len = w.r * (0.35 + 0.65 * k);
+            ctx.moveTo(w.x, w.y);
+            ctx.lineTo(w.x + Math.cos(a + 0.18) * len * 0.5, w.y + Math.sin(a + 0.18) * len * 0.5);
+            ctx.lineTo(w.x + Math.cos(a - 0.1) * len, w.y + Math.sin(a - 0.1) * len);
+        }
+        ctx.stroke();
         ctx.strokeStyle = `rgba(255,${Math.round(120 + 100 * pulse)},60,0.95)`;
         ctx.lineWidth = 3;
         ctx.setLineDash([10, 8]);
@@ -1240,37 +1341,48 @@ function drawMechanics() {
         ctx.stroke();
     });
 
-    // batık hazine
+    // batık hazine: sandık açılır, altın ışık huzmesi ve yükselen paralar
     const tr = world.treasure;
     if (tr) {
         const pulse = 1 + 0.12 * Math.sin(animTime * 7);
-        const grad = ctx.createRadialGradient(tr.x, tr.y, 6, tr.x, tr.y, 80 * pulse);
-        grad.addColorStop(0, 'rgba(255,225,110,0.75)');
-        grad.addColorStop(1, 'rgba(255,200,60,0)');
-        ctx.fillStyle = grad;
+        ctx.globalAlpha = 0.9;
+        ctx.drawImage(glowSprite('255,215,100', 80), tr.x - 80 * pulse, tr.y - 80 * pulse, 160 * pulse, 160 * pulse);
+        const beam = ctx.createLinearGradient(tr.x, tr.y, tr.x, tr.y - 170);
+        beam.addColorStop(0, 'rgba(255,230,140,0.55)');
+        beam.addColorStop(1, 'rgba(255,230,140,0)');
+        ctx.globalAlpha = 0.55 + 0.25 * Math.sin(animTime * 5);
+        ctx.fillStyle = beam;
         ctx.beginPath();
-        ctx.arc(tr.x, tr.y, 80 * pulse, 0, 6.2832);
+        ctx.moveTo(tr.x - 22, tr.y);
+        ctx.lineTo(tr.x - 58, tr.y - 170);
+        ctx.lineTo(tr.x + 58, tr.y - 170);
+        ctx.lineTo(tr.x + 22, tr.y);
+        ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = 'rgba(255,214,70,0.92)';
-        ctx.strokeStyle = 'rgba(120,70,0,0.95)';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(tr.x, tr.y, 30 * pulse, 0, 6.2832);
-        ctx.fill();
-        ctx.stroke();
+        ctx.globalAlpha = 1;
+        for (let i = 0; i < 7; i++) {
+            const t = (animTime * 0.55 + i / 7) % 1;
+            const cx = tr.x + Math.sin(i * 2.3 + animTime * 1.2) * 28;
+            const cy = tr.y - 8 - t * 105;
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.scale(Math.max(0.15, Math.abs(Math.cos(animTime * 6 + i))), 1);
+            ctx.globalAlpha = 1 - t;
+            ctx.fillStyle = '#ffd24a';
+            ctx.strokeStyle = '#9a6a00';
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.arc(0, 0, 5, 0, 6.2832);
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+        }
+        ctx.globalAlpha = 1;
         ctx.strokeStyle = 'rgba(255,250,200,0.95)';
         ctx.lineWidth = 4;
         ctx.beginPath();
         ctx.arc(tr.x, tr.y, 42, -Math.PI / 2, -Math.PI / 2 + 6.2832 * (tr.life / tr.max));
         ctx.stroke();
-        for (let i = 0; i < 5; i++) {
-            const a = animTime * 2 + i * 1.2566;
-            const rr = 52 + 6 * Math.sin(animTime * 5 + i);
-            ctx.fillStyle = 'rgba(255,250,210,0.9)';
-            ctx.beginPath();
-            ctx.arc(tr.x + Math.cos(a) * rr, tr.y + Math.sin(a) * rr, 2.5, 0, 6.2832);
-            ctx.fill();
-        }
         ctx.textAlign = 'center';
         ctx.font = 'bold 20px sans-serif';
         ctx.lineWidth = 4;
@@ -1281,21 +1393,71 @@ function drawMechanics() {
         ctx.textAlign = 'left';
     }
 
-    // kar fırtınası
-    if (world.stormActive) {
-        ctx.fillStyle = 'rgba(205,228,248,0.20)';
+    // kar fırtınası: kenarlarda buzlanma, rüzgârla savrulan kar çizgileri ve iri taneler; gelip gider
+    if (fx.storm > 0.02) {
+        ctx.globalAlpha = fx.storm * (0.75 + 0.25 * Math.sin(animTime * 1.7));
+        ctx.drawImage(frostSprite(), 0, 0, W, H);
+        ctx.globalAlpha = fx.storm * 0.14;
+        ctx.fillStyle = 'rgb(205,228,248)';
         ctx.fillRect(0, 0, W, H);
-        ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+        ctx.globalAlpha = fx.storm * 0.8;
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
         ctx.lineWidth = 2;
         ctx.beginPath();
         for (let i = 0; i < 90; i++) {
-            const x = W + 60 - ((i * 97 + animTime * 520) % (W + 160));
+            const x = W + 60 - ((i * 97 + animTime * 560) % (W + 160));
             const y = ((i * 53 + animTime * 300 + i * i * 7) % (H + 80)) - 40;
             ctx.moveTo(x, y);
-            ctx.lineTo(x + 30, y - 9);
+            ctx.lineTo(x + 32, y - 9);
         }
         ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        for (let i = 0; i < 26; i++) {
+            const x = W + 20 - ((i * 211 + animTime * 340) % (W + 60));
+            const y = ((i * 131 + animTime * 150 + i * i * 11) % (H + 40)) - 20;
+            ctx.beginPath();
+            ctx.arc(x, y, 2 + (i % 3), 0, 6.2832);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
     }
+}
+
+// buzlanma kenarlığı: ortası saydam, kenarları beyaz-mavi (bir kez çizilir, büyütülerek kullanılır)
+let frostCache = null;
+function frostSprite() {
+    if (!frostCache) {
+        frostCache = document.createElement('canvas');
+        frostCache.width = 270;
+        frostCache.height = 180;
+        const g = frostCache.getContext('2d');
+        const grad = g.createRadialGradient(135, 90, 55, 135, 90, 165);
+        grad.addColorStop(0, 'rgba(225,244,255,0)');
+        grad.addColorStop(0.6, 'rgba(225,244,255,0.22)');
+        grad.addColorStop(1, 'rgba(240,250,255,0.78)');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 270, 180);
+    }
+    return frostCache;
+}
+
+// fırtınada kulelerin etrafında buz kristalleri
+function drawFrost(t) {
+    ctx.globalAlpha = Math.min(1, fx.storm * 1.2);
+    ctx.fillStyle = 'rgba(210,240,255,0.95)';
+    ctx.strokeStyle = 'rgba(90,150,200,0.9)';
+    ctx.lineWidth = 1.6;
+    for (let i = 0; i < 5; i++) {
+        const a = 0.4 + i * 1.25 + t.id;
+        const px = t.x + Math.cos(a) * 34;
+        const py = t.y + 22 + Math.sin(a) * 14;
+        ctx.beginPath();
+        ctx.moveTo(px, py - 9); ctx.lineTo(px + 4.5, py); ctx.lineTo(px, py + 5); ctx.lineTo(px - 4.5, py);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
 }
 
 // ekranın üstünde kısa durum şeridi (kar fırtınası)
@@ -1494,6 +1656,9 @@ function drawShadow(x, y, w, h, alpha) {
     ctx.fill();
 }
 
+// girdap haritasında çekimin başladığı ilerleme (yoksa null)
+let pullFrom = null;
+
 function drawEnemy(e) {
     const bob = Math.sin(animTime * 4.2 + e.id * 1.7) * (e.type === 'boss' ? 2 : 3);
     const sinceHit = animTime - (e.hitAnim || -10);
@@ -1632,6 +1797,31 @@ function drawEnemy(e) {
             ctx.fillRect(e.x - bw / 2, by - 6, bw * (e.shield / e.shieldMax), 4);
         }
     }
+    // yavaşlatma bölgesi (yosun, mangrov kökleri): düşmanın ayağına sarılan sarmaşık
+    if (e.zoneMul < 0.95) {
+        ctx.strokeStyle = 'rgba(78,170,70,0.9)';
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 3; i++) {
+            const a0 = animTime * 1.4 + i * 2.1 + e.id;
+            ctx.beginPath();
+            ctx.moveTo(e.x + Math.cos(a0) * size * 0.3, e.y + bob + size * 0.34);
+            ctx.quadraticCurveTo(e.x + Math.cos(a0 + 1.2) * size * 0.46, e.y + bob + size * 0.12 + Math.sin(animTime * 3 + i) * 5, e.x + Math.cos(a0 + 0.5) * size * 0.28, e.y + bob - size * 0.02);
+            ctx.stroke();
+        }
+        ctx.fillStyle = 'rgba(120,200,90,0.9)';
+        ctx.beginPath();
+        ctx.arc(e.x + Math.cos(animTime * 2 + e.id) * size * 0.3, e.y + bob + size * 0.2, 3, 0, 6.2832);
+        ctx.fill();
+    }
+    // girdap çekimi: düşmanın arkasında su izi
+    if (pullFrom !== null && e.progress > pullFrom) {
+        ctx.fillStyle = 'rgba(190,235,255,0.32)';
+        for (let i = 1; i <= 3; i++) {
+            ctx.beginPath();
+            ctx.arc(e.x - Math.cos(e.angle) * i * 13, e.y + bob - Math.sin(e.angle) * i * 13, 6 - i, 0, 6.2832);
+            ctx.fill();
+        }
+    }
     // yetenek göstergeleri: işaretli düşmanda hedef halkası, zehir/yanıkta dönen noktalar
     if (e.markT > 0) {
         ctx.strokeStyle = 'rgba(255,130,70,0.95)';
@@ -1721,6 +1911,7 @@ function drawTower(t) {
         drawLock(t.x, t.y - 66, '#ff9a3a', Math.max(0, t.stun / (t.stunMax || 5)), Math.ceil(t.stun));
     }
 
+    if (fx.storm > 0.05) drawFrost(t);
     if (t.level > 1) drawLevelBar(t.x, t.y + 52, t);
 
     if (selected) {
@@ -1987,8 +2178,34 @@ function drawGas() {
     ctx.globalAlpha = 1;
 }
 
+// patlamanın yerde bıraktığı yanık leke: önce kor gibi parlar, sonra söner
+function drawScorch() {
+    fx.scorch.forEach(c => {
+        const fade = Math.min(1, c.life / 3);
+        ctx.globalAlpha = 0.5 * fade;
+        ctx.fillStyle = 'rgb(18,8,4)';
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.r, 0, 6.2832);
+        ctx.fill();
+        const hot = Math.max(0, (c.life - (c.max - 3.5)) / 3.5);
+        if (hot > 0) {
+            ctx.globalAlpha = hot * (0.55 + 0.25 * Math.sin(animTime * 9));
+            ctx.drawImage(glowSprite('255,110,30', 70), c.x - c.r * 1.1, c.y - c.r * 1.1, c.r * 2.2, c.r * 2.2);
+        }
+    });
+    ctx.globalAlpha = 1;
+}
+
 function drawFx() {
     drawArcs();
+    fx.smoke.forEach(p => {
+        ctx.globalAlpha = 0.34 * Math.max(0, p.life / p.max);
+        ctx.fillStyle = 'rgb(34,28,28)';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, 6.2832);
+        ctx.fill();
+    });
+    ctx.globalAlpha = 1;
     fx.sparks.forEach(p => {
         ctx.globalAlpha = Math.max(0, p.life / p.max);
         ctx.fillStyle = `rgb(${p.c})`;
