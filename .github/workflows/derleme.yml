@@ -9,13 +9,13 @@ on:
 jobs:
   test:
     name: Oyun çekirdeği, ses ve statik denetim
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
-      - uses: actions/setup-java@v4
+          node-version: 22
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
@@ -38,13 +38,13 @@ jobs:
 
   web:
     name: Web ve mobil tarayıcı testleri (Chromium)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
       - name: Playwright kur
         run: |
           cd tools/e2e
@@ -52,7 +52,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Uçtan uca testler (masaüstü, telefon, tablet profilleri)
         run: node tools/e2e/calistir.js
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: ekran-goruntuleri
@@ -61,24 +61,24 @@ jobs:
 
   android:
     name: Android uygulaması (APK + emülatör testi)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
-      - uses: actions/setup-java@v4
+          node-version: 22
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: APK derle
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: SuAltiSavunma-android-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
@@ -102,7 +102,7 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: node tools/e2e/android.js android/app/build/outputs/apk/debug/app-debug.apk
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: android-ekran-goruntuleri
@@ -114,8 +114,8 @@ jobs:
     runs-on: windows-latest
     needs: test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
@@ -123,7 +123,7 @@ jobs:
       - name: Derle ve paketle
         shell: pwsh
         run: ./tools/paketle.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: SuAltiSavunma-windows
           path: dist/SuAltiSavunma-windows.zip
