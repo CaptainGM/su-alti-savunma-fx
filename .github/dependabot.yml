@@ -1,4 +1,6 @@
 # Bağımlılıkları ve CI eylemlerini aylık denetler; güncelleme önerilerini çekme isteği olarak açar.
+# Java/JavaFX (WebView davranışı ve performans ayarları) ile Android derleme araçları (AGP, Gradle) büyük sürümlere kendiliğinden geçmez:
+# bunlar elle, tüm testler ve hız ölçümüyle yükseltilir.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -20,9 +22,15 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     labels: [bagimlilik]
   - package-ecosystem: gradle
     directory: /android
     schedule:
       interval: monthly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     labels: [bagimlilik]
