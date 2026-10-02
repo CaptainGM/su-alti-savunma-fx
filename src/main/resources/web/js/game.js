@@ -47,6 +47,8 @@ function recordKey(map) { return map.id + ':' + difficulty; }
 
 // Java kayıtlı verileri yükleyince çağrılır
 function refreshAfterLoad() {
+    musicKey = '';
+    if (typeof updateMusic === 'function') updateMusic();
     difficulty = Settings.difficulty();
     if (!Core.DIFFICULTY[difficulty]) difficulty = 'normal';
     if (!document.getElementById('mapSelectScreen').classList.contains('hidden')) renderMapSelectScreen();
@@ -107,6 +109,7 @@ function glowSprite(rgb, r) {
 }
 
 function clearSpriteCache() {
+    levelBarCache.clear();
     frostCache = null;
     swirlCache = null;
     glowCache.clear();
@@ -576,6 +579,38 @@ function buildAmbient(map) {
     return out;
 }
 
+// ------------------------------------------------------------------ müzik
+
+// Java'daki MusicEngine'e durum bildirir: menu | calm | battle | boss | off, yoğunluk 0..1
+let musicKey = '';
+function setMusic(state, intensity) {
+    const key = state + ':' + Math.round(intensity * 10);
+    if (key === musicKey) return;
+    try {
+        if (!(window.javaBridge && window.javaBridge.setMusic)) return;   // köprü hazır değilse sonra yeniden denenir
+        window.javaBridge.setMusic(state, intensity);
+        musicKey = key;
+    } catch (e) { /* yoksay */ }
+}
+
+let musicAt = 0;
+// Yarım saniyede bir: patron varsa gerilim, dalga sürüyorsa savaş, aradaysa sakin müzik
+function updateMusic() {
+    musicAt = performance.now();
+    if (!world) { setMusic('menu', 0); return; }
+    if (world.result) { setMusic(world.result === 'win' ? 'calm' : 'off', 0); return; }
+    if (paused) { setMusic('calm', 0); return; }
+    const danger = 1 - world.health / world.maxHealth;
+    const boss = world.enemies.find(e => e.type === 'boss' && !e.mini && e.health > 0);
+    if (boss) setMusic('boss', Math.min(1, Math.max(boss.progress, danger)));
+    else if (world.enemies.length || world.queue.length) {
+        const mini = world.enemies.some(e => e.mini);
+        setMusic('battle', Math.min(1, (mini ? 0.9 : 0) + (world.wave / world.totalWaves) * 0.7 + danger * 0.5));
+    } else setMusic('calm', 0);
+}
+
+window.menuMusic = function () { musicKey = ''; if (typeof applyMusicVolume === 'function') applyMusicVolume(); updateMusic(); };
+
 // ------------------------------------------------------------------ kaydet / devam et
 
 let lastSaveAt = 0;
@@ -678,6 +713,8 @@ function selectMap(mapIndex, resumeSnap) {
     uiCache = {};
     updateUI();
     renderTowerList();
+    musicKey = '';
+    updateMusic();
 
     cancelAnimationFrame(rafId);
     lastFrame = 0;
@@ -770,12 +807,14 @@ function gameLoop(ts, fromJava) {
         tensionTick(dt);
         if (performance.now() - lastLogFlush > 1000) flushLog();
         if (performance.now() - lastSaveAt > 12000) saveProgress();
+        if (performance.now() - musicAt > 500) updateMusic();
         updateFx(dt * speedMultiplier);
     }
     if (world.result && !endShown) {
         endDelay -= dt;
         if (endDelay <= 0) { endShown = true; showEnd(); }
     }
+    if (paused && performance.now() - musicAt > 500) updateMusic();
     const t0 = performance.now();
     draw();
     perf.drawAcc += performance.now() - t0;
@@ -1935,21 +1974,34 @@ function perkIndex(t, lv) {
     return o && t.level >= lv ? o.findIndex(x => x.id === t.perks[lv]) : -1;
 }
 
+// Seviye çubuğu her kule için her karede 6 dikdörtgen çizmek yerine, (seviye, seçilen yetenekler) birleşimi başına
+// bir kez küçük bir tuvale çizilip oradan kopyalanır.
+const levelBarCache = new Map();
 function drawLevelBar(x, y, t) {
     const level = t.level;
+    const key = `${level}|${perkIndex(t, 3)}|${perkIndex(t, 5)}|${res}`;
+    let c = levelBarCache.get(key);
     const w = 9;
     const gap = 2;
     const total = Core.MAX_LEVEL * w + (Core.MAX_LEVEL - 1) * gap;
-    const x0 = x - total / 2;
-    ctx.save();
-    ctx.fillStyle = 'rgba(4,10,18,0.7)';
-    ctx.fillRect(x0 - 2, y - 2, total + 4, 8);
-    for (let i = 0; i < Core.MAX_LEVEL; i++) {
-        const pi = (i === 2 || i === 4) && i < level ? perkIndex(t, i + 1) : -1;
-        ctx.fillStyle = i >= level ? 'rgba(255,255,255,0.14)' : (i === 0 ? LEVEL_BASE : (pi >= 0 ? PERK_COLORS[pi] : LEVEL_UP));
-        ctx.fillRect(x0 + i * (w + gap), y, w, 4);
+    const pw = total + 4;
+    const ph = 8;
+    if (!c) {
+        c = document.createElement('canvas');
+        c.width = Math.ceil(pw * res);
+        c.height = Math.ceil(ph * res);
+        const g = c.getContext('2d');
+        g.scale(res, res);
+        g.fillStyle = 'rgba(4,10,18,0.7)';
+        g.fillRect(0, 0, pw, ph);
+        for (let i = 0; i < Core.MAX_LEVEL; i++) {
+            const pi = (i === 2 || i === 4) && i < level ? perkIndex(t, i + 1) : -1;
+            g.fillStyle = i >= level ? 'rgba(255,255,255,0.14)' : (i === 0 ? LEVEL_BASE : (pi >= 0 ? PERK_COLORS[pi] : LEVEL_UP));
+            g.fillRect(2 + i * (w + gap), 2, w, 4);
+        }
+        levelBarCache.set(key, c);
     }
-    ctx.restore();
+    ctx.drawImage(c, x - total / 2 - 2, y - 2, pw, ph);
 }
 
 // kilit simgesi: arkada kalan süreyi gösteren halka ve altında saniye
@@ -2754,8 +2806,10 @@ function backToMenuFromMapSelect() {
 
 function stopGame() {
     if (world) { saveProgress(); logEnd(); }
+    musicKey = '';
     stopLoop();
     world = null;
+    updateMusic();
     document.getElementById('towerModal').classList.add('hidden');
     document.getElementById('gameScreen').classList.add('hidden');
 }
