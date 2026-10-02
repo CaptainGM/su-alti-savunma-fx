@@ -33,6 +33,7 @@ public class SoundPlayer {
     private static final ConcurrentLinkedQueue<Voice> PENDING = new ConcurrentLinkedQueue<>();
     private static volatile boolean started;
     private static volatile boolean broken;
+    private static volatile boolean windowActive = true;   // pencere öndeyse ve küçültülmemişse true
 
     /** Hattı ve ses bankasını arka planda hazırlar. Açılışta bir kez çağrılır. */
     public static synchronized void init() {
@@ -46,9 +47,20 @@ public class SoundPlayer {
         t.start();
     }
 
+    /**
+     * Pencere öndeyken true, küçültülünce ya da başka pencereye geçilince false verilir: oyun arka plandayken ne müzik ne
+     * efekt çalar. Ses kısa bir geçişle kısılır, müzik kaldığı yerden devam eder.
+     */
+    public static void setWindowActive(boolean on) {
+        windowActive = on;
+        if (!on) {
+            PENDING.clear();
+        }
+    }
+
     /** Hazır bir sesi çalar. volume: 0..~1.5 (ayarlardaki ses düzeyi). */
     public static void playSfx(String name, double volume) {
-        if (broken || volume <= 0) {
+        if (broken || volume <= 0 || !windowActive) {
             return;
         }
         init();
@@ -108,8 +120,20 @@ public class SoundPlayer {
         List<Voice> active = new ArrayList<>();
         float[] mix = new float[CHUNK];
         byte[] out = new byte[CHUNK * 2];
+        byte[] silence = new byte[CHUNK * 2];
+        float master = 1f;                  // pencere arka plana geçince 0'a iner, öne gelince 1'e çıkar
 
         while (true) {
+            float goal = windowActive ? 1f : 0f;
+            if (master == 0f && goal == 0f) {
+                // arka plan: hiçbir şey çalmaz, müzik de ilerlemez; hat sessizlikle beslenir
+                PENDING.clear();
+                active.clear();
+                line.write(silence, 0, silence.length);
+                continue;
+            }
+            float from = master;
+            master += Math.max(-1f / 15f, Math.min(1f / 15f, goal - master));   // ~150 ms'lik geçiş
             Voice v;
             while ((v = PENDING.poll()) != null) {
                 if (active.size() >= MAX_VOICES) {
@@ -135,7 +159,7 @@ public class SoundPlayer {
 
             for (int i = 0; i < CHUNK; i++) {
                 // yumuşak sınırlayıcı: üst üste binen sesler bozulmadan toplanır
-                double s = Math.tanh(mix[i] * 1.15);
+                double s = Math.tanh(mix[i] * 1.15 * (from + (master - from) * i / CHUNK));
                 short pcm = (short) Math.round(s * 32000);
                 out[2 * i] = (byte) (pcm & 0xFF);
                 out[2 * i + 1] = (byte) ((pcm >> 8) & 0xFF);

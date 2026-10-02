@@ -34,6 +34,13 @@
     const SHOCK_WIND = 0.9;
     const SHOCK_STUN = 3.5;
 
+    // Patronun kule yeme sırası: kuleye döner ve hırlar (cast) -> kuleye zıplar (leap) -> ısırır (bite) -> yola geri atlar (back).
+    // Bu sürede patron yerinde durur; çizim bu evrelerden zıplama yayını türetir.
+    const FURY_CAST = 0.85;
+    const FURY_LEAP = 0.5;
+    const FURY_BITE = 0.4;
+    const FURY_BACK = 0.55;
+
     // Patron çeşitleri: her harita birini seçer (map.boss)
     const BOSS_KINDS = {
         shark: { name: 'Kral Köpek Balığı', hp: 1.0, speed: 1.0, armor: 45, flying: false, heavy: false, note: 'dengeli patron',
@@ -55,9 +62,9 @@
     // role: markette görünen kısa açıklama
     const TOWER_TYPES = {
         octopus: { name: 'Ahtapot', cost: 50, range: 210, dmg: 9, rate: 0.9, projSpeed: 520, role: 'Hızlı atar, havadakini de vurur. Zırhlı düşmana zayıf.' },
-        eel: { name: 'Yılan Balığı', cost: 70, range: 180, dmg: 28, rate: 2.6, aoe: 62, groundOnly: true, pierce: 0.5, role: 'Yere alan şoku verir, zırhı deler. Havadakini vuramaz.' },
+        eel: { name: 'Yılan Balığı', cost: 70, range: 180, dmg: 28, rate: 2.6, aoe: 62, groundOnly: true, pierce: 0.5, projSpeed: 780, role: 'Yere alan şoku verir, zırhı deler. Havadakini vuramaz.' },
         jellyfish: { name: 'Deniz Anası', cost: 60, range: 200, dmg: 12, rate: 1.7, slow: 0.5, slowTime: 3, projSpeed: 480, role: 'Vurduğu düşmanı yavaşlatır, kalabalığı geciktirir.' },
-        swordfish: { name: 'Kılıç Balığı', cost: 100, range: 380, dmg: 50, rate: 3.6, projSpeed: 1100, pierce: 0.3, defaultMode: 'strong', role: 'Çok uzun menzilli keskin nişancı. Patronlara %50 fazla hasar verir.' },
+        swordfish: { name: 'Kılıç Balığı', cost: 100, range: 380, dmg: 40, rate: 3.6, projSpeed: 1100, pierce: 0.3, defaultMode: 'strong', role: 'Çok uzun menzilli keskin nişancı. Patronlara %50 fazla hasar verir.' },
         angler: { name: 'Fener Balığı', cost: 80, range: 200, dmg: 17, rate: 1.2, projSpeed: 620, pierce: 0.2, role: 'Dengeli bir kule. Karanlık haritada çevresini aydınlatır, ışığındaki kuleler menzil kaybetmez.' },
         puffer: { name: 'Balon Balığı', cost: 90, range: 270, dmg: 38, rate: 3.0, aoe: 78, lob: true, groundOnly: true, projSpeed: 300, role: 'Havan: düşmanın gideceği yere atar, kümelere alan hasarı verir. Havadakini vuramaz.' },
     };
@@ -415,9 +422,11 @@
             if (this.fury && this.mini) this.fury.casts = 1;      // ara patron yalnızca bir kez saldırır
             this.furyCasts = 0;
             this.furyTimer = this.fury ? this.fury.first : 0;
-            this.furyPhase = 'idle';
+            this.furyPhase = 'idle';       // idle | cast | leap | bite | back | done
             this.furyT = 0;
+            this.furyDur = 0;
             this.furyTargets = [];
+            this.furyTower = null;
             this.pathMul = world.pathSpeedFn(lane);   // haritaya özel yavaşlatma/hızlandırma bölgeleri
             this.zoneMul = 1;
         }
@@ -438,6 +447,7 @@
                 this.stunTime -= dt;
                 return false;
             }
+            if (this.furyPhase === 'cast' || this.furyPhase === 'leap' || this.furyPhase === 'bite' || this.furyPhase === 'back') return false;   // kuleyi yerken yürümez
             this.zoneMul = this.pathMul ? this.pathMul(this.traveled / this.path.length) : 1;
             this.traveled += this.speed * this.zoneMul * this.auraMul * (this.hidden ? 1.25 : 1) * (this.rageT > 0 ? BOSS_RAGE_SPEED : 1) * dt;
             if (this.traveled >= this.path.length) return true;
@@ -643,11 +653,12 @@
             this.pierce = tower.pierce;
             this.aoe = tower.aoe;
             this.lob = !!TOWER_TYPES[tower.type].lob;
+            this.bolt = !!tower.aoe && !this.lob;          // yılan balığının elektrik topu: varınca alan şoku verir
             this.speed = TOWER_TYPES[tower.type].projSpeed || 500;
             this.active = true;
             this.angle = 0;
-            if (this.lob) {
-                // havan: hedefin ilerleyeceği noktaya doğru uçar
+            if (this.lob || this.bolt) {
+                // havan ve elektrik topu: sabit bir noktaya doğru uçar
                 this.tx = aim.x;
                 this.ty = aim.y;
                 this.total = Math.hypot(aim.x - tower.x, aim.y - tower.y) || 1;
@@ -655,7 +666,7 @@
         }
 
         // 0..1 uçuş ilerlemesi (yalnızca havan)
-        get flight() { return this.lob ? Math.min(1, Math.hypot(this.x - this.sx, this.y - this.sy) / this.total) : 0; }
+        get flight() { return this.lob || this.bolt ? Math.min(1, Math.hypot(this.x - this.sx, this.y - this.sy) / this.total) : 0; }
     }
 
     // ---------------------------------------------------------------- dünya
@@ -786,7 +797,8 @@
             }
         }
 
-        // -- patron saldırısı: önce hırlar ve kuleye yönelir, sonra kuleyi yer (kule yok olur)
+        // -- patron saldırısı: kuleye döner ve hırlar, kuleye zıplar, ısırıp yutar (kule yok olur), yola geri atlar.
+        // Patron herhangi bir evrede ölürse ya da kule başka bir şeyle yok olursa kule kurtulur / saldırı iptal olur.
         tickBoss(e, dt) {
             const f = e.fury;
             if (e.furyPhase === 'done') return;
@@ -799,20 +811,41 @@
                     .slice(0, f.targets);
                 if (!targets.length) { e.furyTimer = 1.5; return; }
                 e.furyTargets = targets;
+                e.furyTower = targets[0];
                 e.furyPhase = 'cast';
-                e.furyT = 1.4;
-                this.emit('bossFury', { enemy: e, towers: targets, time: e.furyT });
-            } else {
-                e.furyT -= dt;
-                if (e.furyT > 0) return;
-                for (const t of e.furyTargets) {
-                    if (this.towers.includes(t)) this.destroyTower(t, 'patron', e);
-                }
-                e.furyTargets = [];
-                e.furyCasts++;
-                e.furyPhase = e.furyCasts >= f.casts ? 'done' : 'idle';
-                e.furyTimer = f.interval;
+                e.furyDur = e.furyT = FURY_CAST;
+                this.emit('bossFury', { enemy: e, towers: targets, time: FURY_CAST });
+                return;
             }
+            e.furyT -= dt;
+            if (e.furyT > 0) return;
+            const tower = e.furyTower;
+            const alive = !!tower && this.towers.includes(tower);
+            const next = (phase, dur) => { e.furyPhase = phase; e.furyDur = e.furyT = dur; };
+            switch (e.furyPhase) {
+                case 'cast':
+                    if (!alive) { this.endFury(e); break; }
+                    next('leap', FURY_LEAP);
+                    this.emit('bossLeap', { enemy: e, tower, time: FURY_LEAP });
+                    break;
+                case 'leap':
+                    if (alive) this.destroyTower(tower, 'patron', e);
+                    next('bite', FURY_BITE);
+                    break;
+                case 'bite':
+                    next('back', FURY_BACK);
+                    break;
+                default:
+                    this.endFury(e);
+            }
+        }
+
+        endFury(e) {
+            e.furyTargets = [];
+            e.furyTower = null;
+            e.furyCasts++;
+            e.furyPhase = e.furyCasts >= e.fury.casts ? 'done' : 'idle';
+            e.furyTimer = e.fury.interval;
         }
 
         // -- lav patlaması: önce uyarı çemberi, sonra düşmanları yakar, yakındaki kuleleri susturur
@@ -1272,7 +1305,10 @@
             const lob = !!TOWER_TYPES[t.type].lob;
             if (fx.pulse && t.shotCount % fx.pulse.every === 0) this.pulseSlow(t);
             if (t.aoe && !lob) {
-                this.shockwave(t);       // anlık alan (yılan balığı)
+                // yılan balığı: elektrik topu hedefin bulunduğu noktaya uçar, varınca alan şoku patlar
+                const ball = new Projectile(t, t.target, { x: t.target.x, y: t.target.y });
+                ball.over = !!(fx.overload && t.shotCount % fx.overload.every === 0);
+                this.projectiles.push(ball);
                 return;
             }
             if (lob) {
@@ -1307,11 +1343,8 @@
         }
 
         // Yılan Balığı'nın şoku: alandaki yer düşmanlarına vurur; Aşırı Yük, Zincir Şoku ve Elektrik Yanığı yetenekleri burada işler
-        shockwave(t) {
+        shockwave(t, cx, cy, over) {
             const fx = t.fx;
-            const cx = t.target.x;
-            const cy = t.target.y;
-            const over = !!(fx.overload && t.shotCount % fx.overload.every === 0);
             this.emit('aoe', { x: cx, y: cy, radius: t.aoe, big: over });
             const hit = this.enemies.filter(e => e.health > 0 && !e.flying && Math.hypot(e.x - cx, e.y - cy) < t.aoe);
             for (const e of hit) {
@@ -1357,6 +1390,22 @@
         }
 
         moveProjectile(p, dt) {
+            if (p.bolt) {
+                if (!this.towers.includes(p.owner)) { p.active = false; return; }
+                const dx = p.tx - p.x;
+                const dy = p.ty - p.y;
+                const dist = Math.hypot(dx, dy);
+                const stepLen = p.speed * dt;
+                p.angle = Math.atan2(dy, dx);
+                if (dist <= stepLen) {
+                    p.active = false;
+                    this.shockwave(p.owner, p.tx, p.ty, p.over);
+                    return;
+                }
+                p.x += (dx / dist) * stepLen;
+                p.y += (dy / dist) * stepLen;
+                return;
+            }
             if (p.lob) {
                 const dx = p.tx - p.x;
                 const dy = p.ty - p.y;
@@ -1655,6 +1704,7 @@
         World, Enemy, Tower, Projectile,
         buildPath, generateSmoothPath, mapPaths, buildWavePlan, summarizePlan, totalWavesOf, waveHpScale, mulberry32,
         BOSS_PHASES, MINI_PHASES, BOSS_SHIELD, MINI_HP_MUL, pointAt, describeDifficulty, PERKS, perkOptions, findPerk, ENEMY_INTRO, SPECIAL_ENEMIES, HEAL_RANGE, SHOCK_RANGE, SHOCK_STUN,
+        FURY_CAST, FURY_LEAP, FURY_BITE, FURY_BACK,
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = Core;

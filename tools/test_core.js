@@ -104,6 +104,13 @@ const p1 = JSON.stringify(Core.buildWavePlan(mapOf('cukur'), 5, 7));
 const p2 = JSON.stringify(Core.buildWavePlan(mapOf('cukur'), 5, 7));
 ok(p1 === p2, 'dalga planı aynı tohumla aynı çıkar');
 
+// Elektrik topu uçuşta olduğu için testlerde atış hemen varmış sayılır (uçuşun kendisi aşağıda ayrıca sınanır)
+const fireNow = (w, t) => {
+    w.fire(t);
+    w.projectiles.filter(p => p.bolt).forEach(p => { w.shockwave(p.owner, p.tx, p.ty, p.over); p.active = false; });
+    w.projectiles = w.projectiles.filter(p => p.active);
+};
+
 // ---- haritaya özel mekanikler
 const runUntil = (w, cond, maxSec) => { for (let i = 0; i < maxSec * 30 && !cond(); i++) w.update(1 / 30); return cond(); };
 
@@ -260,6 +267,49 @@ b2.health = 0;
 w.update(2);
 ok(casting && w.towers.includes(s1), 'saldırı sırasında öldürülen patron kuleyi yiyemez');
 
+// patron yeme sırası: kuleye döner -> zıplar -> ısırır -> yola geri atlar; bu sürede yerinde durur
+{
+    const wf = mk('mercan');
+    wf.money = 9999;
+    const q1 = wf.placeTower('octopus', wf.spots[0]).tower;
+    const bf = new Core.Enemy(wf, 'boss', 0, 1, 5, { kind: 'shark', hpMul: 50 });
+    bf.furyTimer = 0.1;
+    bf.fury.range = 99999;
+    wf.enemies.push(bf);
+    const seq = [];
+    let frozen = null, walked = false, tFury = -1, tEaten = -1, tIdle = -1;
+    wf.onEvent = (t, d) => {
+        if (t === 'bossFury') tFury = wf.time;
+        if (t === 'towerDestroyed' && d.cause === 'patron') tEaten = wf.time;
+    };
+    for (let i = 0; i < 300 && tIdle < 0; i++) {
+        wf.update(1 / 60);
+        if (seq[seq.length - 1] !== bf.furyPhase) seq.push(bf.furyPhase);
+        if (['cast', 'leap', 'bite', 'back'].includes(bf.furyPhase)) {
+            if (frozen === null) frozen = bf.traveled; else if (Math.abs(bf.traveled - frozen) > 1e-6) walked = true;
+        } else frozen = null;
+        if (tFury >= 0 && bf.furyPhase === 'idle') tIdle = wf.time;
+    }
+    ok(seq.join('>') === 'idle>cast>leap>bite>back>idle', `patron yeme sırası: ${seq.join('>')}`);
+    ok(!walked, 'patron kuleyi yerken yürümüyor');
+    const gap = tEaten - tFury;
+    ok(gap >= Core.FURY_CAST + Core.FURY_LEAP - 0.05 && gap <= Core.FURY_CAST + Core.FURY_LEAP + 0.1, `kule zıplama bitince yeniyor (${gap.toFixed(2)} sn)`);
+    ok(!wf.towers.includes(q1), 'patron zıplayıp kuleyi yedi');
+
+    // zıplama sırasında ölen patron kuleyi yiyemez
+    const wg = mk('mercan');
+    wg.money = 9999;
+    const q2 = wg.placeTower('octopus', wg.spots[0]).tower;
+    const bg = new Core.Enemy(wg, 'boss', 0, 1, 5, { kind: 'shark', hpMul: 50 });
+    bg.furyTimer = 0.1;
+    bg.fury.range = 99999;
+    wg.enemies.push(bg);
+    for (let i = 0; i < 300 && bg.furyPhase !== 'leap'; i++) wg.update(1 / 60);
+    bg.health = 0;
+    for (let i = 0; i < 120; i++) wg.update(1 / 60);
+    ok(wg.towers.includes(q2), 'zıplarken ölen patron kuleyi yiyemez');
+}
+
 // strateji: yavaşlamış düşman %20 fazla hasar alır
 const slowT = new Core.Enemy(mk('mercan'), 'standard', 0, 1, 1, {});
 const fastT = new Core.Enemy(mk('mercan'), 'standard', 0, 2, 1, {});
@@ -398,20 +448,36 @@ ok(r.serialize().towers.length === 2, 'geri kurulan oyun yeniden kaydedilebiliyo
     far3.x = eel.x + 40 + eel.aoe + 140; far3.y = eel.y;
     let chain = null;
     w2.onEvent = (t, d) => { if (t === 'chain') chain = d; };
-    eel.target = near; w2.fire(eel);
+    eel.target = near; fireNow(w2, eel);
     ok(chain && chain.points.length === 3 && far1.health < far1.maxHealth && far2.health < far2.maxHealth && far3.health === far3.maxHealth, 'Zincir Şoku alan dışındaki en yakın 2 düşmana sıçrıyor');
+    // elektrik topu gerçekten uçar: atış anında hasar yok, kısa süre sonra ve hedefin olduğu yerde şok patlar
+    {
+        const wb = rich('buz');
+        const eb = build(wb, 'eel', 0, [0, 0], 5);
+        const tgt = foe(wb, 'standard', 250);
+        tgt.x = eb.x + 150; tgt.y = eb.y; tgt.maxHealth = tgt.health = 99999;
+        let aoeAt = -1;
+        wb.onEvent = (t) => { if (t === 'aoe' && aoeAt < 0) aoeAt = wb.time; };
+        eb.target = tgt; wb.fire(eb);
+        const ball = wb.projectiles.find(p => p.bolt);
+        ok(ball && aoeAt < 0 && tgt.health === tgt.maxHealth, 'Yılan Balığı elektrik topu atıyor (hasar atış anında değil)');
+        const t0 = wb.time;
+        for (let i = 0; i < 60 && !ball.active === false; i++) wb.update(1 / 60);
+        for (let i = 0; i < 60 && ball.active; i++) { wb.update(1 / 60); tgt.x = eb.x + 150; tgt.y = eb.y; }
+        ok(aoeAt > t0 && aoeAt - t0 < 0.5 && !ball.active, 'elektrik topu 0,5 sn içinde varıp şok veriyor');
+    }
     w2 = rich('buz');
     eel = build(w2, 'eel', 0, [1, 0], 5);
     ok(eel.aoe > Core.TOWER_TYPES.eel.aoe * 1.45 && eel.dmg < Core.TOWER_TYPES.eel.dmg * 2.4, 'Geniş Şok alanı büyütüyor');
     const o1 = foe(w2, 'standard', 250); o1.x = eel.x + 30; o1.y = eel.y; o1.maxHealth = o1.health = 99999;
     let overloads = 0;
     w2.onEvent = (t) => { if (t === 'overload') overloads++; };
-    for (let i = 0; i < 8; i++) { eel.target = o1; w2.fire(eel); }
+    for (let i = 0; i < 8; i++) { eel.target = o1; fireNow(w2, eel); }
     ok(overloads === 2 && o1.stunTime > 0, 'Aşırı Yük her 4. şokta sersemletiyor');
     w2 = rich('buz');
     eel = build(w2, 'eel', 0, [0, 1], 5);
     const bn = foe(w2, 'armored', 250); bn.x = eel.x + 30; bn.y = eel.y;
-    eel.target = bn; w2.fire(eel);
+    eel.target = bn; fireNow(w2, eel);
     const h1 = bn.health;
     for (let i = 0; i < 30; i++) w2.update(1 / 30);
     ok(bn.dotT > 0 && bn.health < h1 - 2, 'Elektrik Yanığı zırhlıda da zamanla hasar veriyor');
@@ -601,7 +667,7 @@ ok(r.serialize().towers.length === 2, 'geri kurulan oyun yeniden kaydedilebiliyo
     eelT.x = sq.x; eelT.y = sq.y + 30;
     const decoy = spawn(w, 'standard', 301); decoy.x = sq.x + 10; decoy.y = sq.y; decoy.maxHealth = decoy.health = 99999;
     const sqh = sq.health;
-    eelT.target = decoy; w.fire(eelT);
+    eelT.target = decoy; fireNow(w, eelT);
     ok(sq.health < sqh && sq.revealT > 0, 'alan hasarı gizleneni de vuruyor ve açığa çıkarıyor');
     let vanished = 0;
     w.onEvent = (t) => { if (t === 'vanish') vanished++; };
@@ -748,6 +814,14 @@ ok(r.serialize().towers.length === 2, 'geri kurulan oyun yeniden kaydedilebiliyo
     const indexHtml = require('fs').readFileSync(path.join(web, '..', 'index.html'), 'utf8');
     ok(indexHtml.includes('id="guideScreen"') && indexHtml.includes('js/rehber.js') && indexHtml.includes('id="guideBtn"'), 'Rehber ekranı, oyun içi düğmesi ve betiği sayfada');
     ok(!indexHtml.includes('id="infoModal"'), 'eski uzun yardım penceresi kaldırıldı (yerini Rehber aldı)');
+
+    // Rehber gerçek haritalar üzerinde çalışır; sağ panelde yazı duvarı yok, İpucu düğmesi var; yüksek zemin yazısı büyük
+    const gameSrc = require('fs').readFileSync(path.join(web, 'game.js'), 'utf8');
+    ok(guideSrc.includes("mapId: 'mercan'") && !guideSrc.includes('DEMO_MAP'), 'Rehber gösterimleri gerçek harita arka planıyla çalışıyor');
+    ok(MAPS.filter(m => m.id === 'mercan')[0].buildSpots.length > 11, 'Rehber sahnesinin kullandığı Mercan kule yerleri duruyor');
+    ok(!gameSrc.includes('advice-row') && gameSrc.includes('function openHint') && indexHtml.includes('id="hintModal"'), 'sağ paneldeki ipucu yazıları yerine İpucu penceresi var');
+    ok(gameSrc.includes('function drawSpotLabel') && gameSrc.includes('+%20 menzil'), 'yüksek zemin üzerinde büyük "+%20 menzil" yazısı çıkıyor');
+    ok(Core.TOWER_TYPES.swordfish.dmg === 40 && Core.TOWER_TYPES.puffer.dmg === 38, 'Kılıç Balığı temel hasarı 40, Balon Balığı 38');
 
     // dalga ipuçları yapısal ve yalnızca haritadaki kuleleri öneriyor
     const wa = new Core.World(mapOf('cukur'), { seed: 3 });

@@ -173,6 +173,12 @@ public class App extends Application {
         primaryStage.setFullScreenExitKeyCombination(KeyCombination.NO_MATCH);
         primaryStage.centerOnScreen();
         primaryStage.show();
+
+        // oyun arka plandayken (küçültülmüş ya da başka pencere öndeyken) ses çalmaz
+        Runnable syncSound = () -> SoundPlayer.setWindowActive(primaryStage.isFocused() && !primaryStage.isIconified());
+        primaryStage.focusedProperty().addListener((o, was, now) -> syncSound.run());
+        primaryStage.iconifiedProperty().addListener((o, was, now) -> syncSound.run());
+        syncSound.run();
     }
 
     private void addIcons(Stage s) {

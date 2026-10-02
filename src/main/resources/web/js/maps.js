@@ -26,9 +26,9 @@
             name: 'Mercan Kanalı',
             desc: 'Sualtı · Klasik S dönüşü',
             stars: 1,
-            hpScale: 0.92,
+            hpScale: 0.85,
             roadHalf: 56,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
-            bossScale: 1.2,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            bossScale: 1.1,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
             miniHp: 0.42,           // ara patronun asıl patrona oranı
             speedScale: 1,
             startMoney: 250,
@@ -165,9 +165,9 @@
             name: 'Batık Gemi Mezarlığı',
             desc: 'Sualtı · İki girişli tahta iskele',
             stars: 3,
-            hpScale: 0.88,
+            hpScale: 0.75,
             roadHalf: 46,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
-            bossScale: 0.8,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            bossScale: 0.65,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
             miniHp: 0.5,           // ara patronun asıl patrona oranı
             speedScale: 1,
             startMoney: 250,
@@ -212,9 +212,9 @@
             name: 'Atlantis Harabeleri',
             desc: 'Sualtı · Mermer basamaklar',
             stars: 3,
-            hpScale: 2.05,
+            hpScale: 2.0,
             roadHalf: 42,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
-            bossScale: 0.6,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            bossScale: 0.5,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
             miniHp: 0.5,           // ara patronun asıl patrona oranı
             speedScale: 1.0,
             startMoney: 250,
@@ -256,12 +256,12 @@
             name: 'Buz Koyu',
             desc: 'Kutup · Çarpı biçimli kanal',
             stars: 3,
-            hpScale: 0.55,
+            hpScale: 0.6,
             roadHalf: 60,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
-            bossScale: 0.9,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            bossScale: 0.65,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
             miniHp: 0.25,           // ara patronun asıl patrona oranı
             speedScale: 1.0,
-            startMoney: 250,
+            startMoney: 300,
             waves: 10,
             countScale: 1.1,
             mix: { armored: 1.3 },
@@ -303,7 +303,7 @@
             stars: 4,
             hpScale: 2.1,
             roadHalf: 44,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
-            bossScale: 0.5,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            bossScale: 0.4,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
             miniHp: 0.5,           // ara patronun asıl patrona oranı
             padSpots: true,       // kule yerleri resimdeki taş kaideler: yola yakın olmaları tasarım gereği
             speedScale: 1.12,

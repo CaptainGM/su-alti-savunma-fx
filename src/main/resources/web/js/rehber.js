@@ -7,21 +7,15 @@
 'use strict';
 
 const Guide = (function () {
-    const DW = 640;
-    const DH = 400;
-    const RES = 1.5;
+    // Tuvalin gerçek piksel boyutu (3:2, haritalarla aynı oran). Çizim bu boyutta yapılır, sayfada küçülerek gösterilir.
+    const BW = 960;
+    const BH = 640;
 
-    // ------------------------------------------------------------------ gösterim haritası
-    // Düz bir "V" biçimli kısa yol ve altı kule yeri. Gerçek haritalardan bağımsızdır.
-    const DEMO_MAP = {
-        id: 'demo', name: 'Gösterim', desc: '', stars: 1, hpScale: 1, speedScale: 1, startMoney: 1e7, waves: 10, countScale: 1,
-        boss: 'shark', towers: ['octopus', 'eel', 'jellyfish', 'swordfish', 'angler', 'puffer'], bossScale: 1, miniHp: 0.5,
-        enemyPool: ['standard', 'armored', 'flying', 'swarm', 'boss', 'shield', 'healer', 'stealth', 'shocker'],
-        flipSprites: false, bg: null, tint: '#0a3c58', ambient: null, mechanics: [],
-        paths: [[{ x: -40, y: 310 }, { x: 120, y: 310 }, { x: 230, y: 175 }, { x: 420, y: 175 }, { x: 520, y: 310 }, { x: 690, y: 310 }]],
-        buildSpots: [{ x: 330, y: 262 }, { x: 330, y: 80, kind: 'high' }, { x: 150, y: 235 }, { x: 520, y: 245 }, { x: 330, y: 352, kind: 'high' }, { x: 80, y: 120 }],
-    };
-    const SPOT = { main: 0, high: 1, left: 2, right: 3, low: 4, corner: 5 };
+    // Gösterimler gerçek haritalar üzerinde çalışır. Kule, düşman ve kural sahneleri Mercan Kanalı'nın S dönüşünden bir
+    // kesittir (kamera: sol üst köşe ve genişlik, yükseklik 2/3'ü); Haritalar sekmesi seçilen haritanın tamamını gösterir.
+    // spots: sahne rollerinin (main, high, left, right) Mercan'ın kendi kule yerlerindeki numarası.
+    const STAGE = { mapId: 'mercan', cam: { x: 420, y: 0, w: 900 }, spots: [8, 1, 0, 11] };
+    const SPOT = { main: 0, high: 1, left: 2, right: 3 };
 
     // ------------------------------------------------------------------ içerik
     const TOWER_INFO = {
@@ -97,41 +91,41 @@ const Guide = (function () {
             sections: [
                 ['Kule kurmak', 'Sağ paneldeki kuleyi haritadaki bir yeşil halkaya sürükle ya da kuleye tıklayıp sonra halkaya tıkla. Her kule enerji (para) harcar; düşman öldürdükçe ve dalga bitince enerji kazanırsın.'],
                 ['Yükseltmek', 'Kuleye tıkla: Yükselt\'e basınca güç artar. 3. ve 5. seviyede iki yetenekten birini seçersin (seçim kalıcıdır). Çubuklar mevcut gücü (mavi) ve yükseltmeyle gelecek kazancı (sarı) gösterir.'],
-                ['Dalgalar', 'Boşluk tuşu ya da düğme sıradaki dalgayı başlatır. Sağ üstteki kutu dalganın içeriğini ve hangi kulelerin iyi (✓) ya da kötü (✗) olduğunu gösterir.'],
-                ['Kısayollar', 'Boşluk: dalga başlat · P: duraklat · F: hız (1x, 2x, 0,5x) · 1-6: kule seç · F11: tam ekran · Esc: geri.'],
+                ['Dalgalar', 'Boşluk tuşu ya da düğme sıradaki dalgayı başlatır. Sağ paneldeki kutu sıradaki dalganın düşmanlarını gösterir. Takılırsan İpucu düğmesine (ya da H tuşuna) bas: hangi düşmana karşı hangi kulenin iyi, hangisinin kötü olduğunu söyler. Üsse düşman geçince İpucu düğmesi göz kırpar.'],
+                ['Kısayollar', 'Boşluk: dalga başlat · P: duraklat · F: hız (1x, 2x, 0,5x) · H: ipucu · 1-6: kule seç · F11: tam ekran · Esc: geri.'],
                 ['Kayıt', 'Haritalara dönünce ya da oyunu kapatınca yarım kalan oyun kaydedilir. Haritaya tekrar tıklayınca Devam et ya da Yeniden başla seçersin.'],
-            ], scene: { towers: [['octopus', 1, 0, 0, 0], ['jellyfish', 1, 0, 0, 3]], feed: [['standard', 3], ['flying', 1]] } },
+            ], scene: { towers: [['octopus', 1, 0, 0, SPOT.main], ['jellyfish', 1, 0, 0, SPOT.right]], feed: [['standard', 3], ['flying', 1]], caption: 'Düşmanlar yoldan gelir, kuleler menzildeki düşmana ateş eder. Üsse ulaşan düşman canını azaltır.' } },
         { id: 'high', title: 'Yüksek zemin', icon: '▲', lead: 'Altın halkalı yerlerde kulenin menzili %20 artar.',
             sections: [
-                ['Nasıl çalışır', 'Yüksek zemindeki kule aynı olsa da daha uzağa ulaşır (Ahtapot 210 → 252, Kılıç Balığı 380 → 456). Bunun karşılığında bu yerler genelde yola biraz daha uzaktır.'],
+                ['Nasıl çalışır', 'Yüksek zemindeki kule aynı olsa da daha uzağa ulaşır (Ahtapot 210 → 252, Kılıç Balığı 380 → 456). Bunun karşılığında bu yerler genelde yola biraz daha uzaktır. Bir kuleyi altın halkanın üstüne sürüklediğinde ya da imleci üstüne getirdiğinde ekranda büyük bir "+%20 menzil" yazısı çıkar; kurunca da yeni menzil gösterilir.'],
                 ['Ne zaman seç', 'Kılıç Balığı ve Balon Balığı gibi uzun menzilli kuleler için idealdir. Kısa menzilli kuleyi çok uzağa koyarsan yolu kaçırabilir; yerin üzerine gelince ipucu çıkar.'],
-            ], scene: { towers: [['octopus', 1, 0, 0, SPOT.main], ['octopus', 1, 0, 0, SPOT.high]], feed: [['standard', 3]], rings: true, caption: 'Alttaki normal zeminde, üstteki yüksek zeminde: halkalar menzili gösterir' } },
+            ], scene: { towers: [['octopus', 1, 0, 0, SPOT.main], ['octopus', 1, 0, 0, SPOT.high]], feed: [['standard', 3]], rings: true, cam: { x: 250, y: 40, w: 990 }, caption: 'Aynı Ahtapot iki yerde: sağdaki normal zeminde, soldaki altın halkalı yüksek zeminde. Halkalar menzili, çizgiler hedefleri gösterir.' } },
         { id: 'armor', title: 'Zırh ve delme', icon: '◆', lead: 'Zırh hasarı kırar; zırh delen kuleler zırhlıya karşı çok daha etkilidir.',
             sections: [
                 ['Formül', 'Hasar çarpanı = 1 − zırh / (zırh + 100). Istakozun zırhı 100 olduğu için hasarın yarısını yer; Ahtapot ona ayrıca yarı hasar verir (toplam %25).'],
                 ['Zırh delme', 'Yılan Balığı zırhın %50\'sini, Kılıç Balığı %30\'unu, Fener Balığı %20\'sini yok sayar. Delici Mürekkep, Zırh Kesen gibi yetenekler bunu artırır. Zehir, yanık ve gaz zırhı hiç saymaz.'],
-            ], scene: { towers: [['octopus', 2, 0, 0, SPOT.left], ['eel', 2, 0, 0, SPOT.main]], feed: [['armored', 2]], caption: 'Aynı Istakoza: Ahtapot çok az, Yılan Balığı belirgin hasar verir' } },
+            ], scene: { towers: [['octopus', 2, 0, 0, SPOT.left], ['eel', 2, 0, 0, SPOT.main]], feed: [['armored', 2]], labels: [{ tower: 0, text: 'Ahtapot: zırhlıya zayıf', color: '#ff9a9a' }, { tower: 1, text: 'Yılan Balığı: zırhı deler', color: '#9fffc0' }], caption: 'Aynı Istakoza: Ahtapot çok az, Yılan Balığı belirgin hasar verir' } },
         { id: 'slow', title: 'Yavaşlatma eşleşmesi', icon: '❄', lead: 'Yavaşlayan düşman her kuleden %20 fazla hasar alır.',
             sections: [
                 ['Neden değerli', 'Deniz Anası kendi başına az hasar verir ama yavaşlattığı düşman herkesten %20 fazla hasar alır; üstelik yavaş düşman daha uzun süre menzilde kalır. Yavaşlatıcıyı hasar kulelerinin yanına koy.'],
                 ['Sınırlar', 'Patronlarda yavaşlatma yarı etkilidir. Kalkan varken yavaşlatma %60 azalır. Buz Dokunuşu yeteneği yavaşlatmayı güçlendirir.'],
-            ], scene: { towers: [['jellyfish', 2, 0, 0, SPOT.main], ['octopus', 2, 0, 0, SPOT.left]], feed: [['standard', 3]], caption: 'Mavi halkalı düşmanlar yavaşlamış: diğer kuleler onlara daha çok vurur' } },
+            ], scene: { towers: [['jellyfish', 2, 0, 0, SPOT.main], ['octopus', 2, 0, 0, SPOT.left]], feed: [['standard', 3]], labels: [{ tower: 0, text: 'Deniz Anası: yavaşlatır', color: '#9fdcff' }, { tower: 1, text: 'Ahtapot: yavaşlayana %20 fazla vurur', color: '#ffe08a' }], caption: 'Mavi halkalı düşmanlar yavaşlamış: diğer kuleler onlara daha çok vurur' } },
         { id: 'adapt', title: 'Alışma', icon: '↻', lead: 'Hasarın yarısından fazlasını tek türe yaptırırsan düşmanlar ona alışır.',
             sections: [
                 ['Nasıl çalışır', '4. dalgadan sonra, son iki dalgada bir kule türü toplam hasarın %55\'inden fazlasını yapıyorsa düşmanlar o türden en fazla %25 az hasar alır (%55 → 0, %100 → %25). Sağ üstteki kutuda "Düşmanlar alıştı" uyarısı çıkar.'],
                 ['Çözüm', 'Türleri karıştır: iki ya da üç türe yay. Alışma tür karışınca kendiliğinden kalkar. Bu yüzden tek tür kuleyle yığılmak uzun vadede çalışmaz.'],
-            ], scene: { custom: 'adapt', caption: 'Ahtapotun hasar payı %55\'i geçince düşmanlar alışır' } },
+            ], scene: { custom: 'adapt', towers: [['octopus', 2, 0, 0, SPOT.main], ['eel', 2, 0, 0, SPOT.left], ['jellyfish', 2, 0, 0, SPOT.right]], feed: [['standard', 3]], caption: 'Ahtapotun hasar payı %55\'i geçince düşmanlar alışır' } },
         { id: 'bossrule', title: 'Patronlar', icon: '♛', lead: 'Patron kule yer, canı düştükçe kalkan kazanıp öfkelenir.',
             sections: [
                 ['Evreler', 'Büyük patron canı %70, %40 ve %15\'e inince, ara patron %60\'a inince: maksimum canın %12\'si kadar kalkan kazanır, 4 sn hızlanır ve sersemletilemez. Sağ üstteki patron çubuğunda bu eşikler çizgi olarak görünür.'],
-                ['Kuleyi yer', 'Patron zaman zaman yakınındaki en yüksek seviyeli kuleyi hedef alır: önce çenesini açar (kırmızı çene ve çizgi), sonra kuleyi yutar. Yenen kule yok olur, para iadesi yoktur. Saldırı sırasında patron ölürse kule kurtulur.'],
+                ['Kuleyi yer', 'Patron zaman zaman yakınındaki en yüksek seviyeli kuleyi hedef alır: kızıl bir halka kuleyi işaretler, patron durup kuleye döner ve çömelir, sonra ağzı kuleye dönük olarak üstüne zıplar, ısırıp yutar ve yola geri atlar. Yenen kule yok olur, para iadesi yoktur. Zıplayıp ısırana kadar patron ölürse kule kurtulur.'],
                 ['Hazırlık', 'Tek bir güçlü kuleyle patronu erken eritemezsin; çok kuleli, yavaşlatıcılı savunma kur ve patronun yolundaki en pahalı kuleyi ona yakın bırakma.'],
-            ], scene: { boss: 'shark', caption: 'Patron kulelere çenesini açar; canı eşiklerden inince kalkan kazanıp öfkelenir' } },
+            ], scene: { boss: 'shark', caption: 'Patron kuleye dönüp zıplar, ısırır ve yola geri atlar; canı eşiklerden inince kalkan kazanıp öfkelenir' } },
         { id: 'difficulty', title: 'Zorluk', icon: '⚙', lead: 'Kolay, Normal ve Zor; harita ekranında seçilir.', table: 'difficulty',
             sections: [
                 ['Fiyatlar', 'Kule fiyatları 50-100 arasındadır ve kolay ile normalde sabittir; zorda aynı türden her yeni kule %5 pahalanır.'],
-                ['Başlangıç', 'Başlangıç enerjisi kolayda 300, normalde 250, zorda 230 (Derin Çukur\'da +50).'],
-                ['Test', 'Haritaların dengesi botlarla ölçülür: düzenli oynayan kazanır, rastgele dizen ya da tek türe yığılan kaybeder, patronlar yolun büyük bölümünde ölmez (tools/zorluk_testi.js).'],
+                ['Başlangıç', 'Başlangıç enerjisi kolayda 300, normalde 250, zorda 230 (Derin Çukur ve Buz Koyu\'nda +50).'],
+                ['Test', 'Haritaların dengesi botlarla ölçülür: düzenli oynayan kazanır, rastgele dizen ya da tek türe yığılan kaybeder, zorda da her haritada galibiyet mümkündür, patronlar yolun başında erimez (tools/zorluk_testi.js).'],
             ] },
     ];
 
@@ -179,108 +173,110 @@ const Guide = (function () {
     const fmt = n => String(n).replace('.', ',');
 
     // ------------------------------------------------------------------ sahne kurma
-    function makeBackground() {
-        const c = document.createElement('canvas');
-        c.width = DW * RES;
-        c.height = DH * RES;
-        const g = c.getContext('2d');
-        g.scale(RES, RES);
-        const grad = g.createLinearGradient(0, 0, 0, DH);
-        grad.addColorStop(0, '#12809c');
-        grad.addColorStop(1, '#0a3f60');
-        g.fillStyle = grad;
-        g.fillRect(0, 0, DW, DH);
-        // yumuşak ışık huzmeleri
-        for (let i = 0; i < 6; i++) {
-            const x = 40 + i * 110;
-            const lg = g.createLinearGradient(x, 0, x + 80, DH);
-            lg.addColorStop(0, 'rgba(210,255,255,0.10)');
-            lg.addColorStop(1, 'rgba(210,255,255,0)');
-            g.fillStyle = lg;
-            g.beginPath();
-            g.moveTo(x, 0); g.lineTo(x + 50, 0); g.lineTo(x + 130, DH); g.lineTo(x + 40, DH);
-            g.closePath();
-            g.fill();
-        }
-        // yol: kum şeridi
-        const pts = Core.generateSmoothPath(DEMO_MAP.paths[0]);
-        g.lineCap = 'round';
-        g.lineJoin = 'round';
-        g.beginPath();
-        pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
-        g.strokeStyle = 'rgba(30,20,10,0.55)';
-        g.lineWidth = 64;
-        g.stroke();
-        g.strokeStyle = '#d9bd7e';
-        g.lineWidth = 54;
-        g.stroke();
-        g.strokeStyle = 'rgba(255,240,200,0.35)';
-        g.lineWidth = 30;
-        g.stroke();
-        // çakıllar
-        let seed = 9;
-        const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-        for (let i = 0; i < 70; i++) {
-            g.fillStyle = `rgba(${150 + rnd() * 60},${130 + rnd() * 40},${90 + rnd() * 40},0.55)`;
-            g.beginPath();
-            g.arc(rnd() * DW, rnd() * DH, 1.5 + rnd() * 3, 0, 6.2832);
-            g.fill();
-        }
-        return c;
-    }
-    let bgCanvas = null;
+    let viaJava = false;       // kareleri Java sürüyor mu (WebView'ın kendi animasyon döngüsü 60'ta kilitli)
+    let hadLoop = false;       // Rehber açılmadan önce Java döngüsü zaten çalışıyor muydu (oyun içinden açıldıysa evet)
+    const stats = { frames: 0, since: 0, fps: 0, stepAcc: 0, drawAcc: 0, step: 0, draw: 0 };
 
-    function spawnEnemy(w, type, opts) {
-        const e = new Core.Enemy(w, type, 0, w.nextEnemyId++, (opts && opts.wave) || 5, opts || {});
+    // Kule/düşman/kural sahnelerinin haritası: Mercan Kanalı, gösterim için sakinleştirilmiş (kural yok, her kule ve düşman açık)
+    function stageMap() {
+        const base = MAPS.find(m => m.id === STAGE.mapId);
+        return Object.assign({}, base, {
+            hpScale: 1, bossScale: 1, miniHp: 0.5, speedScale: 1, countScale: 1, startMoney: 1e7, rule: '',
+            towers: Object.keys(Core.TOWER_TYPES), enemyPool: Object.keys(Core.ENEMY_TYPES), mechanics: [],
+        });
+    }
+
+    // Kameranın gördüğü yol kesiti: düşmanlar kesite girmeden hemen önce doğar, çıkınca sessizce kaldırılır
+    function pathWindow(p, full, cam) {
+        const whole = { s0: 0, s1: p.length - 40 };
+        if (full) return whole;
+        const h = cam.w * BH / BW;
+        const m = 40;
+        let i0 = -1;
+        let i1 = -1;
+        p.points.forEach((q, i) => {
+            if (q.x > cam.x - m && q.x < cam.x + cam.w + m && q.y > cam.y - m && q.y < cam.y + h + m) { if (i0 < 0) i0 = i; i1 = i; }
+        });
+        if (i0 < 0) return whole;
+        return { s0: Math.max(0, p.dist[i0] - 70), s1: p.dist[i1] + 70 };
+    }
+
+    function spawnEnemy(sc, type, opts) {
+        const w = sc.world;
+        const lane = sc.full ? (sc.lane++ % w.paths.length) : 0;
+        const e = new Core.Enemy(w, type, lane, w.nextEnemyId++, (opts && opts.wave) || 5, opts || {});
+        e.traveled = sc.win.get(e.path).s0;
+        e.update(0);
         w.enemies.push(e);
         return e;
     }
 
-    function makeScene(spec) {
-        const map = Object.assign({}, DEMO_MAP, { mechanics: spec.mech || [], guardians: spec.guardians || [], treasure: spec.treasure || null });
-        if (spec.mapExtra) Object.assign(map, spec.mapExtra);
-        const w = new Core.World(map, { difficulty: 'easy', seed: 7, onEvent: () => { } });
-        w.money = 1e8;
-        w.health = w.maxHealth = 1e9;
-        const towers = [];
-        (spec.towers || []).forEach(([type, level, c3, c5, spot, mode]) => {
-            const r = w.placeTower(type, w.spots[spot]);
-            if (!r.ok) return;
-            const tw = r.tower;
-            while (tw.level < (level || 1)) w.upgradeTower(tw, tw.level + 1 === 3 ? c3 : tw.level + 1 === 5 ? c5 : 0);
-            if (mode) tw.mode = mode;
-            towers.push({ spec: [type, level, c3, c5, spot, mode], tower: tw });
-        });
-        const cv = $('guideCanvas');
-        const sc = {
-            spec, world: w, towers, t: 0, loop: 0, nextAt: 0, queue: [], respawn: [],
-            fx: { floaters: [], rings: [], bubbles: [], flash: 0, tension: 0, shake: 0, alert: null, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [], meteors: [], chomps: [], arcs: [], smoke: [], scorch: [], storm: 0 },
-            ctx: cv.getContext('2d'), canvas: cv, map,
-            sprites: demoSprites(map),
-            pullFrom: ((map.mechanics || []).find(m => m.type === 'pull') || {}).from,
-            lastTreasure: 0,
-        };
-        if (sc.pullFrom === undefined) sc.pullFrom = null;
-        w.onEvent = (type, d) => withDemo(sc, () => onWorldEvent(type, d));
-        return sc;
+    // kule kaydı [tür, seviye, 3. sv. seçim, 5. sv. seçim, yer rolü (ya da tam haritada kule yeri numarası), hedef modu]
+    function placeRec(sc, rec) {
+        const [type, level, c3, c5, role, mode] = rec;
+        const spot = sc.spotOf(role);
+        if (!spot || spot.tower) return null;
+        const r = sc.world.placeTower(type, spot);
+        if (!r.ok) return null;
+        const tw = r.tower;
+        while (tw.level < (level || 1)) sc.world.upgradeTower(tw, tw.level + 1 === 3 ? c3 : tw.level + 1 === 5 ? c5 : 0);
+        if (mode) tw.mode = mode;
+        return tw;
     }
 
     let spriteSet = null;
     function demoSprites(map) {
         if (!spriteSet) {
             const saved = sprites;
-            loadSprites(map);
+            loadSprites(MAPS[0]);
             spriteSet = sprites;
             sprites = saved;
         }
-        return spriteSet;
+        return Object.assign({}, spriteSet, {
+            bg: loadImage(map.bg),
+            caustics: map.ambient && map.ambient.caustics ? loadImage('assets/fx/caustics.png') : null,
+        });
+    }
+
+    function makeScene(spec) {
+        const full = !!spec.mapId;
+        let map;
+        if (full) {
+            const m = MAPS.find(x => x.id === spec.mapId);
+            map = Object.assign({}, m, { mechanics: spec.mech || [], hpScale: 0.7, bossScale: 1, miniHp: 0.5, speedScale: (m.speedScale || 1) * 2, startMoney: 1e7 });
+        } else {
+            map = stageMap();
+            if (spec.mapExtra) Object.assign(map, spec.mapExtra);
+        }
+        const size = map.size || { w: 1350, h: 900 };
+        const cam = full ? { x: 0, y: 0, w: size.w } : (spec.cam || STAGE.cam);
+        const w = new Core.World(map, { difficulty: 'easy', seed: 7, onEvent: () => { } });
+        w.money = 1e8;
+        w.health = w.maxHealth = 1e9;
+        const cv = $('guideCanvas');
+        if (cv.width !== BW || cv.height !== BH) { cv.width = BW; cv.height = BH; }
+        const sc = {
+            spec, world: w, map, full, cam, size, res: BW / cam.w,
+            towers: [], t: 0, nextAt: 0, queue: [], respawn: [], lane: 0, lastTreasure: 0, bg: null, ambient: null,
+            fx: { floaters: [], rings: [], bubbles: [], flash: 0, tension: 0, shake: 0, alert: null, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [], meteors: [], chomps: [], arcs: [], smoke: [], scorch: [], storm: 0 },
+            ctx: cv.getContext('2d'), canvas: cv, sprites: demoSprites(map),
+            pullFrom: ((map.mechanics || []).find(m => m.type === 'pull') || {}).from,
+        };
+        if (sc.pullFrom === undefined) sc.pullFrom = null;
+        sc.win = new Map(w.paths.map(p => [p, pathWindow(p, full, cam)]));
+        sc.spotOf = role => (full ? w.spots[role] : w.spots[STAGE.spots[role]]);
+        (spec.towers || []).forEach(rec => sc.towers.push({ spec: rec, tower: placeRec(sc, rec) }));
+        withDemo(sc, () => { sc.ambient = buildAmbient(map); });
+        w.onEvent = (type, d) => withDemo(sc, () => onWorldEvent(type, d));
+        return sc;
     }
 
     // Gösterim süresince oyunun genel değişkenlerini sahneye bağlar
     function withDemo(sc, fn) {
-        const saved = { world, fx, ctx, canvas, W, H, res, currentMap, sprites, hoverTowerId, pullFrom, selectedTower, inDemo };
-        world = sc.world; fx = sc.fx; ctx = sc.ctx; canvas = sc.canvas; W = DW; H = DH; res = RES;
+        const saved = { world, fx, ctx, canvas, W, H, res, currentMap, sprites, hoverTowerId, pullFrom, selectedTower, inDemo, ambient };
+        world = sc.world; fx = sc.fx; ctx = sc.ctx; canvas = sc.canvas; W = sc.size.w; H = sc.size.h; res = sc.res;
         currentMap = sc.map; sprites = sc.sprites; hoverTowerId = null; pullFrom = sc.pullFrom; selectedTower = null; inDemo = true;
+        ambient = sc.ambient;
         try {
             fn();
         } catch (e) {
@@ -288,8 +284,32 @@ const Guide = (function () {
         } finally {
             world = saved.world; fx = saved.fx; ctx = saved.ctx; canvas = saved.canvas; W = saved.W; H = saved.H; res = saved.res;
             currentMap = saved.currentMap; sprites = saved.sprites; hoverTowerId = saved.hoverTowerId; pullFrom = saved.pullFrom;
-            selectedTower = saved.selectedTower; inDemo = saved.inDemo;
+            selectedTower = saved.selectedTower; inDemo = saved.inDemo; ambient = saved.ambient;
         }
+    }
+
+    // Arka plan (gerçek harita resminin kamera kesiti, yol çizgisi, karanlık) tuval boyutunda bir kez pişirilir;
+    // her karede tek bir birebir kopyalama yapılır. Resim henüz yüklenmediyse sonraki karede yeniden denenir.
+    function bakeBackground(sc) {
+        const img = sc.sprites.bg;
+        if (!ready(img)) return;
+        const c = document.createElement('canvas');
+        c.width = BW;
+        c.height = BH;
+        const g = c.getContext('2d');
+        g.imageSmoothingQuality = 'high';
+        const f = img.naturalWidth / sc.size.w;
+        const ch = sc.cam.w * BH / BW;
+        g.drawImage(img, sc.cam.x * f, sc.cam.y * f, sc.cam.w * f, ch * f, 0, 0, BW, BH);
+        withDemo(sc, () => {
+            g.save();
+            g.translate(-sc.cam.x * sc.res, -sc.cam.y * sc.res);
+            bakeRays(g);
+            bakeRail(g);
+            g.restore();
+            if (darknessMech()) bakeDarkness(c);
+        });
+        sc.bg = c;
     }
 
     // ------------------------------------------------------------------ düşman akışı
@@ -298,45 +318,27 @@ const Guide = (function () {
         const spec = sc.spec;
         const w = sc.world;
         sc.t += dt;
-        if (spec.boss) return bossStep(sc, dt);
-        if (spec.custom) return;
-        if (!spec.feed) return;
-        if (sc.t >= sc.nextAt) {
+        if (spec.boss) bossStep(sc, dt);
+        else if (spec.feed && sc.t >= sc.nextAt) {
             if (!sc.queue.length) {
-                sc.queue = [];
                 spec.feed.forEach(([type, n], gi) => {
                     for (let i = 0; i < n; i++) sc.queue.push([type, i === 0 ? (gi === 0 ? 0.5 : 2.2) : (type === 'swarm' ? 0.32 : 0.9)]);
                 });
             }
             const [type, gap] = sc.queue.shift();
-            const lvl = Math.max(...sc.towers.map(t => t.tower.level), 1);
-            spawnEnemy(w, type, { wave: 3 + lvl * 2 });
+            const lvl = Math.max(...sc.towers.map(t => (t.tower ? t.tower.level : 1)), 1);
+            spawnEnemy(sc, type, { wave: sc.full ? 4 : 3 + lvl * 2 });
             sc.nextAt = sc.t + (sc.queue.length ? sc.queue[0][1] : 3.5);
         }
+        // kesitin dışına çıkan düşmanı sessizce kaldır
+        w.enemies = w.enemies.filter(e => { const win = sc.win.get(e.path); return !(win && e.traveled > win.s1); });
         // yok edilen kuleleri geri koy (lav, patron)
         sc.towers.forEach(rec => {
-            if (!w.towers.includes(rec.tower)) {
+            if (!rec.tower || !w.towers.includes(rec.tower)) {
                 rec.gone = (rec.gone || 0) + dt;
-                if (rec.gone > 2.5) restoreTower(sc, rec);
+                if (rec.gone > (spec.boss ? 3.5 : 2.5)) { const tw = placeRec(sc, rec.spec); if (tw) { rec.tower = tw; rec.gone = 0; } }
             }
         });
-        treasureStep(sc, dt);
-    }
-
-    function restoreTower(sc, rec) {
-        const w = sc.world;
-        const [type, level, c3, c5, spot, mode] = rec.spec;
-        if (w.spots[spot].tower) return;
-        const r = w.placeTower(type, w.spots[spot]);
-        if (!r.ok) return;
-        while (r.tower.level < (level || 1)) w.upgradeTower(r.tower, r.tower.level + 1 === 3 ? c3 : r.tower.level + 1 === 5 ? c5 : 0);
-        if (mode) r.tower.mode = mode;
-        rec.tower = r.tower;
-        rec.gone = 0;
-    }
-
-    function treasureStep(sc, dt) {
-        const w = sc.world;
         if (w.treasure) {
             sc.lastTreasure += dt;
             if (sc.lastTreasure > 2.6) { w.collectTreasure(); sc.lastTreasure = 0; }
@@ -346,128 +348,180 @@ const Guide = (function () {
     function bossStep(sc, dt) {
         const w = sc.world;
         const boss = w.enemies.find(e => e.type === 'boss' && e.health > 0);
-        if (!boss) {
-            sc.respawn[0] = (sc.respawn[0] || 0) + dt;
-            if (sc.respawn[0] > 2.2 || sc.t < 0.2) {
-                sc.respawn[0] = 0;
-                const kind = sc.spec.boss;
-                const e = spawnEnemy(w, 'boss', { kind, hpMul: sc.spec.mini ? 0.18 : 0.3, mini: !!sc.spec.mini, wave: 6 });
-                e.furyTimer = 1.5;
-                e.speed = e.originalSpeed = e.originalSpeed * 1.9;     // gösterim için yolu daha çabuk bitirir
-                sc.towers.forEach(rec => { if (!w.towers.includes(rec.tower)) restoreTower(sc, rec); });
-            }
+        if (boss) return;
+        sc.respawn[0] = (sc.respawn[0] || 0) + dt;
+        if (sc.respawn[0] > 2.2 || sc.t < 0.2) {
+            sc.respawn[0] = 0;
+            const e = spawnEnemy(sc, 'boss', { kind: sc.spec.boss, hpMul: sc.spec.mini ? 0.18 : 0.3, mini: !!sc.spec.mini, wave: 6 });
+            e.furyTimer = 2.4;                                       // önce ekranda yürür, sonra kuleye saldırır
+            e.speed = e.originalSpeed = e.originalSpeed * 1.9;     // gösterim için yolu daha çabuk bitirir
+            sc.towers.forEach(rec => { if (!rec.tower || !w.towers.includes(rec.tower)) { const tw = placeRec(sc, rec.spec); if (tw) { rec.tower = tw; rec.gone = 0; } } });
         }
-        sc.towers.forEach(rec => {
-            if (!w.towers.includes(rec.tower)) {
-                rec.gone = (rec.gone || 0) + dt;
-                if (rec.gone > 3.5) restoreTower(sc, rec);
-            }
-        });
     }
 
     // ------------------------------------------------------------------ çizim
+    // Etiket: koyu kapsül içinde yazı (kuleye bağlı açıklamalar). x, y kapsülün ortası; kameranın dışına taşmaz.
+    function pill(sc, text, x, y, color, size) {
+        size = size || 16;
+        const ts = textSprite(text, size, color || '#ffffff');
+        const w = ts.w;
+        const h = size * 1.5;
+        const cam = sc.cam;
+        const camH = cam.w * BH / BW;
+        const left = Math.max(cam.x + 4, Math.min(cam.x + cam.w - w - 4, x - w / 2));
+        const top = Math.max(cam.y + 4, Math.min(cam.y + camH - h - 4, y - h / 2));
+        const r = h / 2;
+        ctx.beginPath();
+        ctx.moveTo(left + r, top);
+        ctx.arcTo(left + w, top, left + w, top + h, r);
+        ctx.arcTo(left + w, top + h, left, top + h, r);
+        ctx.arcTo(left, top + h, left, top, r);
+        ctx.arcTo(left, top, left + w, top, r);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(6,16,28,0.84)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.drawImage(ts.c, left, top + 0.05 * size - 3, ts.w, ts.h);
+    }
+
+    // menzil halkaları önbelleğe alınmış sprite olarak basılır (geniş yay çizimi bu WebView'da pahalı)
+    const ringCache = new Map();
+    function ringSprite(r, rgb, scale) {
+        const key = `${r}|${rgb}|${scale.toFixed(3)}`;
+        let c = ringCache.get(key);
+        if (!c) {
+            const px = Math.ceil((r + 6) * 2 * scale);
+            c = document.createElement('canvas');
+            c.width = c.height = px;
+            const g = c.getContext('2d');
+            g.scale(scale, scale);
+            g.translate(r + 6, r + 6);
+            g.fillStyle = `rgba(${rgb},0.08)`;
+            g.beginPath();
+            g.arc(0, 0, r, 0, 6.2832);
+            g.fill();
+            g.strokeStyle = 'rgba(0,12,22,0.6)';
+            g.lineWidth = 5;
+            g.setLineDash([10, 8]);
+            g.stroke();
+            g.strokeStyle = `rgba(${rgb},0.95)`;
+            g.lineWidth = 2.6;
+            g.stroke();
+            if (ringCache.size > 40) ringCache.clear();
+            ringCache.set(key, c);
+        }
+        return c;
+    }
+
+    // Yüksek zemin sahnesi: her kulenin menzil halkası, o kulenin menzilindeki düşmanlara çizgiler ve açıklama etiketi
     function drawRanges(sc) {
         sc.world.towers.forEach(t => {
-            ctx.strokeStyle = t.spot.kind === 'high' ? 'rgba(255,215,90,0.8)' : 'rgba(255,255,255,0.65)';
-            ctx.lineWidth = 2.5;
-            ctx.setLineDash([8, 7]);
-            ctx.beginPath();
-            ctx.arc(t.x, t.y, t.range, 0, 6.2832);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            ctx.font = 'bold 16px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.lineWidth = 4;
-            ctx.strokeStyle = 'rgba(0,0,0,0.75)';
-            const label = `${t.spot.kind === 'high' ? 'Yüksek zemin' : 'Normal zemin'} · menzil ${t.range}`;
-            const ly = t.spot.kind === 'high' ? t.y - 58 : t.y + 72;
-            ctx.strokeText(label, t.x, ly);
-            ctx.fillStyle = t.spot.kind === 'high' ? '#ffe08a' : '#ffffff';
-            ctx.fillText(label, t.x, ly);
-            ctx.textAlign = 'left';
+            const hi = t.spot.kind === 'high';
+            const rgb = hi ? '255,215,90' : '255,255,255';
+            ctx.drawImage(ringSprite(t.range, rgb, sc.res), t.x - t.range - 6, t.y - t.range - 6, (t.range + 6) * 2, (t.range + 6) * 2);
+            ctx.strokeStyle = `rgba(${rgb},0.45)`;
+            ctx.lineWidth = 2;
+            sc.world.enemies.forEach(e => {
+                if (e.health > 0 && Math.hypot(e.x - t.x, e.y - t.y) <= t.range) {
+                    ctx.beginPath();
+                    ctx.moveTo(t.x, t.y - 8);
+                    ctx.lineTo(e.x, e.y);
+                    ctx.stroke();
+                }
+            });
+        });
+        sc.world.towers.forEach(t => {
+            const hi = t.spot.kind === 'high';
+            pill(sc, `${hi ? 'Yüksek zemin · menzil ' + t.range + ' (+%20)' : 'Normal zemin · menzil ' + t.range}`, t.x, t.y - 78, hi ? '#ffe08a' : '#ffffff', 24);
         });
     }
 
     function drawAdapt(sc) {
-        // üç tür arasında değişen hasar payları ve %55 eşiği
+        // üç tür arasında değişen hasar payları ve %55 eşiği (ekran koordinatlarında)
+        const VW = sc.cam.w;
+        const VH = sc.cam.w * BH / BW;
+        ctx.save();
+        ctx.setTransform(sc.res, 0, 0, sc.res, 0, 0);
         const k = (Math.sin(sc.t * 0.55 - 1.2) + 1) / 2;          // 0..1
         const share = 0.34 + 0.58 * k;                              // ahtapotun payı
         const others = [(1 - share) * 0.6, (1 - share) * 0.4];
         const bars = [['Ahtapot', share, '#ff9a3a'], ['Yılan Balığı', others[0], '#5ec6ff'], ['Deniz Anası', others[1], '#b58cff']];
-        ctx.fillStyle = 'rgba(4,14,26,0.55)';
-        ctx.fillRect(40, 40, DW - 80, DH - 80);
-        ctx.font = 'bold 18px sans-serif';
+        const x0 = 34;
+        const y0 = 54;
+        ctx.fillStyle = 'rgba(4,14,26,0.80)';
+        ctx.fillRect(x0, y0, VW - 2 * x0, VH - 2 * y0);
+        ctx.strokeStyle = 'rgba(120,200,255,0.4)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x0, y0, VW - 2 * x0, VH - 2 * y0);
+        ctx.font = 'bold 20px sans-serif';
         ctx.fillStyle = '#e8f6ff';
-        ctx.fillText('Son iki dalgada verilen hasarın payı', 62, 76);
-        const bx = 190;
-        const bw = DW - 270;
+        ctx.fillText('Son iki dalgada verilen hasarın payı', x0 + 22, y0 + 38);
+        const bx = 200;
+        const bw = VW - 2 * x0 - 200 - 80;
         bars.forEach(([name, v, color], i) => {
-            const y = 108 + i * 62;
-            ctx.font = 'bold 16px sans-serif';
+            const y = y0 + 78 + i * 62;
+            ctx.font = 'bold 17px sans-serif';
             ctx.fillStyle = '#cfe7f5';
-            ctx.fillText(name, 62, y + 22);
+            ctx.fillText(name, x0 + 22, y + 23);
             ctx.fillStyle = 'rgba(255,255,255,0.12)';
             ctx.fillRect(bx, y, bw, 32);
             ctx.fillStyle = color;
             ctx.fillRect(bx, y, bw * v, 32);
             ctx.fillStyle = '#fff';
-            ctx.fillText('%' + Math.round(v * 100), bx + bw * v + 8, y + 22);
+            ctx.fillText('%' + Math.round(v * 100), bx + bw * v + 8, y + 23);
         });
-        // eşik çizgisi
         const tx = bx + bw * 0.55;
         ctx.strokeStyle = '#ffd45a';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2.5;
         ctx.setLineDash([6, 5]);
         ctx.beginPath();
-        ctx.moveTo(tx, 98);
-        ctx.lineTo(tx, 290);
+        ctx.moveTo(tx, y0 + 62);
+        ctx.lineTo(tx, y0 + 78 + 3 * 62 - 14);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = '#ffd45a';
-        ctx.font = '14px sans-serif';
-        ctx.fillText('%55 eşik', tx - 24, 92);
+        ctx.font = 'bold 15px sans-serif';
+        ctx.fillText('%55 eşik', tx - 28, y0 + 56);
         const resist = Math.max(0, Math.min(Core.ADAPT_MAX, (share - Core.ADAPT_FREE_SHARE) * 0.8));
         ctx.font = 'bold 20px sans-serif';
         ctx.fillStyle = resist > 0.01 ? '#ffb347' : '#8fe0a8';
-        ctx.fillText(resist > 0.01 ? `Düşmanlar alıştı: Ahtapot %${Math.round(resist * 100)} daha az hasar veriyor` : 'Karışık dizilim: alışma yok', 62, 322);
+        ctx.fillText(resist > 0.01 ? `Düşmanlar alıştı: Ahtapot %${Math.round(resist * 100)} daha az hasar veriyor` : 'Karışık dizilim: alışma yok', x0 + 22, VH - y0 - 22);
+        ctx.restore();
     }
 
-    function drawDarkness(sc) {
-        const w = sc.world;
-        const lights = w.towers.filter(t => t.type === 'angler').map(t => ({ x: t.x, y: t.y, r: w.lightRadius(t) }));
-        if (!lights.length) return;
-        if (!sc.dark) { sc.dark = document.createElement('canvas'); sc.dark.width = DW; sc.dark.height = DH; }
-        const g = sc.dark.getContext('2d');
-        g.globalCompositeOperation = 'source-over';
-        g.clearRect(0, 0, DW, DH);
-        g.fillStyle = 'rgba(0,4,16,0.66)';
-        g.fillRect(0, 0, DW, DH);
-        g.globalCompositeOperation = 'destination-out';
-        lights.forEach(l => {
-            const grad = g.createRadialGradient(l.x, l.y, l.r * 0.82, l.x, l.y, l.r);
-            grad.addColorStop(0, 'rgba(0,0,0,1)');
-            grad.addColorStop(1, 'rgba(0,0,0,0)');
-            g.fillStyle = grad;
-            g.fillRect(l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
-        });
-        ctx.drawImage(sc.dark, 0, 0, DW, DH);
+    function drawOverlays(sc) {
+        const spec = sc.spec;
+        if (spec.rings) drawRanges(sc);
+        if (spec.labels) {
+            spec.labels.forEach(l => {
+                const rec = sc.towers[l.tower];
+                if (rec && rec.tower && sc.world.towers.includes(rec.tower)) pill(sc, l.text, rec.tower.x, rec.tower.y - 76, l.color || '#ffffff', 22);
+            });
+        }
+        if (spec.custom === 'adapt') drawAdapt(sc);
     }
 
     function drawScene(sc) {
         const c = sc.ctx;
-        c.setTransform(RES, 0, 0, RES, 0, 0);
-        c.drawImage(bgCanvas, 0, 0, DW, DH);
+        if (!sc.bg) bakeBackground(sc);
+        c.setTransform(1, 0, 0, 1, 0, 0);
+        if (sc.bg) c.drawImage(sc.bg, 0, 0);
+        else { c.fillStyle = sc.map.tint || '#0a3c58'; c.fillRect(0, 0, BW, BH); }
+        c.setTransform(sc.res, 0, 0, sc.res, -sc.cam.x * sc.res, -sc.cam.y * sc.res);
         withDemo(sc, () => {
+            const fancy = Settings.get().effects;
+            if (fancy) drawAmbientBack();
             drawGas();
             drawScorch();
             drawEntities();
             drawMechanics();
             drawChomps();
             drawMeteors();
+            if (fancy) drawAmbientFront();
             drawFx();
-            if (sc.spec.rings) drawRanges(sc);
-            if (sc.spec.custom === 'adapt') drawAdapt(sc);
-            if (sc.spec.dark) drawDarkness(sc);
+            drawOverlays(sc);
         });
     }
 
@@ -475,29 +529,72 @@ const Guide = (function () {
         withDemo(sc, () => {
             sc.world.update(dt);
             feedStep(sc, dt);
+            fx.shake = 0;                    // küçük sahne sarsılmasın
             updateFx(dt);
             fx.alert = null;                 // "PATRON SALDIRIYOR" gibi dev uyarılar küçük sahneyi kaplamasın
+            fx.flash = 0;
+            fx.tension = 0;
         });
     }
 
+    // Kareyi Java sürer (oyundaki gibi, 60'ı aşabilir); Java yoksa requestAnimationFrame
     function frame(ts) {
-        raf = requestAnimationFrame(frame);
         if (!isOpen || !st) return;
+        const target = Settings.get().fps;
+        if (target > 0 && lastTs && ts - lastTs < 1000 / target - 0.6) return;
         const dt = Math.min(0.05, lastTs ? (ts - lastTs) / 1000 : 0.016);
         lastTs = ts;
-        if (!world) animTime += dt;          // ana oyun çalışmıyorsa animasyon saatini biz ilerletiriz
+        if (dt <= 0) return;
+        animTime += dt;                       // oyun döngüsü Rehber açıkken durur; animasyon saatini biz ilerletiriz
         try {
+            const t0 = performance.now();
             stepScene(st, dt);
+            const t1 = performance.now();
             drawScene(st);
+            stats.stepAcc += t1 - t0;
+            stats.drawAcc += performance.now() - t1;
         } catch (e) {
             if (window.__errs && window.__errs.length < 20) window.__errs.push('rehber: ' + String((e && e.stack) || e));
         }
+        stats.frames++;
+        const now = performance.now();
+        if (now - stats.since >= 500) {
+            stats.fps = Math.round(stats.frames * 1000 / (now - stats.since));
+            stats.step = +(stats.stepAcc / stats.frames).toFixed(2);
+            stats.draw = +(stats.drawAcc / stats.frames).toFixed(2);
+            stats.stepAcc = stats.drawAcc = 0;
+            stats.frames = 0;
+            stats.since = now;
+        }
+    }
+
+    function tick(ts) {
+        raf = requestAnimationFrame(tick);
+        frame(ts);
+    }
+
+    function startLoop() {
+        cancelAnimationFrame(raf);
+        lastTs = 0;
+        stats.frames = 0;
+        stats.since = performance.now();
+        viaJava = !!window.javaDriven;
+        if (viaJava) {
+            hadLoop = loopOn;
+            if (!hadLoop) bridgeLoop(true);
+        } else {
+            raf = requestAnimationFrame(tick);
+        }
+    }
+
+    function stopLoop() {
+        cancelAnimationFrame(raf);
+        if (viaJava && !hadLoop) bridgeLoop(false);
     }
 
     // ------------------------------------------------------------------ sahne seçimi
     function setScene(spec, caption) {
         if (st) { st.world.onEvent = () => { }; }
-        if (!bgCanvas) bgCanvas = makeBackground();
         st = makeScene(spec);
         $('guideCaption').dataset.caption = caption || spec.caption || '';
         renderCaption();
@@ -512,12 +609,13 @@ const Guide = (function () {
         const perks = lvl >= 5 ? [p3, p5] : lvl >= 3 ? [p3] : [];
         let feed;
         const extra = [];
+        let note = '';
         switch (type) {
-            case 'octopus': feed = [['standard', 3], ['flying', 2], ['armored', 1], ['swarm', 4]]; if (perks.includes('oct-mark')) extra.push(['eel', 2, 0, 0, SPOT.left]); break;
+            case 'octopus': feed = [['standard', 3], ['flying', 2], ['armored', 1], ['swarm', 4]]; if (perks.includes('oct-mark')) { extra.push(['eel', 2, 0, 0, SPOT.left]); note = 'Soldaki Yılan Balığı yalnızca işaretli düşmana daha çok vurduğunu göstermek için'; } break;
             case 'eel': feed = [['swarm', 6], ['armored', 2], ['standard', 3]]; break;
-            case 'jellyfish': feed = [['standard', 3], ['armored', 1], ['swarm', 4]]; extra.push(['octopus', 2, 0, 0, SPOT.left]); break;
+            case 'jellyfish': feed = [['standard', 3], ['armored', 1], ['swarm', 4]]; break;
             case 'swordfish': feed = [['standard', 3], ['armored', 2], ['shocker', 1]]; break;
-            case 'angler': feed = [['standard', 3], ['stealth', 3], ['flying', 1]]; if (perks.includes('ang-halo')) extra.push(['octopus', 2, 0, 0, SPOT.left]); break;
+            case 'angler': feed = [['standard', 3], ['stealth', 3], ['flying', 1]]; if (perks.includes('ang-halo')) { extra.push(['octopus', 2, 0, 0, SPOT.left]); note = 'Soldaki Ahtapot ışığın içinde daha çok hasar verdiğini göstermek için'; } break;
             case 'puffer': feed = [['swarm', 7], ['armored', 2], ['shield', 1]]; break;
             default: feed = [['standard', 4]];
         }
@@ -526,7 +624,7 @@ const Guide = (function () {
         if (perks.includes('jel-poison')) feed = [['armored', 3], ['shield', 1], ['standard', 2]];
         if (perks.includes('jel-pulse') || perks.includes('jel-field')) feed = [['standard', 4], ['flying', 2], ['swarm', 4]];
         if (perks.includes('swo-hunt') || perks.includes('swo-aim') || perks.includes('swo-rain')) feed = [['standard', 4], ['armored', 2], ['standard', 3]];
-        return { towers: towers.concat(extra), feed, noStage: false, mapExtra: null };
+        return { towers: towers.concat(extra), feed, noStage: false, note };
     }
 
     function enemyScene(key) {
@@ -536,19 +634,38 @@ const Guide = (function () {
         return { towers: sc.towers.map(([t, l, a, b, s, m]) => [t, l, a, b, s, m]), feed: sc.feed };
     }
 
+    // Haritanın tamamı: yol, kule yerleri ve haritanın kuralı gerçek verilerle, küçültülmüş canlı gösterim
+    function autoTowers(m) {
+        const paths = Core.mapPaths(m).map(Core.buildPath);
+        const cover = (sp, r) => {
+            let c = 0;
+            for (const p of paths) for (let i = 1; i < p.points.length; i++) if (Math.hypot(p.points[i].x - sp.x, p.points[i].y - sp.y) <= r) c += p.dist[i] - p.dist[i - 1];
+            return c;
+        };
+        const scored = m.buildSpots.map((sp, i) => ({ i, sp, c: cover(sp, 200 * (sp.kind === 'high' ? 1.2 : 1)) })).sort((a, b) => b.c - a.c);
+        const chosen = [];
+        for (const s of scored) {
+            if (chosen.length >= 5 || s.c < 150) break;
+            if (chosen.every(o => Math.hypot(o.sp.x - s.sp.x, o.sp.y - s.sp.y) > 250)) chosen.push(s);
+        }
+        const pref = ['octopus', 'jellyfish', 'eel', 'puffer', 'angler', 'swordfish'].filter(t => m.towers.includes(t));
+        const dark = (m.mechanics || []).some(x => x.type === 'darkness');
+        return chosen.map((s, k) => [dark && k < 2 ? 'angler' : pref[k % pref.length], 2, 0, 0, s.i]);
+    }
+
     function mapScene(m) {
         const mech = (m.mechanics || [])[0];
-        const spec = { towers: [['octopus', 2, 0, 0, SPOT.main], ['jellyfish', 2, 0, 0, SPOT.left]], feed: [['standard', 4], ['flying', 1], ['armored', 1]] };
+        const spec = { mapId: m.id, towers: autoTowers(m), feed: [['standard', 4], ['flying', 1], ['swarm', 4], ['armored', 1]], caption: `${m.name}: harita küçültülmüş ve canlı. Kuleler gerçek kule yerlerinde, düşmanlar gerçek yolda yürür.` };
         if (!mech) return spec;
         const copy = Object.assign({}, mech);
         switch (mech.type) {
-            case 'tangle': spec.mech = [Object.assign({}, copy, { zones: [{ from: 0.3, to: 0.7, factor: mech.zones[0].factor }] })]; spec.caption = 'Sarmaşıklı bölümde düşmanlar yavaşlar'; break;
-            case 'pull': spec.mech = [Object.assign({}, copy, { from: 0.4 })]; spec.caption = 'Yolun son bölümünde girdap düşmanları hızlandırır'; break;
-            case 'treasure': spec.treasure = { x: 330, y: 345 }; spec.mech = [Object.assign({}, copy, { first: 1.5, interval: 5, life: 4 })]; spec.caption = 'Sandık parlayınca tıklarsın (gösterimde otomatik toplanır)'; break;
-            case 'guardians': spec.guardians = [{ x: 250, y: 215 }, { x: 420, y: 215 }]; spec.mech = [Object.assign({}, copy, { first: 2, interval: 6 })]; spec.caption = 'Koruyucu küreler dolunca düşmanlara yıldırım atar'; break;
-            case 'blizzard': spec.mech = [Object.assign({}, copy, { first: 2, interval: 11, duration: 7 })]; spec.caption = 'Kar fırtınasında menzil kısalır'; break;
-            case 'eruption': spec.mech = [Object.assign({}, copy, { first: 2, interval: 6, bombChance: 0.45 })]; spec.caption = 'Lav patlamaları ve düşen kayalar'; break;
-            case 'darkness': spec.mech = [copy]; spec.dark = true; spec.towers = [['angler', 2, 0, 0, SPOT.main], ['octopus', 2, 0, 0, SPOT.right], ['octopus', 2, 0, 0, SPOT.left]]; spec.feed = [['standard', 3], ['stealth', 2]]; spec.caption = 'Işığın içindeki kule tam menzille, dışındaki %15 kısa vurur'; break;
+            case 'tangle': spec.mech = [copy]; spec.caption = 'Sarmaşıklı bölümlerde düşmanlar yavaşlar (ayaklarına yeşil sarmaşık sarılır)'; break;
+            case 'pull': spec.mech = [copy]; spec.caption = 'Girdap yolun ikinci yarısında düşmanları hızlandırır (arkalarında su izi kalır)'; break;
+            case 'treasure': spec.mech = [Object.assign({}, copy, { first: 1.5, interval: 5, life: 4 })]; spec.caption = 'Sandık parlayınca tıklayıp altın toplarsın (gösterimde otomatik toplanır)'; break;
+            case 'guardians': spec.mech = [Object.assign({}, copy, { first: 2, interval: 6 })]; spec.caption = 'Koruyucu küreler dolunca düşmanlara yıldırım atar ve sersemletir'; break;
+            case 'blizzard': spec.mech = [Object.assign({}, copy, { first: 2, interval: 11, duration: 7 })]; spec.caption = 'Kar fırtınasında kule menzilleri kısalır ve ekran kenarları buzlanır'; break;
+            case 'eruption': spec.mech = [Object.assign({}, copy, { first: 2, interval: 6, bombChance: 0.45 })]; spec.caption = 'Lav patlamaları düşmanları yakar, yakındaki kuleleri susturur; arada kayalar düşer'; break;
+            case 'darkness': spec.mech = [copy]; spec.feed = [['standard', 3], ['stealth', 2]]; spec.caption = 'Fener Balığı\'nın ışığındaki kuleler tam menzille, dışındakiler kısa vurur'; break;
             default: break;
         }
         return spec;
@@ -612,8 +729,8 @@ const Guide = (function () {
         const key = id.startsWith('boss_') ? 'boss' : id;
         const cn = COUNTERS[key];
         if (!cn) return '';
-        const ico = t => `<img class="adv-tower" src="${SPRITE_FILES.towers[t]}" title="${esc(towerName(t))}" alt="">`;
-        return `<h4>Bu düşmana karşı</h4><div class="g-vs"><span class="adv-good">✓ iyi:</span>${cn.good.map(ico).join('')}${cn.bad.length ? `<span class="adv-bad">✗ kötü:</span>${cn.bad.map(ico).join('')}` : ''}</div>`;
+        const chipOf = t => `<span class="hint-t"><img src="${SPRITE_FILES.towers[t]}" alt="">${esc(towerName(t))}</span>`;
+        return `<h4>Bu düşmana karşı</h4><div class="g-vs"><span class="adv-good">✓ İyi kuleler:</span>${cn.good.map(chipOf).join('')}</div>${cn.bad.length ? `<div class="g-vs"><span class="adv-bad">✗ Kötü kuleler:</span>${cn.bad.map(chipOf).join('')}</div>` : ''}`;
     }
 
     function enemyPage(id) {
@@ -627,7 +744,7 @@ const Guide = (function () {
                 <h4>Davranışı</h4>${list([
                     'Her haritada son dalgada büyük patron, 5. dalgada (12 dalgalı haritada 6.) yarı güçte ara patron gelir',
                     'Canı %70, %40 ve %15\'e inince kalkan kazanır, 4 sn hızlanır ve sersemletilemez (ara patronda yalnızca %60)',
-                    'Yakınındaki en yüksek seviyeli kuleye çenesini açar, sonra yutar: kule yok olur',
+                    'Yakınındaki en yüksek seviyeli kuleye döner, zıplayıp ısırarak yutar, sonra yola geri atlar: kule yok olur',
                     k.splits ? 'Canı yarıya inince 8 yavru köpek balığı saçar' : (k.flying ? 'Havadan gelir: yalnızca havayı vurabilen kuleler çalışır' : 'Zırhı yüksektir: zırh delen kuleler gerekir'),
                 ])}
                 <h4>Karşı koymak</h4>${list(['Kılıç Balığı patronlara %50 fazla vurur (Zırh Kesen: %80)', 'Yavaşlatıcılar ve çok sayıda kule: patron bir kuleyle erimez', `Bu patron: ${maps || '-'}`])}`;
@@ -711,6 +828,7 @@ const Guide = (function () {
             const o5 = ui.level >= 5 ? Core.perkOptions(id, 5)[ui.c5] : null;
             caption = `Gösterim: ${towerName(id)}, seviye ${ui.level}` + (o3 ? ` · ${o3.name}` : '') + (o5 ? ` + ${o5.name}` : '');
         }
+        if (spec && spec.note) caption = (caption ? caption + ' · ' : '') + spec.note;
         setScene(normalizeSpec(spec), caption);
     }
 
@@ -731,8 +849,12 @@ const Guide = (function () {
         if (!el) el = $('guideScreen');
         if (tabId && TABS.some(t => t.id === tabId)) tab = tabId;
         if (itemId) selected[tab] = itemId;
+        if (typeof hintOpen === 'function' && hintOpen()) closeHint();       // ipucu penceresi açıksa kapat (duraklatmayı geri alır)
         defaults();
         isOpen = true;
+        // Altta duran ekran (menü resmi, oyun tuvali) gösterim her karede değiştiği için sürekli yeniden boyanıyordu ve
+        // Rehber 30 FPS'te kalıyordu; açıkken gizlenir (yerleşim bozulmaz), kapanınca geri gelir.
+        document.querySelectorAll('.screen').forEach(sc => { if (sc.id !== 'guideScreen' && !sc.classList.contains('hidden')) sc.classList.add('g-under'); });
         el.classList.remove('hidden');
         // oyun içinden açıldıysa oyun duraklar
         const inGame = typeof world !== 'undefined' && world && !$('gameScreen').classList.contains('hidden');
@@ -741,9 +863,7 @@ const Guide = (function () {
         renderTabs();
         renderNav();
         renderPage();
-        lastTs = 0;
-        cancelAnimationFrame(raf);
-        raf = requestAnimationFrame(frame);
+        startLoop();
     }
 
     function defaults() {
@@ -756,10 +876,11 @@ const Guide = (function () {
     function close() {
         if (!isOpen) return;
         isOpen = false;
-        cancelAnimationFrame(raf);
+        stopLoop();
         if (st) st.world.onEvent = () => { };
         st = null;
         el.classList.add('hidden');
+        document.querySelectorAll('.g-under').forEach(sc => sc.classList.remove('g-under'));
         const inGame = typeof world !== 'undefined' && world && !$('gameScreen').classList.contains('hidden');
         if (inGame && !pausedBefore && paused) togglePause();
     }
@@ -795,6 +916,7 @@ const Guide = (function () {
         open, close, go, pick, level, perk,
         // testler ve araçlar için
         RULES, TOWER_INFO, ENEMY_INFO, mechText,
+        running: () => isOpen, frame, fps: () => stats.fps, perf: () => stats, scene: () => st,
     };
 })();
 
