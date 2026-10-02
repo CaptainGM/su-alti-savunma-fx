@@ -267,7 +267,8 @@ b2.health = 0;
 w.update(2);
 ok(casting && w.towers.includes(s1), 'saldırı sırasında öldürülen patron kuleyi yiyemez');
 
-// patron yeme sırası: kuleye döner -> zıplar -> ısırır -> yola geri atlar; bu sürede yerinde durur
+// patron yeme sırası: algoritma değişmez (hedef seçilir, FURY_TIME sn sonra kule yutulur, patron bu sürede yürür);
+// atlama, çiğneme ve yola dönüş yalnızca görüntüdür
 {
     const wf = mk('mercan');
     wf.money = 9999;
@@ -277,26 +278,30 @@ ok(casting && w.towers.includes(s1), 'saldırı sırasında öldürülen patron 
     bf.fury.range = 99999;
     wf.enemies.push(bf);
     const seq = [];
-    let frozen = null, walked = false, tFury = -1, tEaten = -1, tIdle = -1;
+    let tFury = -1, tEaten = -1, tLeap = -1, travelAtCast = null, walked = false, afterMax = 0, afterEnd = -1;
     wf.onEvent = (t, d) => {
         if (t === 'bossFury') tFury = wf.time;
+        if (t === 'bossLeap') tLeap = wf.time;
         if (t === 'towerDestroyed' && d.cause === 'patron') tEaten = wf.time;
     };
-    for (let i = 0; i < 300 && tIdle < 0; i++) {
+    for (let i = 0; i < 600 && afterEnd < 0; i++) {
         wf.update(1 / 60);
         if (seq[seq.length - 1] !== bf.furyPhase) seq.push(bf.furyPhase);
-        if (['cast', 'leap', 'bite', 'back'].includes(bf.furyPhase)) {
-            if (frozen === null) frozen = bf.traveled; else if (Math.abs(bf.traveled - frozen) > 1e-6) walked = true;
-        } else frozen = null;
-        if (tFury >= 0 && bf.furyPhase === 'idle') tIdle = wf.time;
+        if (bf.furyPhase === 'cast') {
+            if (travelAtCast === null) travelAtCast = bf.traveled; else if (bf.traveled > travelAtCast + 1) walked = true;
+        }
+        afterMax = Math.max(afterMax, bf.furyAfter);
+        if (tEaten >= 0 && bf.furyAfter <= 0) afterEnd = wf.time;
     }
-    ok(seq.join('>') === 'idle>cast>leap>bite>back>idle', `patron yeme sırası: ${seq.join('>')}`);
-    ok(!walked, 'patron kuleyi yerken yürümüyor');
+    ok(seq.join('>') === 'idle>cast>idle', `patron yeme algoritması aynı: ${seq.join('>')}`);
+    ok(walked, 'patron kuleye saldırırken yürümeye devam ediyor');
     const gap = tEaten - tFury;
-    ok(gap >= Core.FURY_CAST + Core.FURY_LEAP - 0.05 && gap <= Core.FURY_CAST + Core.FURY_LEAP + 0.1, `kule zıplama bitince yeniyor (${gap.toFixed(2)} sn)`);
-    ok(!wf.towers.includes(q1), 'patron zıplayıp kuleyi yedi');
+    ok(Math.abs(gap - Core.FURY_TIME) < 0.05, `kule hedeften ${Core.FURY_TIME} sn sonra yutuluyor (${gap.toFixed(2)} sn)`);
+    ok(Math.abs((tEaten - tLeap) - Core.FURY_LEAP) < 0.05, `patron yutmadan ${Core.FURY_LEAP} sn önce zıplıyor`);
+    ok(Math.abs(afterMax - (Core.FURY_BITE + Core.FURY_BACK)) < 0.05 && afterEnd - tEaten < 1.1, 'yuttuktan sonra çiğneme ve yola dönüş animasyonu ~0,9 sn sürüyor');
+    ok(!wf.towers.includes(q1), 'patron kuleyi yedi');
 
-    // zıplama sırasında ölen patron kuleyi yiyemez
+    // zıplarken (yutmadan önce) ölen patron kuleyi yiyemez
     const wg = mk('mercan');
     wg.money = 9999;
     const q2 = wg.placeTower('octopus', wg.spots[0]).tower;
@@ -304,7 +309,7 @@ ok(casting && w.towers.includes(s1), 'saldırı sırasında öldürülen patron 
     bg.furyTimer = 0.1;
     bg.fury.range = 99999;
     wg.enemies.push(bg);
-    for (let i = 0; i < 300 && bg.furyPhase !== 'leap'; i++) wg.update(1 / 60);
+    for (let i = 0; i < 600 && !(bg.furyPhase === 'cast' && bg.furyT < Core.FURY_LEAP); i++) wg.update(1 / 60);
     bg.health = 0;
     for (let i = 0; i < 120; i++) wg.update(1 / 60);
     ok(wg.towers.includes(q2), 'zıplarken ölen patron kuleyi yiyemez');
@@ -821,7 +826,7 @@ ok(r.serialize().towers.length === 2, 'geri kurulan oyun yeniden kaydedilebiliyo
     ok(MAPS.filter(m => m.id === 'mercan')[0].buildSpots.length > 11, 'Rehber sahnesinin kullandığı Mercan kule yerleri duruyor');
     ok(!gameSrc.includes('advice-row') && gameSrc.includes('function openHint') && indexHtml.includes('id="hintModal"'), 'sağ paneldeki ipucu yazıları yerine İpucu penceresi var');
     ok(gameSrc.includes('function drawSpotLabel') && gameSrc.includes('+%20 menzil'), 'yüksek zemin üzerinde büyük "+%20 menzil" yazısı çıkıyor');
-    ok(Core.TOWER_TYPES.swordfish.dmg === 40 && Core.TOWER_TYPES.puffer.dmg === 38, 'Kılıç Balığı temel hasarı 40, Balon Balığı 38');
+    ok(Core.TOWER_TYPES.swordfish.dmg === 40 && Core.TOWER_TYPES.puffer.dmg === 33, 'Kılıç Balığı temel hasarı 40, Balon Balığı 33');
 
     // dalga ipuçları yapısal ve yalnızca haritadaki kuleleri öneriyor
     const wa = new Core.World(mapOf('cukur'), { seed: 3 });

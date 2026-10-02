@@ -1782,29 +1782,41 @@ function drawShadow(x, y, w, h, alpha) {
 // girdap haritasında çekimin başladığı ilerleme (yoksa null)
 let pullFrom = null;
 
-// Patronun kule yeme sırasındaki duruşu (core.js tickBoss evreleri): kuleye döner ve çömelir (cast), kuleye zıplar (leap),
-// ısırır (bite), yola geri atlar (back). Dönüş: { ox, oy, lift, tilt, right, sx, sy } ya da null (normal yürüyüş).
-function leapingUp(e) { return !!e.furyTower && (e.furyPhase === 'leap' || e.furyPhase === 'bite' || e.furyPhase === 'back'); }
+// Patronun kule yeme sırasındaki duruşu (core.js tickBoss): hedef seçilince kuleyi işaretleyen halka belirir, patron yürürken
+// kuleye döner ve çömelir (cast); son yarım saniyede ağzı kuleye dönük olarak üstüne atlar (leap), yutunca çiğner (bite) ve yola
+// geri atlar (back). Patronun yoldaki gerçek konumu (e.x, e.y) hiç değişmez: atlama yalnızca çizimdeki bir sapmadır, bu yüzden
+// geri dönüş patronun o andaki yol konumuna olur. Dönüş: { ox, oy, lift, tilt, right, sx, sy } ya da null.
+function leapingUp(e) { return (e.furyPhase === 'cast' && !!e.furyTower && e.furyT <= Core.FURY_LEAP) || e.furyAfter > 0; }
 
 function bossLeap(e) {
-    const ph = e.furyPhase;
-    if (!e.furyTower || !(ph === 'cast' || ph === 'leap' || ph === 'bite' || ph === 'back')) return null;
-    const tw = e.furyTower;
+    let tw = null;
+    let ph = '';
+    let p = 0;
+    if (e.furyPhase === 'cast' && e.furyTower) {
+        tw = e.furyTower;
+        if (e.furyT > Core.FURY_LEAP) { ph = 'cast'; p = 1 - (e.furyT - Core.FURY_LEAP) / Math.max(0.01, e.furyDur - Core.FURY_LEAP); }
+        else { ph = 'leap'; p = 1 - e.furyT / Core.FURY_LEAP; }
+    } else if (e.furyAfter > 0 && e.furyEaten) {
+        tw = e.furyEaten;
+        const el = Core.FURY_BITE + Core.FURY_BACK - e.furyAfter;
+        if (el < Core.FURY_BITE) { ph = 'bite'; p = el / Core.FURY_BITE; }
+        else { ph = 'back'; p = (el - Core.FURY_BITE) / Core.FURY_BACK; }
+    } else return null;
+    p = Math.max(0, Math.min(1, p));
     const dx = tw.x - e.x;
     const dy = tw.y - e.y;
     const d = Math.hypot(dx, dy) || 1;
     const ux = dx / d;
     const uy = dy / d;
     const reach = Math.max(0, d - e.size * 0.3);              // ağız kulenin üstüne gelir, gövde tam üstüne değil
-    const p = e.furyDur > 0 ? Math.min(1, Math.max(0, 1 - e.furyT / e.furyDur)) : 1;
     const arc = Math.min(74, 28 + d * 0.15);
     let h = 0, lift = 0, sx = 1, sy = 1, turn = 1, away = false;
     if (ph === 'cast') {
         const c = Math.sin(p * Math.PI);
         sx = 1 + 0.07 * c; sy = 1 - 0.13 * c;                    // çömelir
-        turn = Math.min(1, p * 4);
+        turn = Math.min(1, p * 3);
     } else if (ph === 'leap') {
-        h = p * (2 - p);                                         // hızlı kalkış, yumuşak iniş
+        h = p * p * (3 - 2 * p) * 0.5 + p * 0.5;                 // yumuşak kalkış, kuleye varırken hızlı
         lift = 4 * arc * p * (1 - p);
         const c = Math.sin(p * Math.PI);
         sx = 1 + 0.14 * c; sy = 1 - 0.06 * c;

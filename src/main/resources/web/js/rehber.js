@@ -118,7 +118,7 @@ const Guide = (function () {
         { id: 'bossrule', title: 'Patronlar', icon: '♛', lead: 'Patron kule yer, canı düştükçe kalkan kazanıp öfkelenir.',
             sections: [
                 ['Evreler', 'Büyük patron canı %70, %40 ve %15\'e inince, ara patron %60\'a inince: maksimum canın %12\'si kadar kalkan kazanır, 4 sn hızlanır ve sersemletilemez. Sağ üstteki patron çubuğunda bu eşikler çizgi olarak görünür.'],
-                ['Kuleyi yer', 'Patron zaman zaman yakınındaki en yüksek seviyeli kuleyi hedef alır: kızıl bir halka kuleyi işaretler, patron durup kuleye döner ve çömelir, sonra ağzı kuleye dönük olarak üstüne zıplar, ısırıp yutar ve yola geri atlar. Yenen kule yok olur, para iadesi yoktur. Zıplayıp ısırana kadar patron ölürse kule kurtulur.'],
+                ['Kuleyi yer', 'Patron zaman zaman yakınındaki en yüksek seviyeli kuleyi hedef alır: kızıl bir halka kuleyi işaretler, patron yürürken kuleye döner ve çömelir. 1,4 sn sonra kule yutulur: patron son yarım saniyede ağzı kuleye dönük olarak üstüne zıplar, ısırıp yutar ve yola geri atlar. Yenen kule yok olur, para iadesi yoktur. Patron yutmadan ölürse kule kurtulur.'],
                 ['Hazırlık', 'Tek bir güçlü kuleyle patronu erken eritemezsin; çok kuleli, yavaşlatıcılı savunma kur ve patronun yolundaki en pahalı kuleyi ona yakın bırakma.'],
             ], scene: { boss: 'shark', caption: 'Patron kuleye dönüp zıplar, ısırır ve yola geri atlar; canı eşiklerden inince kalkan kazanıp öfkelenir' } },
         { id: 'difficulty', title: 'Zorluk', icon: '⚙', lead: 'Kolay, Normal ve Zor; harita ekranında seçilir.', table: 'difficulty',
