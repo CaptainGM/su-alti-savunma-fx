@@ -4,5 +4,5 @@
   "version": "1.0.0",
   "description": "Su Altı Savunma web betikleri için statik denetim (ESLint)",
   "scripts": { "test": "node lint.js" },
-  "devDependencies": { "eslint": "^9.0.0" }
+  "devDependencies": { "eslint": "^10.11.0" }
 }
