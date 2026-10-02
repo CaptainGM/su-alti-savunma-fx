@@ -75,7 +75,29 @@ function fit(img, nominal) {
     }
     return c;
 }
+// yumuşak ışık lekesi: her karede gradyan üretmemek için bir kez çizilip saklanır (alfa ile kullanılır)
+const glowCache = new Map();
+function glowSprite(rgb, r) {
+    const key = `${rgb}|${r}|${res}`;
+    let c = glowCache.get(key);
+    if (!c) {
+        const px = Math.ceil(2 * r * res);
+        c = document.createElement('canvas');
+        c.width = c.height = px;
+        const g = c.getContext('2d');
+        const grad = g.createRadialGradient(px / 2, px / 2, 0, px / 2, px / 2, px / 2);
+        grad.addColorStop(0, `rgba(${rgb},1)`);
+        grad.addColorStop(0.45, `rgba(${rgb},0.35)`);
+        grad.addColorStop(1, `rgba(${rgb},0)`);
+        g.fillStyle = grad;
+        g.fillRect(0, 0, px, px);
+        glowCache.set(key, c);
+    }
+    return c;
+}
+
 function clearSpriteCache() {
+    glowCache.clear();
     spriteCache.clear();
     if (typeof darkSpriteCache !== 'undefined') darkSpriteCache.clear();
     if (typeof spotCache !== 'undefined') spotCache.clear();
@@ -289,7 +311,7 @@ function onWorldEvent(type, d) {
             sfx('gong');
             fx.shake = Math.max(fx.shake || 0, d.hits ? 0.35 : 0.15);
             fx.rings.push({ x: d.x, y: d.y, r: 20, max: d.r, life: 0.9, maxLife: 0.9, color: '120,255,230', fill: true });
-            if (d.hits) addLog(`Koruyucu baş vurdu: ${d.hits} düşman hasar aldı ve sersemledi.`);
+            if (d.hits) addLog(`Koruyucu küre vurdu: ${d.hits} düşman hasar aldı ve sersemledi.`);
             break;
         case 'treasureOpen':
             sfx('upgrade', 0, 0.6);
@@ -1068,24 +1090,29 @@ function drawMechanics() {
         });
     });
 
-    // Atlantis koruyucuları: gözleri ve halesi
+    // Atlantis koruyucu küreleri: dolum arttıkça halka hızlanır ve çekirdek parlar, darbede patlar
+    const gm = world.mech.find(m => m.cfg.type === 'guardians');
     (currentMap.guardians || []).forEach((g, i) => {
-        const glow = fx.guardGlow[i] || 0;
+        const st = gm && gm.guards[i];
+        const charge = st ? Math.max(0, Math.min(1, 1 - st.timer / gm.cfg.interval)) : 0;
+        const glow = Math.min(1, fx.guardGlow[i] || 0);
         const pulse = 0.5 + 0.5 * Math.sin(animTime * 2 + i);
-        const a = 0.18 + 0.12 * pulse + 0.6 * Math.min(1, glow);
-        const grad = ctx.createRadialGradient(g.x, g.y, 4, g.x, g.y, 70);
-        grad.addColorStop(0, `rgba(120,255,235,${a})`);
-        grad.addColorStop(1, 'rgba(120,255,235,0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(g.x, g.y, 70, 0, 6.2832);
-        ctx.fill();
-        ctx.fillStyle = `rgba(170,255,245,${0.55 + 0.45 * Math.min(1, glow + pulse * 0.4)})`;
-        [-14, 14].forEach(dx => {
+        const k = Math.min(1, 0.22 + 0.1 * pulse + 0.55 * charge * charge + 0.5 * glow);
+        ctx.globalAlpha = k;
+        ctx.drawImage(glowSprite('120,255,235', 70), g.x - 70, g.y - 70, 140, 140);
+        ctx.globalAlpha = 1;
+        const rot = animTime * (0.5 + 4 * charge);
+        ctx.strokeStyle = `rgba(160,255,242,${0.3 + 0.55 * charge})`;
+        ctx.lineWidth = 2.5;
+        for (let j = 0; j < 4; j++) {
             ctx.beginPath();
-            ctx.ellipse(g.x + dx, g.y - 5, 6, 3.5, 0, 0, 6.2832);
-            ctx.fill();
-        });
+            ctx.arc(g.x, g.y, 46 + 7 * charge, rot + j * 1.5708, rot + j * 1.5708 + 0.9);
+            ctx.stroke();
+        }
+        ctx.fillStyle = `rgba(200,255,250,${Math.min(1, 0.3 + 0.55 * charge + 0.4 * glow)})`;
+        ctx.beginPath();
+        ctx.arc(g.x, g.y, 7 + 7 * charge + 5 * glow, 0, 6.2832);
+        ctx.fill();
     });
 
     // lav patlaması uyarıları
@@ -1818,6 +1845,18 @@ function toLogical(e) {
     return { x: (e.clientX - rect.left - ox) / scale, y: (e.clientY - rect.top - oy) / scale };
 }
 
+// kule yerinin üzerine gelince ne işe yaradığı yazılır (altın halkalı yerler: yüksek zemin)
+let spotHintKind = null;
+function showSpotHint(spot) {
+    const kind = spot ? spot.kind : null;
+    if (kind === spotHintKind) return;
+    spotHintKind = kind;
+    const box = document.getElementById('towerHint');
+    if (kind === 'high') box.innerText = 'Yüksek zemin (altın halka): burada kulenin menzili %20 artar.';
+    else if (kind === 'normal') box.innerText = 'Normal zemin. Altın halkalı yüksek zeminlerde menzil %20 artar.';
+    else box.innerText = 'Bir kulenin üzerine gel';
+}
+
 function spotAt(p) {
     for (const spot of world.spots) {
         if (!spot.tower && Math.hypot(p.x - spot.x, p.y - spot.y) < Core.BUILD_SPOT_RADIUS) return spot;
@@ -1870,12 +1909,13 @@ canvas.addEventListener('mousemove', (e) => {
     if (!world) return;
     const p = toLogical(e);
     hoverSpot = armedType ? spotAt(p) : null;
+    showSpotHint(spotAt(p));
     const t = towerAt(p);
     hoverTowerId = t ? t.id : null;
     const overTreasure = world.treasure && Math.hypot(p.x - world.treasure.x, p.y - world.treasure.y) < 56;
     canvas.style.cursor = overTreasure ? 'pointer' : armedType ? (hoverSpot ? 'copy' : 'not-allowed') : (t ? 'pointer' : 'default');
 });
-canvas.addEventListener('mouseleave', () => { hoverSpot = null; hoverTowerId = null; });
+canvas.addEventListener('mouseleave', () => { hoverSpot = null; hoverTowerId = null; showSpotHint(null); });
 canvas.addEventListener('click', (e) => {
     if (!world || world.result) return;
     const p = toLogical(e);

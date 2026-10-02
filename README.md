@@ -75,7 +75,7 @@ Her haritanın yolu farklı olduğu gibi kendine özel bir kuralı da var. Kural
 | Yosun Ormanı | tek, uzun yılan | yolun iki virajındaki yosun yataklarında düşmanlar %38 yavaşlar |
 | Mangrov Deltası | nehir üçe ayrılır, sonra birleşir | kök bölgesinde düşmanlar %30 yavaşlar |
 | Batık Gemi Mezarlığı | iki girişli, ortada birleşir | sandık ara sıra parlar, **tıklayıp** altın toplarsın |
-| Atlantis Harabeleri | mermer basamaklar | 3 taş koruyucu baş her 10 sn düşmanlara vurup sersemletir |
+| Atlantis Harabeleri | mermer basamaklar | 3 mermer koruyucu küre her 10 sn düşmanlara vurup sersemletir (dolum arttıkça parlar) |
 | Buz Koyu | iki kanal ortada çapraz geçer | kar fırtınası (önceden uyarır): 9 sn boyunca kule menzilleri %25 kısalır |
 | Girdap | spiral | yolun ikinci yarısında düşmanlar girdaba çekilip hızlanır |
 | Volkanik Bacalar | üç sütunlu dikey zigzag | lav patlamaları (önceden uyarır): düşmanı yakar, yakındaki kuleleri 5 sn susturur (kilit simgesi çıkar). Zaman zaman gökten bir lav kayası düşer ve uyarısız bir kuleyi yok eder |

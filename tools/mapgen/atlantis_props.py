@@ -1,4 +1,4 @@
-"""Atlantis Harabeleri nesneleri: sütun, devrik sütun, taş baş, tapınak tabanı, üç dişli mızrak."""
+"""Atlantis Harabeleri nesneleri: sütun, devrik sütun, koruyucu küre, tapınak tabanı, üç dişli mızrak."""
 import math
 
 import numpy as np
@@ -86,6 +86,33 @@ def stone_head(rng, r=38):
     # sakal çizgileri
     for i in range(-3, 4):
         d.line([((cx + i * r * 0.12) * s, (cx + r * 0.7) * s), ((cx + i * r * 0.16) * s, (cx + r * 1.08) * s)], fill=col8(rgb('#4a5a4f'), 180), width=int(1.6 * s))
+    return Image.alpha_composite(patch, f.finish())
+
+
+def guardian_orb(rng, r=38):
+    """Koruyucu küre (yukarıdan): rün çentikli mermer kaide ve ortasında turkuaz enerji küresi. Yüz yok."""
+    w = h = int(r * 2.8)
+    cx = w / 2
+    m = C.mask_patch(w, h, lambda d, s: d.ellipse([(cx - r) * s, (cx - r) * s, (cx + r) * s, (cx + r) * s], fill=255))
+    col = _marble(m, rng, base=rgb('#d3dbd0'), dark=rgb('#7d8c80'), moss=0.3)
+    patch = C.shade_patch(m, col, sigma=r * 0.55, outline=OUT, outline_px=2.0, rng=rng, grain=0.04, rim=0.3)
+    f = SSCanvas(w, h)
+    d, s = f.d, f.s
+    dk = col8(rgb('#2c3a35'))
+    # sekiz rün çentiği ve iç halka
+    for i in range(8):
+        a = i * math.pi / 4 + math.pi / 8
+        x0, y0 = cx + math.cos(a) * r * 0.64, cx + math.sin(a) * r * 0.64
+        x1, y1 = cx + math.cos(a) * r * 0.88, cx + math.sin(a) * r * 0.88
+        d.line([(x0 * s, y0 * s), (x1 * s, y1 * s)], fill=dk, width=int(2.6 * s))
+    d.ellipse([(cx - r * 0.56) * s, (cx - r * 0.56) * s, (cx + r * 0.56) * s, (cx + r * 0.56) * s], outline=dk, width=int(2.2 * s))
+    # enerji küresi
+    o = r * 0.4
+    d.ellipse([(cx - o) * s, (cx - o) * s, (cx + o) * s, (cx + o) * s], fill=col8(rgb('#22a9c4')), outline=dk, width=int(2.2 * s))
+    o2 = o * 0.62
+    d.ellipse([(cx - o2 - o * 0.1) * s, (cx - o2 - o * 0.12) * s, (cx + o2 - o * 0.1) * s, (cx + o2 - o * 0.12) * s], fill=col8(rgb('#7ffff0'), 235))
+    o3 = o * 0.22
+    d.ellipse([(cx - o3 - o * 0.28) * s, (cx - o3 - o * 0.3) * s, (cx + o3 - o * 0.28) * s, (cx + o3 - o * 0.3) * s], fill=col8(rgb('#ffffff'), 240))
     return Image.alpha_composite(patch, f.finish())
 
 
