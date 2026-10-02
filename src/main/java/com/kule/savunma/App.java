@@ -61,6 +61,12 @@ public class App extends Application {
                                 "saveData: function(json) {" +
                                 "   alert('JAVA_SAVE_DATA:' + json);" +
                                 "}," +
+                                "setMusic: function(state, intensity) {" +
+                                "   alert('JAVA_MUSIC:' + state + ',' + intensity);" +
+                                "}," +
+                                "setMusicVolume: function(v) {" +
+                                "   alert('JAVA_MUSIC_VOL:' + v);" +
+                                "}," +
                                 "setLoop: function(on) {" +
                                 "   alert('JAVA_LOOP:' + on);" +
                                 "}," +
@@ -87,6 +93,13 @@ public class App extends Application {
                     } catch (Exception e) {
                         System.out.println("Kayit yuklenemedi: " + e.getMessage());
                     }
+                }
+
+                // menü müziği (kayıt dosyası olsun ya da olmasın) ve müzik düzeyi
+                try {
+                    webView.getEngine().executeScript("window.menuMusic && window.menuMusic()");
+                } catch (RuntimeException e) {
+                    // sayfa hazır değilse müzik oyun başlayınca açılır
                 }
 
                 System.out.println("JavaScript bridge kuruldu");
@@ -188,6 +201,11 @@ public class App extends Application {
             System.exit(0);
         } else if (data.startsWith("JAVA_LOOP:")) {
             loopOn = Boolean.parseBoolean(data.substring("JAVA_LOOP:".length()));
+        } else if (data.startsWith("JAVA_MUSIC_VOL:")) {
+            MusicEngine.setVolume(Double.parseDouble(data.substring("JAVA_MUSIC_VOL:".length())));
+        } else if (data.startsWith("JAVA_MUSIC:")) {
+            String[] parts = data.substring("JAVA_MUSIC:".length()).split(",");
+            MusicEngine.setState(parts[0], parts.length > 1 ? Double.parseDouble(parts[1]) : 0);
         } else if (data.startsWith("JAVA_SFX:")) {
             String[] parts = data.substring("JAVA_SFX:".length()).split(",");
             SoundPlayer.playSfx(parts[0], Double.parseDouble(parts[1]));

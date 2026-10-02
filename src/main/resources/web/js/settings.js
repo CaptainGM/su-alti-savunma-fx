@@ -5,7 +5,7 @@
 'use strict';
 
 const Settings = (function () {
-    const DEFAULTS = { sfx: 0.6, mute: false, fullscreen: false, size: 'auto', quality: 'high', effects: true, floaters: true, fps: 120, showFps: false };
+    const DEFAULTS = { sfx: 0.6, music: 0.4, mute: false, fullscreen: false, size: 'auto', quality: 'high', effects: true, floaters: true, fps: 120, showFps: false };
     const state = { settings: Object.assign({}, DEFAULTS), records: {}, difficulty: 'normal', saves: {} };
     let listeners = [];
 
@@ -72,8 +72,15 @@ function bridgeCall(name, ...args) {
     } catch (e) { /* tarayıcıda köprü yok */ }
 }
 
+// müzik düzeyi: sessiz modda 0
+function applyMusicVolume() {
+    const s = Settings.get();
+    bridgeCall('setMusicVolume', s.mute ? 0 : s.music);
+}
+
 function applyWindowSettings() {
     const s = Settings.get();
+    applyMusicVolume();
     bridgeCall('setFullscreen', !!s.fullscreen);
     if (!s.fullscreen && s.size !== 'auto') {
         const [w, h] = s.size.split('x').map(Number);
@@ -85,6 +92,8 @@ function syncSettingsForm() {
     const s = Settings.get();
     document.getElementById('setSfx').value = Math.round(s.sfx * 100);
     document.getElementById('setSfxVal').innerText = Math.round(s.sfx * 100) + '%';
+    document.getElementById('setMusic').value = Math.round(s.music * 100);
+    document.getElementById('setMusicVal').innerText = Math.round(s.music * 100) + '%';
     document.getElementById('setMute').checked = s.mute;
     document.getElementById('setFullscreen').checked = s.fullscreen;
     document.getElementById('setSize').value = s.size;
@@ -124,6 +133,10 @@ function bindSettingsForm() {
         document.getElementById('setSfxVal').innerText = e.target.value + '%';
     });
     on('setSfx', 'change', () => { if (typeof sfx === 'function') sfx('fire_swordfish'); });
+    on('setMusic', 'input', e => {
+        Settings.set('music', e.target.value / 100);
+        document.getElementById('setMusicVal').innerText = e.target.value + '%';
+    });
     on('setMute', 'change', e => Settings.set('mute', e.target.checked));
     on('setFullscreen', 'change', e => {
         Settings.set('fullscreen', e.target.checked);
@@ -155,7 +168,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 // Java kayıtlı ayarları yükleyince pencere durumunu uygula
-Settings.onChange(() => { if (document.getElementById('settingsScreen')) syncSettingsForm(); });
+Settings.onChange(() => { if (document.getElementById('settingsScreen')) syncSettingsForm(); applyMusicVolume(); });
 window.addEventListener('load', () => {
     bindSettingsForm();
     syncSettingsForm();

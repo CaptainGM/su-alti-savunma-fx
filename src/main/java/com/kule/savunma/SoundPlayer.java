@@ -92,6 +92,7 @@ public class SoundPlayer {
 
     private static void run() {
         SoundBank.buildAll();
+        MusicEngine.init();                 // müzik arka planda üretilir, hazır olunca karışıma girer
         AudioFormat format = new AudioFormat(RATE, 16, 1, true, false);
         SourceDataLine line;
         try {
@@ -129,6 +130,8 @@ public class SoundPlayer {
                     active.remove(k);
                 }
             }
+
+            MusicEngine.mixInto(mix, CHUNK);
 
             for (int i = 0; i < CHUNK; i++) {
                 // yumuşak sınırlayıcı: üst üste binen sesler bozulmadan toplanır

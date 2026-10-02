@@ -15,7 +15,8 @@
         <div class="help-text">
             <p><b>Amaç:</b> Düşmanlar yolun başından girip sonuna ulaşırsa üssün canı azalır. Tüm dalgaları bitirmeden canın tükenmesin.</p>
             <p><b>Kule kurmak:</b> Sağ paneldeki bir kuleyi haritadaki <b>yeşil alana</b> sürükle, ya da kuleye tıklayıp sonra alana tıkla. Altın halkalı yerler yüksek zemindir (+%20 menzil).</p>
-            <p><b>Kuleyi geliştirmek:</b> Kuleye tıkla; yükselt, sat ya da hedef önceliğini değiştir (İlk / Son / En Güçlü / En Yakın). Kuleler 5 seviyedir, 3. ve 5. seviyede yeni yetenek açılır.</p>
+            <p><b>Kuleyi geliştirmek:</b> Kuleye tıkla; yükselt, sat ya da hedef önceliğini değiştir (Öncelikli / İlk / Son / En Güçlü / En Yakın). Kuleler 5 seviyedir. <b>3. ve 5. seviyeye çıkarken iki yetenekten birini seçersin</b> (her kule için farklı; seçim sonradan değişmez). Seviye çubuğunda turuncu dilim A, mor dilim B yeteneğini gösterir.</p>
+            <p><b>Özel düşmanlar:</b> <b>Kalkanlı Kaplumbağa</b> önce kalkanını erittirir (zehir ve gaz kalkanı deler). <b>Şifacı Denizatı</b> yakındakileri iyileştirir, önce onu vur. <b>Hayalet Kalamar</b> belli aralıkla gizlenir; Fener Balığı ışığı ya da alan hasarı (Yılan, Balon) onu ortaya çıkarır. <b>Elektrikli Müren</b> yakınındaki kuleyi sersemletir, uzaktan vur. "Öncelikli" hedef modu bunları önce seçer.</p>
             <p><b>Strateji:</b> Rastgele kule dizmek kazandırmaz. Sağ üstteki kutu sıradaki dalganın içeriğini ve hangi kulelerin işe yarayacağını söyler: <b>zırhlılara</b> Ahtapot çok az hasar verir (zırh deler: Yılan, Kılıç, Fener Balığı), <b>uçanları</b> Yılan ve Balon Balığı vuramaz, <b>sürüyü</b> alan hasarı eritir, patronlara Kılıç Balığı %50 fazla vurur.</p>
             <p><b>Eşleşme:</b> Deniz Anası'nın yavaşlattığı düşman her kuleden %20 fazla hasar alır. Uzak ve yüksek (altın halkalı) yerler yalnızca uzun menzilli kulelere uyar.</p>
             <p><b>Alışma:</b> 4. dalgadan sonra hasarın yarısından fazlasını tek bir türe yaptırırsan düşmanlar ona alışır ve o türden en fazla %25 az hasar alır (kutuda "Ahtapot %25 daha az hasar veriyor" gibi yazar). Türleri karıştırırsan alışma kalkar.</p>
@@ -23,6 +24,7 @@
             <p><b>Kaydetme:</b> Bir oyunu bırakıp haritalara döndüğünde ya da oyunu kapattığında kaydedilir. Haritaya tekrar tıklayınca <b>devam edebilir</b> ya da yeniden başlayabilirsin.</p>
             <p><b>Patronlar:</b> Belirli dalgalarda güçlü bir patron gelir. Patron zaman zaman en yüksek seviyeli yakın kuleni önce çenesini açarak hedef alır, sonra <b>yer</b>: kule yok olur, para iadesi yoktur. Patronu menzil dışında yavaşlatıp önce öldürmek gerekir.</p>
             <p><b>Harita kuralları:</b> Her haritanın kendine özel bir kuralı vardır (haritanın başında ve sağ üst kutuda yazar). Volkanda gökten düşen lav kayası uyarısız bir kuleyi yok edebilir.</p>
+            <p><b>Müzik:</b> sakin su altı müziği dalga aralarında çalar; dalga başlayınca bas ve davul girer, patron gelince tempo ve gerilim artar. Ayarlardan Müzik ve Efekt sesi ayrı kısılır.</p>
             <p class="help-keys">Kısayollar: Boşluk dalga başlat · P duraklat · F hız (1x, 2x, 0,5x) · 1-6 kule seç · F11 tam ekran · Esc geri</p>
         </div>
         <button class="close-btn" onclick="toggleInfo()">ANLAŞILDI</button>
@@ -79,6 +81,9 @@
                 <h4>Ses</h4>
                 <label class="set-row">Efekt sesi
                     <span class="set-control"><input type="range" id="setSfx" min="0" max="100" step="5"><span id="setSfxVal" class="set-val"></span></span>
+                </label>
+                <label class="set-row">Müzik
+                    <span class="set-control"><input type="range" id="setMusic" min="0" max="100" step="5"><span id="setMusicVal" class="set-val"></span></span>
                 </label>
                 <label class="set-row"><span>Sesi kapat</span><input type="checkbox" id="setMute"></label>
             </div>
