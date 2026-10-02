@@ -3,7 +3,7 @@ rem Android APK uretir.
 rem   apk_uret.bat         imzali APK     -> dist\SuAltiSavunma.apk
 rem   apk_uret.bat debug   debug APK      -> dist\SuAltiSavunma-debug.apk
 rem Android Studio (ya da Android SDK) ve JDK 17-23 gerekiyor.
-rem Ilk calismada imza anahtari androidnahtar klasorune uretilir, o klasoru yedekleyin.
+rem Ilk calismada imza anahtari android\anahtar klasorune uretilir, o klasoru yedekleyin.
 setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul 2>&1
 cd /d "%~dp0"
