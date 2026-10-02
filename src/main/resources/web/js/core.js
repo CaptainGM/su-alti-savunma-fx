@@ -896,13 +896,15 @@
                 g.timer = c.interval;
                 g.warned = false;
                 let hits = 0;
+                const hitsAt = [];
                 for (const e of this.enemies) {
                     if (e.health <= 0 || Math.hypot(e.x - g.x, e.y - g.y) > c.radius) continue;
                     hits++;
+                    hitsAt.push({ x: e.x, y: e.y });
                     this.envDamage(e, c.flat + c.pct * e.maxHealth);
                     e.stunTime = Math.max(e.stunTime, e.type === 'boss' ? 0.4 : c.stun);
                 }
-                this.emit('guardianPulse', { x: g.x, y: g.y, r: c.radius, hits });
+                this.emit('guardianPulse', { x: g.x, y: g.y, r: c.radius, hits, hitsAt });
             }
         }
 
