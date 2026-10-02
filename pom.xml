@@ -12,7 +12,7 @@
         <maven.compiler.source>25</maven.compiler.source>
         <maven.compiler.target>25</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <javafx.version>25</javafx.version>
+        <javafx.version>25.0.4</javafx.version>
         <main.class>com.kule.savunma.Launcher</main.class>
     </properties>
 
