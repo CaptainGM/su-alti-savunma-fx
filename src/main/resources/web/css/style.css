@@ -1031,7 +1031,8 @@ body {
 }
 #guideBtn:hover { border-color: #ffd45a; }
 
-#guideScreen { background: rgba(0, 10, 22, 0.84); z-index: 3100; }
+#guideScreen { background: radial-gradient(ellipse at 50% 30%, #0d2f47 0%, #041320 70%, #020a12 100%); z-index: 3100; }
+.g-under { visibility: hidden !important; }
 
 .guide-card {
     width: min(1260px, 97vw);
@@ -1144,24 +1145,65 @@ body {
 }
 
 /* sağ panel: dalga ipuçları (düşman simgesi, iyi ve kötü kuleler) */
+.preview-btns { float: right; display: flex; gap: 5px; align-items: center; }
+.hint-btn {
+    background: rgba(95, 224, 143, 0.14); color: #7dffb0; border: 1px solid #3f9a66; border-radius: 8px;
+    font-size: 0.85em; padding: 1px 9px; cursor: pointer; font-family: inherit;
+}
+.hint-btn:hover { background: rgba(95, 224, 143, 0.3); }
+.hint-btn.pulse { animation: hintPulse 1.1s ease-in-out infinite; border-color: #7dffb0; color: #fff; background: rgba(95, 224, 143, 0.4); }
+@keyframes hintPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(125, 255, 176, 0.7); } 50% { box-shadow: 0 0 10px 4px rgba(125, 255, 176, 0.5); } }
 .guide-link {
-    float: right; background: rgba(255, 212, 90, 0.14); color: #ffd45a; border: 1px solid #b8942f; border-radius: 8px;
+    background: rgba(255, 212, 90, 0.14); color: #ffd45a; border: 1px solid #b8942f; border-radius: 8px;
     font-size: 0.85em; padding: 1px 8px; cursor: pointer; font-family: inherit;
 }
 .guide-link:hover { background: rgba(255, 212, 90, 0.3); }
 .chip { cursor: pointer; }
-.advice-box { margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.1); }
-.advice-title { font-size: 0.74em; color: #8fb4c4; margin-bottom: 4px; }
-.advice-row {
-    display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 8px; cursor: pointer; margin-bottom: 2px;
-}
-.advice-row:hover { background: rgba(255, 255, 255, 0.08); }
-.adv-enemy { width: 30px; height: 30px; object-fit: contain; margin-right: 4px; }
-.adv-tower { width: 24px; height: 24px; object-fit: contain; }
-.adv-good { color: #5fe08f; font-weight: 900; margin: 0 2px 0 4px; }
-.adv-bad { color: #ff7b7b; font-weight: 900; margin: 0 2px 0 8px; }
+.adv-good { color: #5fe08f; font-weight: 800; margin-right: 4px; }
+.adv-bad { color: #ff7b7b; font-weight: 800; margin-right: 4px; }
 
 #guideControls { margin-top: 2px; }
 #guideControls h4 { color: #ffd45a; margin: 8px 0 5px; font-size: 0.98em; }
 .g-vs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 6px; font-size: 0.9em; color: #9fc3d4; }
-.g-vs .adv-tower { width: 30px; height: 30px; }
+
+/* ipucu penceresi */
+#hintModal {
+    position: fixed; inset: 0; z-index: 2700; display: flex; justify-content: center; align-items: center;
+    background: rgba(0, 6, 14, 0.62);
+}
+.hint-card {
+    width: min(760px, 94vw); max-height: 88vh; overflow-y: auto; padding: 18px 22px 20px;
+    background: rgba(10, 25, 41, 0.98); border: 3px solid #5fe08f; border-radius: 18px; box-shadow: 0 0 90px rgba(0, 0, 0, 0.85);
+}
+.hint-head { display: flex; justify-content: space-between; align-items: center; }
+.hint-head h3 { color: #7dffb0; font-size: 1.6em; }
+.hint-close {
+    background: #3a4a5a; color: #fff; border: 0; border-radius: 10px; padding: 7px 14px; font-size: 1em; cursor: pointer; font-family: inherit;
+}
+.hint-close:hover { background: #4d6277; }
+.hint-sub { color: #9fc3d4; margin: 4px 0 6px; }
+#hintBody h4 { color: #ffd45a; margin: 14px 0 6px; font-size: 1.05em; }
+.hint-row {
+    display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; margin-bottom: 8px;
+    background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px;
+}
+.hint-enemy { width: 58px; height: 58px; object-fit: contain; flex: none; }
+.hint-main { flex: 1; min-width: 0; }
+.hint-name { font-weight: 800; font-size: 1.1em; color: #fff; }
+.hint-count { color: #ffd45a; }
+.hint-lead { color: #bcd8e6; font-size: 0.92em; margin: 1px 0 5px; }
+.hint-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 3px 0; font-size: 0.92em; }
+.hint-line b { min-width: 118px; }
+.hint-line.good b { color: #5fe08f; }
+.hint-line.bad b { color: #ff7b7b; }
+.hint-t { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 4px; background: rgba(0, 0, 0, 0.3); border-radius: 999px; color: #e8f6ff; }
+.hint-t img { width: 26px; height: 26px; object-fit: contain; }
+.hint-note { color: #9fc3d4; font-size: 0.85em; margin-top: 4px; }
+.hint-go {
+    flex: none; align-self: center; background: rgba(255, 212, 90, 0.14); color: #ffd45a; border: 1px solid #b8942f; border-radius: 10px;
+    padding: 6px 10px; cursor: pointer; font-family: inherit; font-size: 0.9em;
+}
+.hint-go:hover { background: rgba(255, 212, 90, 0.3); }
+.hint-none { color: #c9e3f0; line-height: 1.5; }
+.hint-none a, .hint-links a { color: #ffd45a; cursor: pointer; text-decoration: underline; }
+.hint-links { margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.12); color: #9fc3d4; font-size: 0.92em; line-height: 1.8; }

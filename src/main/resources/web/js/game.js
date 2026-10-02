@@ -146,6 +146,7 @@ let paused = false;
 let speedMultiplier = 1;
 let selectedTower = null;
 let hoverSpot = null;
+let labelSpot = null;      // fare üzerindeyken (kule seçili olmasa da) yüksek zemin yazısı için
 let armedType = null;
 let draggedType = null;
 let animTime = 0;
@@ -304,8 +305,8 @@ function onWorldEvent(type, d) {
             if (!inDemo && selectedTower === tw) closeTowerModal();
             renderTowerList();
             if (d.cause === 'patron') {
-                // yeme animasyonu çizimde (drawChomps); çene kapandığında ses ve parçalar çıkar
-                fx.chomps.push({ x: tw.x, y: tw.y, type: tw.type, life: 1.15, max: 1.15, snapped: false });
+                // yeme animasyonu çizimde (bossLeap, drawChomps): patron zıplayıp ısırdığında ses ve parçalar çıkar
+                fx.chomps.push({ x: tw.x, y: tw.y, type: tw.type, life: 0.6, max: 0.6, snapped: false });
                 const by = d.by;
                 notify(`${by ? by.name : 'Patron'} ${by && by.fury ? by.fury.verb : 'yuttu'}: ${tw.name} yok oldu!`, '#ff8a9a');
             } else {
@@ -325,9 +326,16 @@ function onWorldEvent(type, d) {
             sfx('roar');
             fx.shake = Math.max(fx.shake || 0, 0.45);
             fx.furies.push({ boss: d.enemy, towers: d.towers, life: d.time, max: d.time });
-            fx.alert = { text: 'PATRON SALDIRIYOR', life: d.time + 0.3, max: d.time + 0.3 };
-            addLog(`${d.enemy.name} öfkelendi ve ${d.towers.map(t => t.name).join(', ')} kulesini hedef aldı.`);
+            fx.alert = { text: 'PATRON SALDIRIYOR', life: 1.0, max: 1.0 };
+            addLog(`${d.enemy.name} ${d.towers.map(t => t.name).join(', ')} kulesini hedef aldı.`);
             break;
+        case 'bossLeap': {
+            // kalkış: ayağının altında toz halkası
+            const e = d.enemy;
+            fx.rings.push({ x: e.x, y: e.y + e.size * 0.3, r: 8, max: e.size * 0.9, life: 0.45, maxLife: 0.45, color: '210,235,255' });
+            fx.shake = Math.max(fx.shake || 0, 0.2);
+            break;
+        }
         case 'guardianWarn': {
             const gi = nearestGuardian(d.x, d.y);
             if (gi >= 0) fx.guardGlow[gi] = 1.2;
@@ -402,6 +410,14 @@ function onWorldEvent(type, d) {
             break;
         case 'fire':
             sfx('fire_' + d.tower.type, d.tower.type === 'octopus' ? 40 : 55);
+            if (d.tower.type === 'eel') {
+                // elektrik topu çıkarken kulenin üstünde kıvılcım
+                fx.rings.push({ x: d.tower.x, y: d.tower.y - 12, r: 8, max: 44, life: 0.28, maxLife: 0.28, color: '255,230,90' });
+                for (let i = 0; i < 7; i++) {
+                    const a = Math.random() * 6.2832;
+                    fx.sparks.push({ x: d.tower.x, y: d.tower.y - 12, vx: Math.cos(a) * 120, vy: Math.sin(a) * 120 - 30, life: 0.3, max: 0.3, r: 2.4, c: '255,235,120' });
+                }
+            }
             if (d.tower.type === 'puffer') {
                 // namlu ucundan duman
                 const a = d.tower.aim !== undefined ? d.tower.aim : -1;
@@ -414,6 +430,11 @@ function onWorldEvent(type, d) {
             break;
         case 'aoe':
             fx.rings.push({ x: d.x, y: d.y, r: 10, max: d.radius * 1.15, life: 0.45, maxLife: 0.45, color: '255,230,80', aoeImg: true });
+            if (!d.big) sfx('zap_small', 70);
+            for (let i = 0; i < 9; i++) {
+                const a = Math.random() * 6.2832;
+                fx.sparks.push({ x: d.x, y: d.y, vx: Math.cos(a) * 170, vy: Math.sin(a) * 170 - 30, life: 0.35, max: 0.35, r: 2.6, c: '255,235,120' });
+            }
             break;
         case 'heal':
             sfx('heal', 250);
@@ -529,6 +550,14 @@ function onWorldEvent(type, d) {
             addFloater({ x: d.enemy.x, y: d.enemy.y - 30, text: '+' + d.reward, color: '#ffd84a', life: 1.0, maxLife: 1.0 });
             break;
         case 'leak':
+            if (!hintAlert && !inDemo) {
+                hintAlert = true;
+                uiCache.preview = null;
+                if (!hintShown && !inDemo) {
+                    hintShown = true;
+                    notify('Bir düşman üsse ulaştı. Sağ paneldeki İpucu düğmesi hangi kuleler işe yarar gösterir.', '#9fe4ff');
+                }
+            }
             addLog(`${label(d.enemy)} üsse ulaştı. Oyuncu Canı: ${Math.max(0, Math.round(world.health))} (-${d.enemy.damage}).`);
             sfx('leak', 140);
             fx.flash = 1;
@@ -715,6 +744,7 @@ function selectMap(mapIndex, resumeSnap) {
     speedMultiplier = 1;
     selectedTower = null;
     hoverSpot = null;
+    labelSpot = null;
     pullFrom = ((currentMap.mechanics || []).find(m => m.type === 'pull') || {}).from;
     if (pullFrom === undefined) pullFrom = null;
     armedType = null;
@@ -786,7 +816,9 @@ function stopLoop() {
     if (window.javaDriven) bridgeLoop(false);
 }
 
+let loopOn = false;       // Java döngüsünü istedik mi (Rehber açılırken oyun çalışıyor muydu bilmek için)
 function bridgeLoop(on) {
+    loopOn = on;
     try { if (window.javaBridge && window.javaBridge.setLoop) window.javaBridge.setLoop(on); } catch (e) { /* yoksay */ }
 }
 
@@ -797,7 +829,11 @@ function reportError(e) {
     if (window.__errs.length <= 3) addLog('JS HATASI: ' + ((e && e.message) || e));
 }
 window.javaFrame = function (ms) {
-    try { gameLoop(ms, true); } catch (e) { reportError(e); }
+    try {
+        // Rehber açıkken kareleri o çizer (oyun zaten duraklamıştır)
+        if (typeof Guide !== 'undefined' && Guide.running()) Guide.frame(ms);
+        else gameLoop(ms, true);
+    } catch (e) { reportError(e); }
 };
 
 function gameLoop(ts, fromJava) {
@@ -909,6 +945,7 @@ function draw() {
     drawMechanics();
     drawChomps();
     drawMeteors();
+    drawSpotLabel();
     if (fancy) drawAmbientFront();
     drawFx();
     drawHud();
@@ -1171,63 +1208,11 @@ function swirlSprite() {
     return swirlCache;
 }
 
-// patronun çenesi: iki yarım elips ve birbirine geçen dişler; gap, çenelerin merkezden uzaklığı
-function drawJaws(x, y, gap, alpha) {
-    const R = 54;
-    const n = 7;
-    const sp = (2 * R) / n;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    for (const dir of [-1, 1]) {
-        ctx.save();
-        ctx.translate(x, y + dir * gap);
-        if (dir < 0) ctx.scale(1, -1);                 // üst çene alt çenenin aynasıdır
-        ctx.fillStyle = '#7a1630';
-        ctx.strokeStyle = '#2e0610';
-        ctx.lineWidth = 3;
-        // yarım elips yerine bezier: WebView'ın yol çizicisi başlangıç noktasız yay yollarında hata veriyor
-        ctx.beginPath();
-        ctx.moveTo(-R, 0);
-        ctx.bezierCurveTo(-R, R * 0.8, R, R * 0.8, R, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = '#f6f1e4';
-        ctx.strokeStyle = '#8a7f6a';
-        ctx.lineWidth = 1.2;
-        for (let i = 0; i < n; i++) {
-            const tx = (i - (n - 1) / 2) * sp + (dir < 0 ? sp / 2 : 0);
-            if (Math.abs(tx) > R * 0.86) continue;
-            ctx.beginPath();
-            ctx.moveTo(tx - sp * 0.38, 1);
-            ctx.lineTo(tx + sp * 0.38, 1);
-            ctx.lineTo(tx, -17);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-        }
-        ctx.restore();
-    }
-    ctx.restore();
-}
-
-// kule yeniliyor: çene hızla kapanır, kule yutulur, parçalar saçılır
+// yutulan kule: patron ısırdığı anda kule hızla küçülüp ağıza çekilir, parçalar saçılır
 function drawChomps() {
     fx.chomps.forEach(c => {
         const k = 1 - c.life / c.max;
-        const closeAt = 0.26;
-        if (k < closeAt + 0.1) {
-            // yutulan kule: çene kapanırken küçülür
-            const img = sprites.towers[c.type];
-            const shrink = k < closeAt ? 1 : Math.max(0, 1 - (k - closeAt) / 0.1);
-            if (ready(img) && shrink > 0.02) {
-                const sz = 100 * (0.35 + 0.65 * shrink);
-                ctx.globalAlpha = shrink;
-                ctx.drawImage(fit(img, 100), c.x - sz / 2, c.y - sz / 2, sz, sz);
-                ctx.globalAlpha = 1;
-            }
-        }
-        if (k >= closeAt && !c.snapped) {
+        if (!c.snapped) {
             c.snapped = true;
             sfx('chomp');
             fx.shake = Math.max(fx.shake || 0, 0.85);
@@ -1238,15 +1223,14 @@ function drawChomps() {
                 fx.sparks.push({ x: c.x, y: c.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 50, life: 0.5 + Math.random() * 0.7, max: 1.2, r: 2 + Math.random() * 3.5, c: i % 3 ? '210,40,70' : '240,236,220' });
             }
         }
-        let gap;
-        if (k < closeAt) {
-            const e = k / closeAt;
-            gap = 52 * (1 - e * e);                           // hızlanarak kapanır
-        } else {
-            gap = 3 * Math.abs(Math.sin((k - closeAt) * 26)) * Math.max(0, 1 - (k - closeAt) / 0.5);   // çiğneme
+        const img = sprites.towers[c.type];
+        const shrink = Math.max(0, 1 - k * 3.2);
+        if (ready(img) && shrink > 0.02) {
+            const sz = 100 * (0.2 + 0.8 * shrink);
+            ctx.globalAlpha = shrink;
+            ctx.drawImage(fit(img, 100), c.x - sz / 2, c.y - sz / 2 - 14 * (1 - shrink), sz, sz);
+            ctx.globalAlpha = 1;
         }
-        const alpha = k < 0.7 ? 0.95 : Math.max(0, 0.95 * (1 - (k - 0.7) / 0.3));
-        drawJaws(c.x, c.y + 6, gap, alpha);
     });
 }
 
@@ -1304,7 +1288,21 @@ function drawMechanics() {
             ctx.lineTo(t.x, t.y);
             ctx.stroke();
             ctx.setLineDash([]);
-            drawJaws(t.x, t.y + 6, 78 - 26 * k + Math.sin(animTime * 20) * 1.5 * k, Math.min(1, k * 3) * 0.92);
+            // kızıl hedef halkası kuleye doğru daralır
+            const r = 66 - 22 * k;
+            ctx.strokeStyle = `rgba(255,70,90,${0.5 + 0.4 * Math.sin(animTime * 14) ** 2})`;
+            ctx.lineWidth = 3.5;
+            ctx.beginPath();
+            ctx.arc(t.x, t.y + 6, r, 0, 6.2832);
+            ctx.stroke();
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for (let i = 0; i < 4; i++) {
+                const a = i * 1.5708 + 0.785;
+                ctx.moveTo(t.x + Math.cos(a) * (r - 8), t.y + 6 + Math.sin(a) * (r - 8));
+                ctx.lineTo(t.x + Math.cos(a) * (r + 9), t.y + 6 + Math.sin(a) * (r + 9));
+            }
+            ctx.stroke();
         });
     });
 
@@ -1723,7 +1721,7 @@ function drawSpots() {
         if (draggedType || armedType) {
             const type = draggedType || armedType;
             const range = Core.TOWER_TYPES[type].range * (spot.kind === 'high' ? Core.HIGH_GROUND_RANGE : 1);
-            ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+            ctx.strokeStyle = spot.kind === 'high' ? 'rgba(255,215,90,0.8)' : 'rgba(255,255,255,0.45)';
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.arc(spot.x, spot.y, range, 0, 6.2832);
@@ -1732,11 +1730,43 @@ function drawSpots() {
     }
 }
 
+// Yüksek zemin yazısı: altın halkanın üstüne gelince (ya da kule sürüklenirken) büyük ve okunur bir etiket çıkar
+function drawSpotLabel() {
+    if (!world) return;
+    const spot = hoverSpot && !hoverSpot.tower ? hoverSpot : (labelSpot && !labelSpot.tower ? labelSpot : null);
+    if (!spot || spot.kind !== 'high') return;
+    const type = draggedType || armedType;
+    const base = type ? Core.TOWER_TYPES[type].range : 0;
+    const big = textSprite('+%20 menzil', 32, '#ffd45a');
+    const small = textSprite(type ? `Yüksek zemin · menzil ${base} → ${Math.round(base * Core.HIGH_GROUND_RANGE)}` : 'Yüksek zemin (altın halka)', 17, '#ffffff');
+    const bw = Math.max(big.w, small.w) + 14;
+    const bh = big.h + small.h - 12;
+    const cx = Math.max(bw / 2 + 6, Math.min(W - bw / 2 - 6, spot.x));
+    let top = spot.y - Core.BUILD_SPOT_RADIUS - 16 - bh;
+    if (top < 6) top = spot.y + Core.BUILD_SPOT_RADIUS + 16;
+    const x0 = cx - bw / 2;
+    const r = 12;
+    ctx.beginPath();
+    ctx.moveTo(x0 + r, top);
+    ctx.arcTo(x0 + bw, top, x0 + bw, top + bh, r);
+    ctx.arcTo(x0 + bw, top + bh, x0, top + bh, r);
+    ctx.arcTo(x0, top + bh, x0, top, r);
+    ctx.arcTo(x0, top, x0 + bw, top, r);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(6,16,28,0.88)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,212,90,0.95)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.drawImage(big.c, cx - big.w / 2, top - 4, big.w, big.h);
+    ctx.drawImage(small.c, cx - small.w / 2, top + big.h - 14, small.w, small.h);
+}
+
 function drawEntities() {
     // üstteki nesneler altakileri örtsün diye y'ye göre sırala
     const items = [];
     world.towers.forEach(t => items.push({ y: t.y, draw: () => drawTower(t) }));
-    world.enemies.forEach(e => items.push({ y: e.y, draw: () => drawEnemy(e) }));
+    world.enemies.forEach(e => items.push({ y: e.y + (leapingUp(e) ? 400 : 0), draw: () => drawEnemy(e) }));
     items.sort((a, b) => a.y - b.y);
     items.forEach(i => i.draw());
     world.projectiles.forEach(drawProjectile);
@@ -1752,7 +1782,64 @@ function drawShadow(x, y, w, h, alpha) {
 // girdap haritasında çekimin başladığı ilerleme (yoksa null)
 let pullFrom = null;
 
+// Patronun kule yeme sırasındaki duruşu (core.js tickBoss evreleri): kuleye döner ve çömelir (cast), kuleye zıplar (leap),
+// ısırır (bite), yola geri atlar (back). Dönüş: { ox, oy, lift, tilt, right, sx, sy } ya da null (normal yürüyüş).
+function leapingUp(e) { return !!e.furyTower && (e.furyPhase === 'leap' || e.furyPhase === 'bite' || e.furyPhase === 'back'); }
+
+function bossLeap(e) {
+    const ph = e.furyPhase;
+    if (!e.furyTower || !(ph === 'cast' || ph === 'leap' || ph === 'bite' || ph === 'back')) return null;
+    const tw = e.furyTower;
+    const dx = tw.x - e.x;
+    const dy = tw.y - e.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const ux = dx / d;
+    const uy = dy / d;
+    const reach = Math.max(0, d - e.size * 0.3);              // ağız kulenin üstüne gelir, gövde tam üstüne değil
+    const p = e.furyDur > 0 ? Math.min(1, Math.max(0, 1 - e.furyT / e.furyDur)) : 1;
+    const arc = Math.min(74, 28 + d * 0.15);
+    let h = 0, lift = 0, sx = 1, sy = 1, turn = 1, away = false;
+    if (ph === 'cast') {
+        const c = Math.sin(p * Math.PI);
+        sx = 1 + 0.07 * c; sy = 1 - 0.13 * c;                    // çömelir
+        turn = Math.min(1, p * 4);
+    } else if (ph === 'leap') {
+        h = p * (2 - p);                                         // hızlı kalkış, yumuşak iniş
+        lift = 4 * arc * p * (1 - p);
+        const c = Math.sin(p * Math.PI);
+        sx = 1 + 0.14 * c; sy = 1 - 0.06 * c;
+    } else if (ph === 'bite') {
+        h = 1;
+        const c = Math.abs(Math.sin(p * Math.PI * 3)) * (1 - p * 0.6);
+        sx = 1 + 0.14 * c; sy = 1 - 0.1 * c;                     // çiğneme
+    } else {
+        away = true;
+        h = 1 - p * (2 - p);
+        lift = 4 * arc * p * (1 - p);
+        const c = Math.sin(p * Math.PI);
+        sx = 1 + 0.12 * c; sy = 1 - 0.05 * c;
+    }
+    const vx = away ? -ux : ux;
+    const vy = away ? -uy : uy;
+    const right = vx >= 0;
+    let tilt = right ? Math.atan2(vy, vx) : Math.atan2(-vy, -vx);
+    tilt = Math.max(-0.75, Math.min(0.75, tilt)) * turn;
+    return { ox: ux * reach * h, oy: uy * reach * h, lift, tilt, right, sx, sy };
+}
+
 function drawEnemy(e) {
+    const lp = bossLeap(e);
+    if (!lp) { drawEnemyBody(e, null); return; }
+    // gölge yerde kalır, havadayken küçülür
+    const gk = 1 - Math.min(0.6, lp.lift / 120);
+    drawShadow(e.x + lp.ox, e.y + lp.oy + e.size * 0.36, e.size * 0.34 * gk, e.size * 0.1 * gk, 0.26);
+    ctx.save();
+    ctx.translate(lp.ox, lp.oy - lp.lift);
+    drawEnemyBody(e, lp);
+    ctx.restore();
+}
+
+function drawEnemyBody(e, lp) {
     const bob = Math.sin(animTime * 4.2 + e.id * 1.7) * (e.type === 'boss' ? 2 : 3);
     const sinceHit = animTime - (e.hitAnim || -10);
     if (e.lastHit !== e.hitSeen) { e.hitSeen = e.lastHit; e.hitAnim = animTime; }
@@ -1768,7 +1855,7 @@ function drawEnemy(e) {
         ctx.arc(e.x, e.y, size * 0.85, 0, 6.2832);
         ctx.fill();
     }
-    drawShadow(e.x, e.y + size * 0.36, size * 0.34, size * 0.1, 0.22);
+    if (!lp) drawShadow(e.x, e.y + size * 0.36, size * 0.34, size * 0.1, 0.22);
     if (e.rageT > 0) {
         // öfke: nabız gibi atan kızıl hale ve arkada hız çizgileri
         ctx.globalAlpha = 0.5 + 0.3 * Math.sin(animTime * 16);
@@ -1798,7 +1885,11 @@ function drawEnemy(e) {
     }
     ctx.save();
     ctx.translate(e.x, e.y + bob);
-    if (currentMap.flipSprites && e.dirX > 0) ctx.scale(-1, 1);
+    if (lp) {
+        ctx.rotate(lp.tilt);                       // ağzı kuleye bakar
+        if (lp.right) ctx.scale(-1, 1);
+        ctx.scale(lp.sx, lp.sy);
+    } else if (currentMap.flipSprites && e.dirX > 0) ctx.scale(-1, 1);
     // türe özgü hareket: kaplumbağa sallanır, denizatı salınır, kalamar jet gibi büzülür, müren kıvrılır
     const ph = animTime * 3 + e.id;
     switch (e.special) {
@@ -2196,6 +2287,33 @@ function drawSwordfish(t, idle, since) {
 
 function drawProjectile(p) {
     const img = sprites.projectiles[p.type];
+    if (p.bolt) {
+        // elektrik topu: parlak çekirdek, arkasında kıvrılan yıldırım izi; hedefe varınca şok patlar
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.globalAlpha = 0.85;
+        ctx.drawImage(glowSprite('255,225,80', 36), -36, -36, 72, 72);
+        ctx.globalAlpha = 1;
+        ctx.rotate(p.angle);
+        const j = Math.sin(animTime * 70 + p.x) * 5;
+        ctx.strokeStyle = 'rgba(255,244,170,0.9)';
+        ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-8, 0); ctx.lineTo(-20, -6 + j); ctx.lineTo(-30, 5 - j); ctx.lineTo(-44, j * 0.6);
+        ctx.moveTo(-6, 4); ctx.lineTo(-17, 10 - j); ctx.lineTo(-26, 3);
+        ctx.stroke();
+        ctx.rotate(-p.angle + animTime * 11);
+        if (ready(img)) ctx.drawImage(fit(img, 38), -19, -19, 38, 38);
+        else {
+            ctx.fillStyle = '#ffd84a';
+            ctx.beginPath();
+            ctx.arc(0, 0, 10, 0, 6.2832);
+            ctx.fill();
+        }
+        ctx.restore();
+        return;
+    }
     if (p.lob) {
         // havan: yay çizerek uçar, yere yaklaştıkça küçülür
         const f = p.flight;
@@ -2545,9 +2663,16 @@ function tryBuild(type, spot) {
         addFloater({ x: spot.x, y: spot.y - 40, text: `${cost} Enerji gerek`, color: '#ff8a8a', life: 1.2, maxLife: 1.2, important: true });
         return false;
     }
-    world.placeTower(type, spot);
+    const placed = world.placeTower(type, spot);
     updateUI();
     renderTowerList();
+    if (placed && placed.ok && spot.kind === 'high') {
+        // yüksek zemine kurulunca kazanılan menzil ekranda büyükçe gösterilir
+        const base = Core.TOWER_TYPES[type].range;
+        addFloater({ x: spot.x, y: spot.y - 76, text: '+%20 menzil', color: '#ffd45a', life: 2.2, maxLife: 2.2, big: true, important: true });
+        addFloater({ x: spot.x, y: spot.y - 46, text: `${base} → ${placed.tower.range}`, color: '#ffffff', life: 2.2, maxLife: 2.2, important: true });
+        fx.rings.push({ x: spot.x, y: spot.y, r: 30, max: placed.tower.range, life: 0.9, maxLife: 0.9, color: '255,212,90' });
+    }
     return true;
 }
 
@@ -2569,13 +2694,14 @@ canvas.addEventListener('mousemove', (e) => {
     if (!world) return;
     const p = toLogical(e);
     hoverSpot = armedType ? spotAt(p) : null;
-    showSpotHint(spotAt(p));
+    labelSpot = spotAt(p);
+    showSpotHint(labelSpot);
     const t = towerAt(p);
     hoverTowerId = t ? t.id : null;
     const overTreasure = world.treasure && Math.hypot(p.x - world.treasure.x, p.y - world.treasure.y) < 56;
     canvas.style.cursor = overTreasure ? 'pointer' : armedType ? (hoverSpot ? 'copy' : 'not-allowed') : (t ? 'pointer' : 'default');
 });
-canvas.addEventListener('mouseleave', () => { hoverSpot = null; hoverTowerId = null; showSpotHint(null); });
+canvas.addEventListener('mouseleave', () => { hoverSpot = null; labelSpot = null; hoverTowerId = null; showSpotHint(null); });
 canvas.addEventListener('click', (e) => {
     if (!world || world.result) return;
     const p = toLogical(e);
@@ -2605,6 +2731,11 @@ document.addEventListener('keydown', (e) => {
         return;
     }
     const k = e.key.toLowerCase();
+    if (hintOpen()) {
+        if (k === 'escape' || k === 'h') { e.preventDefault(); closeHint(); }
+        return;
+    }
+    if (k === 'h') { e.preventDefault(); openHint(); return; }
     if (k === 'escape') {
         if (armedType) { armTower(armedType); }
         else if (selectedTower) closeTowerModal();
@@ -2872,18 +3003,79 @@ function renderWavePreview() {
         const name = typeName(type);
         return `<span class="chip" title="${name} (tıkla: Rehber)" onclick="openGuide('enemies','${type === 'boss' ? 'boss_' + (currentMap.boss || 'shark') : type}')"><img src="${img}" alt="">×${count}</span>`;
     }).join('');
-    // ipuçları: düşman simgesi, iyi kuleler (yeşil tik) ve kötü kuleler (kırmızı çarpı); tıklayınca Rehber ilgili düşmanı açar
-    const icon = t => `<img class="adv-tower" src="${SPRITE_FILES.towers[t]}" title="${towerTypeName(t)}" alt="">`;
-    const advice = world.waveAdviceItems(next.wave).map(it => {
-        const img = SPRITE_FILES.enemies[enemyKey(it.enemy, currentMap.boss)];
-        const good = it.good.length ? `<span class="adv-good">✓</span>${it.good.map(icon).join('')}` : '';
-        const bad = it.bad.length ? `<span class="adv-bad">✗</span>${it.bad.map(icon).join('')}` : '';
-        return `<div class="advice-row" title="${it.note}" onclick="openGuide('enemies','${it.enemy === 'boss' ? 'boss_' + (currentMap.boss || 'shark') : it.enemy}')"><img class="adv-enemy" src="${img}" alt="">${good}${bad}</div>`;
-    }).join('');
     const adapt = Object.entries(world.adapt).map(([t, r]) => `${towerTypeName(t)} %${Math.round(r * 100)}`);
     const adaptHtml = adapt.length ? `<div class="adapt-line" title="Hasarın yarısından fazlasını tek türe yaptırırsan düşmanlar ona alışır; türleri karıştırınca kalkar">Düşmanlar alıştı: ${adapt.join(', ')} daha az hasar veriyor</div>` : '';
-    box.innerHTML = `<div class="preview-title">Sıradaki: Dalga ${next.wave} <button class="guide-link" onclick="openGuide()" title="Rehber: kuleler, düşmanlar, haritalar">? Rehber</button></div><div class="chips">${chips}</div>${advice ? '<div class="advice-box"><div class="advice-title">Bu dalgaya karşı <span class="adv-good">✓</span> iyi <span class="adv-bad">✗</span> kötü kuleler</div>' + advice + '</div>' : ''}${adaptHtml}`;
+    box.innerHTML = `<div class="preview-title">Sıradaki: Dalga ${next.wave} <span class="preview-btns"><button class="hint-btn${hintAlert ? ' pulse' : ''}" onclick="openHint()" title="Bu dalgaya karşı hangi kuleler iyi, hangileri kötü? (H)">İpucu</button><button class="guide-link" onclick="openGuide()" title="Rehber: kuleler, düşmanlar, haritalar">? Rehber</button></span></div><div class="chips">${chips}</div>${adaptHtml}`;
 }
+
+// ------------------------------------------------------------------ ipucu penceresi
+// Sağ panelde sürekli yazı yok: oyuncu takılınca İpucu düğmesine basar. Üsse düşman geçtiğinde düğme göz kırpar.
+let hintAlert = false;
+let hintShown = false;
+let hintPausedBefore = false;
+const bossKey = type => (type === 'boss' ? 'boss_' + (currentMap.boss || 'shark') : type);
+
+function hintRows(wave, counts) {
+    const items = world.waveAdviceItems(wave);
+    const chip = t => `<span class="hint-t"><img src="${SPRITE_FILES.towers[t]}" alt="">${towerTypeName(t)}</span>`;
+    if (!items.length) {
+        return '<p class="hint-none">Bu dalgada özel bir tehlike yok: sıradan düşmanlar. Birkaç farklı kule türü yeter; tek türe yığılırsan düşmanlar ona alışır.</p>';
+    }
+    return items.map(it => {
+        const key = bossKey(it.enemy);
+        const img = SPRITE_FILES.enemies[enemyKey(it.enemy, currentMap.boss)];
+        const info = (typeof Guide !== 'undefined' && Guide.ENEMY_INFO[key]) || {};
+        const count = counts && counts[it.enemy] ? ` <span class="hint-count">×${counts[it.enemy]}</span>` : '';
+        return `<div class="hint-row">
+            <img class="hint-enemy" src="${img}" alt="">
+            <div class="hint-main">
+                <div class="hint-name">${typeName(it.enemy)}${count}</div>
+                <div class="hint-lead">${info.lead || ''}</div>
+                ${it.good.length ? `<div class="hint-line good"><b>✓ İyi kuleler:</b>${it.good.map(chip).join('')}</div>` : ''}
+                ${it.bad.length ? `<div class="hint-line bad"><b>✗ Kötü kuleler:</b>${it.bad.map(chip).join('')}</div>` : ''}
+                <div class="hint-note">${it.note}</div>
+            </div>
+            <button class="hint-go" onclick="openGuide('enemies','${key}')">Rehber ›</button>
+        </div>`;
+    }).join('');
+}
+
+function renderHint() {
+    const next = world.previewNext();
+    const busy = world.enemies.length > 0 && world.wave > 0;
+    let html = '';
+    if (busy) {
+        const counts = Core.summarizePlan(world.planFor(world.wave));
+        html += `<h4>Şu an sahada: Dalga ${world.wave}</h4>${hintRows(world.wave, counts)}`;
+    }
+    if (next) html += `<h4>Sıradaki: Dalga ${next.wave}</h4>${hintRows(next.wave, next.counts)}`;
+    const adapt = Object.entries(world.adapt).map(([t, r]) => `${towerTypeName(t)} %${Math.round(r * 100)}`);
+    if (adapt.length) html += `<h4>Düşmanlar alıştı</h4><p class="hint-none">Hasarın yarısından fazlasını tek türe yaptırdığın için düşmanlar şunlardan daha az hasar alıyor: ${adapt.join(', ')}. Başka türde kule ekleyince kalkar. <a onclick="openGuide('rules','adapt')">Ayrıntı ›</a></p>`;
+    const links = [`<a onclick="openGuide('maps','${currentMap.id}')">Bu haritanın kuralı</a>`, '<a onclick="openGuide(\'rules\',\'high\')">Altın halka (yüksek zemin)</a>', '<a onclick="openGuide(\'towers\')">Kulelerin yetenekleri</a>', '<a onclick="openGuide(\'enemies\')">Tüm düşmanlar</a>'];
+    html += `<div class="hint-links">Rehber'de: ${links.join(' · ')}</div>`;
+    document.getElementById('hintBody').innerHTML = html;
+}
+
+function openHint() {
+    if (!world || world.result) return;
+    hintAlert = false;
+    hintShown = true;
+    uiCache.preview = null;
+    renderHint();
+    hintPausedBefore = paused;
+    if (!paused) togglePause();
+    document.getElementById('hintModal').classList.remove('hidden');
+}
+
+function closeHint() {
+    const m = document.getElementById('hintModal');
+    if (m.classList.contains('hidden')) return;
+    m.classList.add('hidden');
+    if (world && !hintPausedBefore && paused) togglePause();
+}
+
+// Rehber ipucu penceresinden açılırsa oyun zaten duraklamıştır; ipucu penceresi açık kalmasın
+function hintOpen() { return !document.getElementById('hintModal').classList.contains('hidden'); }
 
 function togglePause() {
     if (!world) return;
