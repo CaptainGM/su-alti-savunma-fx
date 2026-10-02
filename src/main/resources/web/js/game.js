@@ -146,6 +146,7 @@ let paused = false;
 let speedMultiplier = 1;
 let selectedTower = null;
 let hoverSpot = null;
+let labelUntil = 0;         // dokunmatikte etiket bu zamana kadar gösterilir
 let labelSpot = null;      // fare üzerindeyken (kule seçili olmasa da) yüksek zemin yazısı için
 let armedType = null;
 let draggedType = null;
@@ -783,7 +784,7 @@ function showBanner() {
     b.classList.add('show');
 }
 
-let MAX_CANVAS_PX = 2700;
+let MAX_CANVAS_PX = (typeof Platform !== 'undefined' && Platform.maxCanvasPx) || 2700;
 
 function fitCanvas() {
     const box = document.getElementById('canvasContainer');
@@ -836,6 +837,25 @@ window.javaFrame = function (ms) {
     } catch (e) { reportError(e); }
 };
 
+// Mobil: kare hızı uzun süre düşük kalırsa görüntü kalitesi kendiliğinden bir basamak düşer (yavaş telefonlarda oyun akıcı kalır).
+// 4 sn boyunca hedefin %62'sinin altında kalmak gerekir; oturum başına en fazla iki kez. Duraklatma ve arka plan sayılmaz.
+let lowFpsRun = 0;
+let qualityDrops = 0;
+function adaptQuality(fps, target) {
+    if (typeof Platform === 'undefined' || !Platform.mobile || paused || document.hidden || inDemo) { lowFpsRun = 0; return; }
+    const want = target > 0 ? Math.min(target, 60) : 60;
+    lowFpsRun = fps < want * 0.62 ? lowFpsRun + 1 : 0;
+    if (lowFpsRun < 8 || qualityDrops >= 2) return;
+    const order = ['high', 'medium', 'low'];
+    const i = order.indexOf(Settings.get().quality);
+    if (i < 0 || i >= order.length - 1) return;
+    Settings.set('quality', order[i + 1]);
+    fitCanvas();
+    qualityDrops++;
+    lowFpsRun = 0;
+    notify(`Kare hızı düşük: görüntü kalitesi "${{ medium: 'Orta', low: 'Düşük' }[order[i + 1]]}" yapıldı. Ayarlardan değiştirebilirsin.`, '#ffd27a');
+}
+
 function gameLoop(ts, fromJava) {
     if (!world) return;
     if (!fromJava) {
@@ -881,6 +901,7 @@ function gameLoop(ts, fromJava) {
     const now = performance.now();
     if (now - perf.since >= 500) {
         perf.fps = Math.round(perf.frames * 1000 / (now - perf.since));
+        adaptQuality(perf.fps, target);
         perf.drawMs = perf.drawAcc / perf.frames;
         perf.frames = 0;
         perf.drawAcc = 0;
@@ -1733,6 +1754,15 @@ function drawSpots() {
 // Yüksek zemin yazısı: altın halkanın üstüne gelince (ya da kule sürüklenirken) büyük ve okunur bir etiket çıkar
 function drawSpotLabel() {
     if (!world) return;
+    if (labelUntil && performance.now() > labelUntil) { labelUntil = 0; labelSpot = null; }
+    // dokunmatik: kule seçiliyken ya da sürüklenirken tüm boş yüksek zeminlerde küçük "+%20" etiketi görünür
+    if ((armedType || draggedType) && typeof Platform !== 'undefined' && Platform.touch) {
+        const tag = textSprite('+%20', 22, '#ffd45a');
+        world.spots.forEach(sp => {
+            if (sp.tower || sp.kind !== 'high' || sp === hoverSpot) return;
+            ctx.drawImage(tag.c, sp.x - tag.w / 2, sp.y - Core.BUILD_SPOT_RADIUS - tag.h + 6, tag.w, tag.h);
+        });
+    }
     const spot = hoverSpot && !hoverSpot.tower ? hoverSpot : (labelSpot && !labelSpot.tower ? labelSpot : null);
     if (!spot || spot.kind !== 'high') return;
     const type = draggedType || armedType;
@@ -2595,7 +2625,7 @@ function renderTowerMarket() {
     towerOrder().forEach((type, idx) => {
         const btn = document.createElement('div');
         btn.className = 'tower-button';
-        btn.setAttribute('draggable', 'true');
+        btn.setAttribute('draggable', (typeof Platform !== 'undefined' && Platform.mobile) ? 'false' : 'true');
         btn.setAttribute('data-tower', type);
         const def = Core.TOWER_TYPES[type];
         const name = (currentMap.towerNames && currentMap.towerNames[type]) || def.name;
@@ -2614,7 +2644,8 @@ function renderTowerMarket() {
             hoverSpot = null;
             draggedType = null;
         });
-        btn.addEventListener('click', () => armTower(type));
+        btn.addEventListener('click', () => { if (Date.now() >= suppressClickUntil) armTower(type); });
+        setupTouchDrag(btn, type);
         btn.addEventListener('mouseenter', () => { document.getElementById('towerHint').innerText = `${name}: ${def.role}`; });
         btn.addEventListener('mouseleave', () => { document.getElementById('towerHint').innerText = 'Bir kulenin üzerine gel'; });
         container.appendChild(btn);
@@ -2625,6 +2656,68 @@ function armTower(type) {
     armedType = armedType === type ? null : type;
     document.querySelectorAll('.tower-button').forEach(b =>
         b.classList.toggle('armed', b.getAttribute('data-tower') === armedType));
+    // dokunmatikte üzerine gelinip bilgi okunamaz: kule seçilince kısa tanıtımı ekranda çıkar
+    if (armedType && world && typeof Platform !== 'undefined' && Platform.touch) {
+        notify(`${towerTypeName(armedType)} · ${world.towerCost(armedType)} Enerji: ${Core.TOWER_TYPES[armedType].role}`, '#bff0ff');
+    }
+}
+
+// ------------------------------------------------------------------ dokunmatik sürükleme
+// Kule düğmesinden oyun alanına parmakla sürükle: parmağın hemen üstünde kulenin simgesi gezer, altındaki kule yeri
+// vurgulanır (yüksek zeminde "+%20 menzil" etiketiyle), parmak kalkınca kule kurulur. Kısa dokunuş ise kuleyi seçer.
+let suppressClickUntil = 0;
+let touchDrag = null;
+const GHOST_LIFT = 52;                    // simge parmağın bu kadar piksel üstünde durur (parmak hedefi kapatmasın)
+
+function setupTouchDrag(btn, type) {
+    btn.addEventListener('pointerdown', e => {
+        if (e.pointerType === 'mouse' || !world) return;
+        touchDrag = { type, id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false, ghost: null };
+        try { btn.setPointerCapture(e.pointerId); } catch (err) { /* yoksay */ }
+    });
+    btn.addEventListener('pointermove', e => {
+        const d = touchDrag;
+        if (!d || d.id !== e.pointerId || !world) return;
+        if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 12) {
+            d.moved = true;
+            draggedType = d.type;
+            armedType = null;
+            document.querySelectorAll('.tower-button').forEach(b => b.classList.remove('armed'));
+            const g = document.createElement('div');
+            g.className = 'touch-ghost';
+            g.innerHTML = btn.querySelector('.tower-icon-box').innerHTML;
+            document.body.appendChild(g);
+            d.ghost = g;
+        }
+        if (d.moved) {
+            d.ghost.style.left = e.clientX + 'px';
+            d.ghost.style.top = (e.clientY - GHOST_LIFT) + 'px';
+            const p = toLogical({ clientX: e.clientX, clientY: e.clientY - GHOST_LIFT });
+            hoverSpot = spotAt(p);
+            labelSpot = hoverSpot;
+        }
+    });
+    const finish = (e, cancelled) => {
+        const d = touchDrag;
+        if (!d || d.id !== e.pointerId) return;
+        touchDrag = null;
+        if (d.ghost) d.ghost.remove();
+        if (d.moved) {
+            suppressClickUntil = Date.now() + 450;          // sürüklemeden sonra gelen sahte tıklama kuleyi seçmesin
+            if (!cancelled && world && !world.result) {
+                const r = canvas.getBoundingClientRect();
+                const overCanvas = e.clientX >= r.left && e.clientX <= r.right && e.clientY - GHOST_LIFT >= r.top && e.clientY - GHOST_LIFT <= r.bottom;
+                if (overCanvas) {
+                    const spot = spotAt(toLogical({ clientX: e.clientX, clientY: e.clientY - GHOST_LIFT }));
+                    tryBuild(d.type, spot);
+                }
+            }
+            draggedType = null;
+            hoverSpot = null;
+        }
+    };
+    btn.addEventListener('pointerup', e => finish(e, false));
+    btn.addEventListener('pointercancel', e => finish(e, true));
 }
 
 function toLogical(e) {
@@ -2726,6 +2819,13 @@ canvas.addEventListener('click', (e) => {
         if (spot) { tryBuild(armedType, spot); return; }
     }
     const t = towerAt(p);
+    // dokunmatik: boş bir kule yerine dokununca (kule seçili değilken) ne işe yaradığı kısa süre gösterilir
+    if (!armedType && !t && typeof Platform !== 'undefined' && Platform.touch) {
+        const sp = spotAt(p);
+        labelSpot = sp;
+        labelUntil = sp ? performance.now() + 3200 : 0;
+    }
+    if (armedType && !t && typeof Platform !== 'undefined' && Platform.touch) notify('Kuleyi bir kule yerinin (halkanın) üstüne koy.', '#ffd0d0');
     if (t) {
         armedType = null;
         document.querySelectorAll('.tower-button').forEach(b => b.classList.remove('armed'));
@@ -2838,8 +2938,18 @@ function openTowerModal(tower) {
     document.getElementById('sellBtn').innerText = `SAT (+${tower.sellValue()} Enerji)`;
     document.getElementById('perkChoice').classList.add('hidden');
     document.getElementById('towerMain').classList.remove('hidden');
-    document.getElementById('towerModal').classList.remove('hidden');
+    const modal = document.getElementById('towerModal');
+    modal.classList.remove('hidden');
+    dockTowerModal(tower);
     renderTowerList();
+}
+
+// Küçük ekranda pencere seçili kulenin üstüne binmesin diye kulenin ekranın hangi yarısında olduğuna göre karşı tarafa yaslanır
+function dockTowerModal(tower) {
+    const modal = document.getElementById('towerModal');
+    const r = canvas.getBoundingClientRect();
+    const sx = r.left + tower.x / W * r.width;
+    modal.classList.toggle('dock-left', sx > window.innerWidth / 2);
 }
 
 // seçilmiş yetenekler; yoksa bir sonraki yetenek seçiminin ne zaman geleceği
@@ -3245,7 +3355,8 @@ function toggleInfo() {
 
 function exitGame() {
     window.saveBeforeExit();
-    alert('JAVA_EXIT_APP');
+    if (typeof Platform !== 'undefined' && !Platform.java) bridgeCall('exitApp');
+    else alert('JAVA_EXIT_APP');
 }
 
 function restartGame() {

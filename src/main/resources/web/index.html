@@ -3,9 +3,18 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#020a12">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Su Altı Savunma">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="assets/icon_64.png">
+    <link rel="apple-touch-icon" href="assets/icon_256.png">
     <title>Su Altı Savunma</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/mobil.css">
 </head>
 
 <body>
@@ -56,10 +65,12 @@
     <div id="menuScreen" class="screen">
         <img id="menuLogo" src="assets/logo.png" alt="">
         <h1>SU ALTI SAVUNMA</h1>
-        <button class="menu-button" onclick="showMapSelect()">Oyunu Başlat</button>
-        <button class="menu-button" onclick="openSettings()">Ayarlar</button>
-        <button class="menu-button" onclick="openGuide()">Rehber</button>
-        <button class="menu-button" onclick="exitGame()">Çıkış</button>
+        <div class="menu-buttons">
+            <button class="menu-button" onclick="showMapSelect()">Oyunu Başlat</button>
+            <button class="menu-button" onclick="openSettings()">Ayarlar</button>
+            <button class="menu-button" onclick="openGuide()">Rehber</button>
+            <button class="menu-button exit-btn" onclick="exitGame()">Çıkış</button>
+        </div>
     </div>
 
     <div id="settingsScreen" class="screen hidden">
@@ -77,8 +88,8 @@
             </div>
             <div class="set-group">
                 <h4>Ekran</h4>
-                <label class="set-row"><span>Tam ekran <small>(F11)</small></span><input type="checkbox" id="setFullscreen"></label>
-                <label class="set-row">Pencere boyutu
+                <label class="set-row fs-row"><span>Tam ekran <small>(F11)</small></span><input type="checkbox" id="setFullscreen"></label>
+                <label class="set-row java-only">Pencere boyutu
                     <select id="setSize">
                         <option value="auto">Otomatik</option>
                         <option value="1280x720">1280 x 720</option>
@@ -99,7 +110,9 @@
                 </label>
                 <label class="set-row">Hedef FPS
                     <select id="setFps">
+                        <option value="30">30</option>
                         <option value="60">60</option>
+                        <option value="90">90</option>
                         <option value="120">120</option>
                         <option value="144">144</option>
                         <option value="240">240</option>
@@ -159,30 +172,35 @@
             </div>
 
             <div class="sidebar">
-                <div class="panel" style="border-color: #ffcc00;">
+                <div class="panel" id="statusPanel" style="border-color: #ffcc00;">
                     <h3>Durum Paneli</h3>
-                    <p>Can: <span id="healthValue" style="color:#ff4757; font-weight:bold;">100</span></p>
-                    <div class="hp-track"><div id="healthBar"></div></div>
-                    <p>Enerji: <span id="moneyValue" style="color:#ffcc00; font-weight:bold;">200</span></p>
-                    <p>Dalga: <span id="waveValue">0/10</span></p>
+                    <div id="hudStats">
+                        <p class="hud-hp">Can: <span id="healthValue" style="color:#ff4757; font-weight:bold;">100</span></p>
+                        <div class="hp-track"><div id="healthBar"></div></div>
+                        <p class="hud-money">Enerji: <span id="moneyValue" style="color:#ffcc00; font-weight:bold;">200</span></p>
+                        <p class="hud-wave">Dalga: <span id="waveValue">0/10</span></p>
+                    </div>
                     <p id="ruleLine"></p>
                     <div id="wavePreview"></div>
-                    <button class="btn" id="waveButton" onclick="startNextWave()">DALGA BAŞLAT</button>
-                    <div style="display:flex; gap:8px; margin-top:8px;">
-                        <button class="btn" id="pauseButton" onclick="togglePause()"
-                            style="flex:1; font-size:1em; padding:10px; background:#333; box-shadow:none;">DURAKLAT</button>
-                        <button class="btn" id="speedButton" onclick="toggleSpeed()"
-                            style="flex:1; font-size:1em; padding:10px; background:#333; box-shadow:none;">HIZ: 1x</button>
+                    <div id="hudActions">
+                        <button class="btn" id="waveButton" onclick="startNextWave()">DALGA BAŞLAT</button>
+                        <div class="hud-row" style="display:flex; gap:8px; margin-top:8px;">
+                            <button class="btn" id="pauseButton" onclick="togglePause()"
+                                style="flex:1; font-size:1em; padding:10px; background:#333; box-shadow:none;">DURAKLAT</button>
+                            <button class="btn" id="speedButton" onclick="toggleSpeed()"
+                                style="flex:1; font-size:1em; padding:10px; background:#333; box-shadow:none;">HIZ: 1x</button>
+                        </div>
+                        <button class="btn compact-only" id="hintBtnC" onclick="openHint()">İPUCU</button>
                     </div>
                 </div>
 
-                <div class="panel" style="border-color: #00ff88;">
+                <div class="panel" id="marketPanel" style="border-color: #00ff88;">
                     <h3>Kule Market</h3>
                     <div id="towerMarketContainer"></div>
                     <div id="towerHint">Bir kulenin üzerine gel</div>
                 </div>
 
-                <div class="panel" style="border-color: #ffcc00; flex: 1; min-height:120px; display:flex; flex-direction:column;">
+                <div class="panel" id="placedPanel" style="border-color: #ffcc00; flex: 1; min-height:120px; display:flex; flex-direction:column;">
                     <h3>Yerleştirdiğiniz Kuleler</h3>
                     <div id="towerList" style="overflow-y:auto;">
                         <p style="color:#888; font-size:0.95em;">Henüz kule yerleştirilmedi.</p>
@@ -217,11 +235,24 @@
         </div>
     </div>
 
+    <div id="rotateHint" aria-hidden="true">
+        <div class="rotate-phone"></div>
+        <p>Oyun yatay ekranda oynanır.<br>Telefonunu yan çevir.</p>
+    </div>
+
+    <script src="js/platform.js"></script>
     <script src="js/core.js"></script>
     <script src="js/settings.js"></script>
     <script src="js/maps.js"></script>
+    <script src="js/audio.js"></script>
     <script src="js/game.js"></script>
     <script src="js/rehber.js"></script>
+    <script>
+        // Çevrimdışı çalışma ve ana ekrana eklenebilirlik (yalnızca web; Java ve Android uygulamasında dosyalar zaten yerelde)
+        if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !/JavaFX|SASApp/.test(navigator.userAgent) && location.hostname !== 'appassets.androidplatform.net') {
+            window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => { /* kayıt başarısız olabilir */ }));
+        }
+    </script>
 </body>
 
 </html>

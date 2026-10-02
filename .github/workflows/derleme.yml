@@ -8,17 +8,106 @@ on:
 
 jobs:
   test:
-    name: Oyun çekirdeği testleri
+    name: Oyun çekirdeği, ses ve statik denetim
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
       - name: Birim testleri (kurallar, yetenekler, düşmanlar, kayıt)
         run: node tools/test_core.js
       - name: Zorluk ve strateji ölçütleri (3 harita, botlarla)
         run: node tools/zorluk_testi.js hizli
+      - name: Dayanıklılık (sonsuz mod, rastgele girdi, kaydet/devam et)
+        run: node tools/dayaniklilik.js hizli
+      - name: Statik denetim (tanımsız değişken, yinelenen tanım...)
+        run: |
+          cd tools/lint
+          npm install --no-audit --no-fund
+          node lint.js
+      - name: Java derle (ses karşılaştırması için)
+        run: mvn -B -q compile
+      - name: JavaScript sesleri Java sesleriyle örnek örnek aynı mı
+        run: node tools/ses_karsilastir.js
+
+  web:
+    name: Web ve mobil tarayıcı testleri (Chromium)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Playwright kur
+        run: |
+          cd tools/e2e
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Uçtan uca testler (masaüstü, telefon, tablet profilleri)
+        run: node tools/e2e/calistir.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ekran-goruntuleri
+          path: tools/e2e/ciktilar/
+          if-no-files-found: ignore
+
+  android:
+    name: Android uygulaması (APK + emülatör testi)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: APK derle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SuAltiSavunma-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Playwright kur (WebView'a bağlanmak için)
+        run: |
+          cd tools/e2e
+          npm install --no-audit --no-fund
+      - name: KVM aç (emülatör hızlansın)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Emülatörde APK testi (gerçek dokunuş, geri tuşu, yaşam döngüsü)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: node tools/e2e/android.js android/app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-ekran-goruntuleri
+          path: tools/e2e/ciktilar/
+          if-no-files-found: ignore
 
   paketle:
     name: Windows uygulaması

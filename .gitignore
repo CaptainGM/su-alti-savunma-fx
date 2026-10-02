@@ -12,3 +12,14 @@ tools/mapgen/swatch*.png
 tools/mapgen/spots_preview/
 dist/
 loglar/
+
+# mobil / Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.apk
+tools/e2e/node_modules/
+tools/e2e/ciktilar/
+tools/lint/node_modules/

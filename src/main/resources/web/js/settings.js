@@ -6,6 +6,8 @@
 
 const Settings = (function () {
     const DEFAULTS = { sfx: 0.6, music: 0.4, mute: false, fullscreen: false, size: 'auto', quality: 'high', effects: true, floaters: true, fps: 120, showFps: false };
+    // mobilde daha hafif başlangıç ayarları (Platform.defaults), diğer ortamlarda boş
+    if (typeof Platform !== 'undefined') Object.assign(DEFAULTS, Platform.defaults);
     const state = { settings: Object.assign({}, DEFAULTS), records: {}, difficulty: 'normal', saves: {} };
     let listeners = [];
 
@@ -157,6 +159,7 @@ function bindSettingsForm() {
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !document.getElementById('settingsScreen').classList.contains('hidden')) {
         closeSettings();
+        e.stopImmediatePropagation();          // oyunun Esc işleyicisi aynı tuşla oyundan da çıkmasın
         return;
     }
     if (e.key === 'F11') {

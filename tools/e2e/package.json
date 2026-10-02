@@ -1,0 +1,12 @@
+{
+  "name": "su-alti-savunma-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Su Altı Savunma web ve mobil uçtan uca testleri (Playwright, Chromium)",
+  "scripts": {
+    "test": "node calistir.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.50.0"
+  }
+}

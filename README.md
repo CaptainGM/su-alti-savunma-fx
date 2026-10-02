@@ -1,12 +1,29 @@
 # Su Altı Savunma FX
 
-Deniz canlısı temalı bir kule savunma (tower defense) oyunu. Uygulama JavaFX ile açılır, oyun ise `WebView` içinde çalışan HTML5 Canvas/JS motoruyla oynanır.
+Deniz canlısı temalı bir kule savunma (tower defense) oyunu. Aynı oyun üç yerde çalışır: **Windows masaüstü uygulaması** (JavaFX + `WebView`), **Android uygulaması** (yatay ekran, dokunmatik) ve **tarayıcı / PWA** (telefonda ana ekrana eklenip çevrimdışı oynanır). Oyun kuralları, 9 harita, 6 kule, 24 yetenek, patronlar, Rehber ve müzik her üçünde de aynıdır; çizim HTML5 Canvas/JS motoruyla yapılır.
 
 ![Ana menü](docs/menu.jpg)
 
 Derin Çukur haritasından bir kare: Fener Balıkları karanlığı aydınlatıyor, kulelerin altındaki renkli çubuklar seviyeyi ve seçilen yetenekleri gösteriyor, sağ üstteki kutu sıradaki dalgaya karşı hangi kulelerin işe yarayacağını söylüyor. Ekranda şifacı denizatı ve vatozlar var.
 
 ![Oynanış](docs/oynanis.jpg)
+
+## Mobil ve web
+
+Oyun telefonda **yatay ekranda** oynanır (Clash of Clans gibi); masaüstündeki tüm özellikler vardır. Ekran küçülünce yan panel yerine oyun alanını kapatmayan iki dar çubuk gelir: solda kuleler (fiyatlarıyla), sağda enerji, can, dalga ve komut düğmeleri (Dalga başlat, Duraklat, Hız, İpucu; altta Haritalar, Ayarlar, Rehber).
+
+![Android: oyun](docs/mobil-oyun.jpg)
+
+- **Dokunmatik kontrol:** kuleyi sol çubuktan **parmakla sürükleyip** bir kule yerine bırakırsın (parmağın hemen üstünde kulenin simgesi gezer, altındaki yer vurgulanır; altın halkada "+%20 menzil" etiketi çıkar). Kısa dokunuşla kule seçilir ve bir yere dokunarak kurulur; kurulu kuleye dokununca yükseltme/satma penceresi açılır (kulenin karşı tarafına yaslanır, kuleyi kapatmaz). Boş bir kule yerine dokununca ne işe yaradığı gösterilir
+- **Android geri tuşu:** önce açık pencereyi (İpucu, Rehber, Ayarlar, kule penceresi) kapatır, sonra oyundan haritalara, haritalardan menüye döner; menüdeyken uygulamayı arka plana atar. Uygulama arka plana gidince **ses kesilir ve oyun duraklar**
+- **Ses her yerde aynı:** efektler ve müzik Java'da değil, saf JavaScript'te (`js/ses_dsp.js`) üretilir ve Web Audio ile çalınır. Java sürümünün üretimiyle **örnek örnek aynıdır** (`node tools/ses_karsilastir.js` bunu Java'nın yazdığı WAV'larla karşılaştırır: en büyük fark 1 LSB). Üretim bir Worker içinde yapılır, telefonda birkaç saniye sürer
+- **Hafif başlangıç ayarları:** mobilde görüntü kalitesi Orta, FPS 60; kare hızı 4 sn boyunca düşük kalırsa kalite kendiliğinden bir basamak iner (en çok iki kez, bildirimle)
+- **Tarayıcı / PWA:** `src/main/resources/web` klasörü olduğu gibi bir web sunucusuna konabilir. `manifest.webmanifest` ve `sw.js` sayesinde telefonda "Ana ekrana ekle" ile tam ekran, yatay ve çevrimdışı çalışır. Yerelde denemek için `node tools/serve.js` (telefondan `http://<bilgisayar-ip>:8080`); `?mobil=1` ile masaüstü tarayıcıda da mobil düzen açılır. Dikey tutulursa "telefonu yan çevir" uyarısı çıkar
+- **Android uygulaması:** `android/` klasöründeki küçük bir Gradle projesidir; web dosyalarını (`src/main/resources/web`) kopyalamadan doğrudan paketler ve `https://appassets.androidplatform.net` altından bir `WebView`'da sunar (güvenli bağlam: Web Audio, Worker ve depolama çalışır; internet izni yoktur). Tam ekran, yatay, ekran açık kalır. Derlemek için: `cd android && ./gradlew assembleDebug` (JDK 17+ ve Android SDK gerekir); çıktı `android/app/build/outputs/apk/debug/app-debug.apk`. GitHub Actions her çalışmada APK'yı derler ve **emülatörde gerçek dokunuşlarla test eder**; APK çalışmanın çıktıları arasında `SuAltiSavunma-android-debug` adıyla durur
+
+![Android: kule penceresi](docs/mobil-kule.jpg)
+
+![Android: İpucu](docs/mobil-ipucu.jpg)
 
 ## Rehber
 
@@ -156,18 +173,25 @@ Savaş günlüğü arayüzde gösterilmez. Her oyun için `loglar/<harita>_<tari
 
 ```mermaid
 flowchart LR
-    APP[JavaFX Uygulaması] --> WV[WebView]
-    APP -- "AnimationTimer: kare" --> WV
-    WV --> UI["game.js (çizim, arayüz)"]
-    UI --> CORE["core.js (oyun kuralları)"]
-    UI --> MAPS["maps.js (harita verisi)"]
-    UI --> SET["settings.js (ayarlar, rekorlar)"]
-    UI <--> BR["Java-JS köprüsü (alert)"]
-    BR --> SND[SoundPlayer + MusicEngine]
-    BR --> LOG[LogWriter]
-    BR --> SAVE[SaveStore]
+    subgraph web["src/main/resources/web (tek kaynak)"]
+        UI["game.js (çizim, arayüz, dokunmatik)"] --> CORE["core.js (oyun kuralları)"]
+        UI --> MAPS["maps.js (harita verisi)"]
+        UI --> SET["settings.js (ayarlar, rekorlar)"]
+        UI --> GUIDE["rehber.js (Rehber)"]
+        UI <--> BR["javaBridge (platform.js)"]
+        DSP["ses_dsp.js (ses ve müzik üretimi)"] --> AUD["audio.js (Web Audio)"]
+    end
+    DESK["Windows: JavaFX uygulaması"] --> WV[WebView]
+    WV --> web
+    BR -- "Java ortamı" --> SND["SoundPlayer + MusicEngine, LogWriter, SaveStore"]
+    BR -- "tarayıcı / Android" --> AUD
+    AND["Android: WebView kabuğu"] --> web
+    BR -- "kayıt" --> LS["localStorage"]
 ```
 
+Aynı web klasörü üç ortamda çalışır; `js/platform.js` hangi ortamda olduğunu anlar ve `window.javaBridge` yüzeyini sağlar (Java ortamında Java kendi köprüsünü kurar). Oyun kodu ortamı bilmez.
+
+- `platform.js` ortamı (Java / Android / tarayıcı) tanır, küçük ekran düzenini (`html.compact`) ve dokunmatik sınıflarını ayarlar, geri tuşunu ve arka plana geçişi yönetir; `audio.js` Web Audio motorudur (Java ortamında devreye girmez); `css/mobil.css` küçük ekran düzenidir
 - `core.js` DOM'a dokunmaz: düşmanlar, kuleler, dalga planı, ekonomi, patron saldırısı, alışma, harita kuralları. Aynı dosya Node'da denge ve birim testleri için de kullanılır
 - `game.js` çizimi, efektleri, sesi ve arayüzü yönetir; `core.js`'den gelen olaylara tepki verir
 - `maps.js` yeni harita eklemek için tek yerdir (yol, kule yerleri, hangi kuleler, patron türü, zorluk, ortam efektleri)
@@ -183,6 +207,8 @@ Tüm sesleri WAV olarak yazmak ve düzeylerini görmek için:
 ```bash
 java -cp target/classes com.kule.savunma.SoundBank sesler
 ```
+
+Tarayıcı ve Android sürümü aynı sesleri JavaScript'te üretir (`js/ses_dsp.js`, `java.util.Random` dahil taşınmıştır). İki üretimin aynı kaldığını `node tools/ses_karsilastir.js` denetler; ses kodunu değiştirirsen Java ve JS'i birlikte güncelle.
 
 ## Görsel kaynakları
 
@@ -201,13 +227,18 @@ Proje bu haliyle tamamlanmış sayılır. Devam edilmek istenirse en çok değer
 
 ## Teknoloji
 
-- Java 25+, JavaFX (controls, fxml, web)
-- Maven (`javafx-maven-plugin`)
-- HTML5 Canvas / JavaScript
+- Masaüstü: Java 25+, JavaFX (controls, fxml, web), Maven (`javafx-maven-plugin`)
+- Oyun: HTML5 Canvas / JavaScript (tek kaynak, `src/main/resources/web`), Web Audio, Service Worker (PWA)
+- Android: Gradle (AGP 8.13), `WebView` kabuğu, minSdk 24
+- Testler: Node (birim, denge, dayanıklılık), ESLint, Playwright (Chromium, masaüstü ve mobil profilleri), adb + Chrome DevTools protokolü (Android)
 
 ## Çalıştırma
 
 **Hazır uygulama (Java kurmadan):** GitHub'daki *Actions* sekmesinde son başarılı çalışmanın `SuAltiSavunma-windows` çıktısını indirip zip'i açın ve `SuAltiSavunma.exe` dosyasını çalıştırın (JavaFX ve Java çalışma ortamı içindedir, ~110 MB). Kendiniz üretmek için JDK 25+ ve Maven ile `powershell -File tools\paketle.ps1`; çıktı `dist\` altında oluşur.
+
+**Android:** GitHub *Actions* çıktılarında `SuAltiSavunma-android-debug` (APK). Telefona kurmak için "bilinmeyen kaynaklardan yükleme" izni gerekir. Kendiniz derlemek için `cd android && ./gradlew assembleDebug`.
+
+**Tarayıcı:** `node tools/serve.js` ve telefondan `http://<bilgisayar-ip>:8080`. Gerçek bir adrese (HTTPS) konursa "Ana ekrana ekle" ile uygulama gibi kurulur.
 
 **Geliştirme:**
 
@@ -227,6 +258,12 @@ node tools/balans.js "" all          # üç zorluk birden
 node tools/zorluk_testi.js           # zorluk ve strateji ölçütlerini denetler (tüm haritalar, birkaç dakika)
 node tools/zorluk_testi.js hizli     # üç haritada hızlı denetim (CI)
 BOTS=rastgele,karisik SEEDS=11,23,37,41,59 node tools/balans.js yosun   # bot ve tohum seçimi
+node tools/ayar.js <harita> <hp listesi> <patron listesi>   # bir haritanın hpScale/bossScale değerlerini ızgara olarak dener
+node tools/dayaniklilik.js [hizli]   # sonsuz mod, rastgele girdi ve kaydet/devam et ile çökme ve NaN avı
+node tools/ses_karsilastir.js        # JS sesleri Java sesleriyle örnek örnek aynı mı (önce mvn compile)
+cd tools/lint && npm install && node lint.js          # statik denetim: tanımsız değişken, yinelenen tanım...
+cd tools/e2e && npm install && npx playwright install chromium && cd ../.. && node tools/e2e/calistir.js   # web ve mobil uçtan uca testleri
+node tools/e2e/android.js android/app/build/outputs/apk/debug/app-debug.apk   # APK'yı emülatörde/cihazda gerçek dokunuşlarla dener
 python tools/mapgen/build.py         # harita arka planlarını ve önizlemelerini yeniden üretir
 python tools/mapgen/export_js.py --write   # yolları (ve ilk kule yerlerini) maps.js'e yazar
 python tools/mapgen/spots.py         # kule yerlerinin dağılımını önizler (tools/mapgen/spots_preview/)

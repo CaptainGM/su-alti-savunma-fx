@@ -89,10 +89,10 @@ const Guide = (function () {
     const RULES = [
         { id: 'start', title: 'Başlarken', icon: '▶', lead: 'Düşmanlar yolun başından girer; sonuna ulaşırsa üssün canı azalır. Tüm dalgaları can bitmeden bitir.',
             sections: [
-                ['Kule kurmak', 'Sağ paneldeki kuleyi haritadaki bir yeşil halkaya sürükle ya da kuleye tıklayıp sonra halkaya tıkla. Her kule enerji (para) harcar; düşman öldürdükçe ve dalga bitince enerji kazanırsın.'],
+                ['Kule kurmak', 'Kule marketindeki (masaüstünde sağ panel, telefonda sol çubuk) kuleyi haritadaki bir yeşil halkaya sürükle; ya da kuleye tıklayıp (dokunup) sonra halkaya tıkla. Her kule enerji (para) harcar; düşman öldürdükçe ve dalga bitince enerji kazanırsın.'],
                 ['Yükseltmek', 'Kuleye tıkla: Yükselt\'e basınca güç artar. 3. ve 5. seviyede iki yetenekten birini seçersin (seçim kalıcıdır). Çubuklar mevcut gücü (mavi) ve yükseltmeyle gelecek kazancı (sarı) gösterir.'],
                 ['Dalgalar', 'Boşluk tuşu ya da düğme sıradaki dalgayı başlatır. Sağ paneldeki kutu sıradaki dalganın düşmanlarını gösterir. Takılırsan İpucu düğmesine (ya da H tuşuna) bas: hangi düşmana karşı hangi kulenin iyi, hangisinin kötü olduğunu söyler. Üsse düşman geçince İpucu düğmesi göz kırpar.'],
-                ['Kısayollar', 'Boşluk: dalga başlat · P: duraklat · F: hız (1x, 2x, 0,5x) · H: ipucu · 1-6: kule seç · F11: tam ekran · Esc: geri.'],
+                ['Kısayollar ve dokunma', 'Klavye: Boşluk dalga başlatır · P duraklatır · F hızı değiştirir (1x, 2x, 0,5x) · H ipucu · 1-6 kule seçer · F11 tam ekran · Esc geri. Telefon ve tablette: kuleyi parmakla sürükleyip bırak, kuleye dokunarak yükselt ya da sat, sağ çubuktaki İpucu düğmesi ve cihazın geri tuşu aynı işleri görür.'],
                 ['Kayıt', 'Haritalara dönünce ya da oyunu kapatınca yarım kalan oyun kaydedilir. Haritaya tekrar tıklayınca Devam et ya da Yeniden başla seçersin.'],
             ], scene: { towers: [['octopus', 1, 0, 0, SPOT.main], ['jellyfish', 1, 0, 0, SPOT.right]], feed: [['standard', 3], ['flying', 1]], caption: 'Düşmanlar yoldan gelir, kuleler menzildeki düşmana ateş eder. Üsse ulaşan düşman canını azaltır.' } },
         { id: 'high', title: 'Yüksek zemin', icon: '▲', lead: 'Altın halkalı yerlerde kulenin menzili %20 artar.',
