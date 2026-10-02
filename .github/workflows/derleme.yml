@@ -1,0 +1,40 @@
+name: Derleme ve test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Oyun çekirdeği testleri
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Birim testleri (kurallar, yetenekler, düşmanlar, kayıt)
+        run: node tools/test_core.js
+      - name: Denge simülasyonu (hızlı kontrol)
+        run: BOTS=karisik SEEDS=11 node tools/balans.js mercan normal
+
+  paketle:
+    name: Windows uygulaması
+    runs-on: windows-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Derle ve paketle
+        shell: pwsh
+        run: ./tools/paketle.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SuAltiSavunma-windows
+          path: dist/SuAltiSavunma-windows.zip

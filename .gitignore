@@ -10,3 +10,5 @@ tools/mapgen/__pycache__/
 tools/mapgen/layout_*.png
 tools/mapgen/swatch*.png
 tools/mapgen/spots_preview/
+dist/
+loglar/
