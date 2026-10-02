@@ -982,3 +982,34 @@ body {
     background: #4fe3ff;
     border-radius: 10px;
 }
+
+/* yetenek seçimi */
+#towerModalPerk { margin: 4px 0 12px; text-align: left; }
+.perk-line { margin: 6px 0; font-size: 0.86em; line-height: 1.35; color: #b9ccd6; }
+.perk-line b { display: block; font-size: 1.02em; }
+.perk-line.a b, .perk-tag.a { color: #ff9a3a; }
+.perk-line.b b, .perk-tag.b { color: #b58cff; }
+.perk-hint { font-size: 0.85em; color: #8fb4c4; line-height: 1.35; }
+.lv-bar i.pa { background: #ff9a3a; }
+.lv-bar i.pb { background: #b58cff; }
+
+#perkChoice h4 { color: #ffd45a; font-size: 1.15em; margin-bottom: 4px; }
+#perkChoice p { color: #9fc3d4; font-size: 0.85em; margin-bottom: 12px; white-space: normal; }
+.perk-cards { display: flex; flex-direction: column; gap: 10px; }
+.perk-card {
+    text-align: left;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 2px solid #3b5368;
+    border-radius: 12px;
+    color: #e8f3f8;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: normal;
+    transition: 0.15s;
+}
+.perk-card:hover:not(:disabled) { border-color: #ffd45a; background: rgba(255, 212, 90, 0.1); }
+.perk-card:disabled { opacity: 0.45; cursor: not-allowed; }
+.perk-card .perk-tag { display: block; font-size: 0.72em; font-weight: 800; letter-spacing: 0.08em; margin-bottom: 2px; }
+.perk-card b { display: block; font-size: 1.08em; margin-bottom: 4px; color: #fff; }
+.perk-card .perk-desc { font-size: 0.86em; color: #b9ccd6; line-height: 1.35; }

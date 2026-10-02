@@ -38,6 +38,80 @@
         puffer: { name: 'Balon Balığı', cost: 90, range: 270, dmg: 38, rate: 3.0, aoe: 78, lob: true, groundOnly: true, projSpeed: 300, role: 'Havan: düşmanın gideceği yere atar, kümelere alan hasarı verir. Havadakini vuramaz.' },
     };
 
+    // ---------------------------------------------------------------- yetenek ağacı
+    // Her kule 3. ve 5. seviyeye çıkarken iki yetenekten birini seçer (toplam 4 seçim, 24 yetenek). `fx` alanları:
+    //   çarpanlar: dmgMul rateMul rangeMul aoeMul     toplananlar: shotsAdd pierceAdd lightBonus auraDmg
+    //   özel: noHeavy bossHit slow mark poison burn chain crit execute salvo overload pulse slowArea gas auraSlow
+    // Etkileri Tower.derive() ile World.fire/strike/afterHit/splash uygular.
+    const PERKS = {
+        octopus: {
+            3: [
+                { id: 'oct-twin', name: 'Çift Mürekkep', desc: 'Aynı anda iki hedefe atar; her mermi biraz daha zayıftır.', fx: { shotsAdd: 1, dmgMul: 0.9 } },
+                { id: 'oct-pierce', name: 'Delici Mürekkep', desc: 'Zırhın %40\'ını deler, zırhlılara yarı hasar cezası kalkar. Hasar +%10.', fx: { pierceAdd: 0.4, noHeavy: true, dmgMul: 1.1 } },
+            ],
+            5: [
+                { id: 'oct-rain', name: 'Mürekkep Yağmuru', desc: 'Bir hedef daha vurur ve atış aralığı %10 kısalır.', fx: { shotsAdd: 1, rateMul: 0.9 } },
+                { id: 'oct-mark', name: 'Karartma Bulutu', desc: 'Vurduğu düşman 4 sn işaretlenir: tüm kulelerden %20 fazla hasar alır.', fx: { mark: { pct: 0.2, time: 4 } } },
+            ],
+        },
+        eel: {
+            3: [
+                { id: 'eel-chain', name: 'Zincir Şoku', desc: 'Şok alanının dışındaki en yakın 2 yer düşmanına %60 hasarla sıçrar.', fx: { chain: { count: 2, range: 150, mul: 0.6 } } },
+                { id: 'eel-wide', name: 'Geniş Şok', desc: 'Şok alanı %45 genişler, hasar %8 azalır. Kalabalıklar için.', fx: { aoeMul: 1.45, dmgMul: 0.92 } },
+            ],
+            5: [
+                { id: 'eel-overload', name: 'Aşırı Yük', desc: 'Her 4. şok iki kat vurur ve düşmanları 1,2 sn sersemletir (patronları 0,4 sn).', fx: { overload: { every: 4, mul: 2, stun: 1.2, stunBoss: 0.4 } } },
+                { id: 'eel-burn', name: 'Elektrik Yanığı', desc: 'Şoklanan düşman 3 sn boyunca saniyede canının %2\'sini kaybeder (zırh saymaz, patronlarda %0,8).', fx: { burn: { pct: 0.02, bossPct: 0.008, time: 3 } } },
+            ],
+        },
+        jellyfish: {
+            3: [
+                { id: 'jel-ice', name: 'Buz Dokunuşu', desc: 'Yavaşlatma çok güçlenir: düşman %65 yavaşlar ve 4,5 sn sürer.', fx: { slow: { factor: 0.35, time: 4.5 } } },
+                { id: 'jel-poison', name: 'Zehirli Dokunuş', desc: 'Vurulan düşman 4 sn zehirlenir: saniyede kule hasarının %30\'u kadar, zırh saymaz.', fx: { poison: { dpsMul: 0.3, time: 4 } } },
+            ],
+            5: [
+                { id: 'jel-field', name: 'Elektrikli Su', desc: 'İsabet ettiği yerin 85 piksel çevresindeki herkesi de yavaşlatır.', fx: { slowArea: { radius: 85 } } },
+                { id: 'jel-pulse', name: 'Derin Nabız', desc: 'Her 6. atışta menzilinin %80\'indeki tüm düşmanları (havadakiler dahil) 2,5 sn %55 yavaşlatır.', fx: { pulse: { every: 6, rangeMul: 0.8, factor: 0.45, time: 2.5 } } },
+            ],
+        },
+        swordfish: {
+            3: [
+                { id: 'swo-cut', name: 'Zırh Kesen', desc: 'Zırhın %35 daha fazlasını deler, patronlara %80 fazla hasar verir (normalde %50).', fx: { pierceAdd: 0.35, bossHit: 1.8 } },
+                { id: 'swo-aim', name: 'Keskin Nişan', desc: '%25 şansla 2,5 kat vurur (kritik). Menzil +%10.', fx: { crit: { chance: 0.25, mul: 2.5 }, rangeMul: 1.1 } },
+            ],
+            5: [
+                { id: 'swo-hunt', name: 'Av Başı', desc: 'Canı %30\'un altındaki düşmana iki kat hasar verir.', fx: { execute: { below: 0.3, mul: 2 } } },
+                { id: 'swo-rain', name: 'Kılıç Yağmuru', desc: 'Her 5. atış menzildeki en güçlü 3 düşmana birden gider.', fx: { salvo: { every: 5, count: 3 } } },
+            ],
+        },
+        angler: {
+            3: [
+                { id: 'ang-halo', name: 'Aydınlık Çevre', desc: 'Işık alanı %40 büyür; ışığındaki diğer kuleler %10 fazla hasar verir.', fx: { lightBonus: 0.4, auraDmg: 0.1 } },
+                { id: 'ang-focus', name: 'Odak Işığı', desc: 'Menzil +%20, hasar +%25: tek başına daha güçlü bir kule.', fx: { rangeMul: 1.2, dmgMul: 1.25 } },
+            ],
+            5: [
+                { id: 'ang-dawn', name: 'Şafak Ağı', desc: 'Işık alanındaki düşmanlar %12 yavaşlar.', fx: { auraSlow: 0.88 } },
+                { id: 'ang-twin', name: 'Çifte Işık', desc: 'İki hedefe birden ateş eder, atış aralığı %15 kısalır.', fx: { shotsAdd: 1, rateMul: 0.85 } },
+            ],
+        },
+        puffer: {
+            3: [
+                { id: 'puf-big', name: 'Büyük Patlama', desc: 'Patlama %35 büyür, hasar +%15, atış %10 yavaşlar.', fx: { aoeMul: 1.35, dmgMul: 1.15, rateMul: 1.1 } },
+                { id: 'puf-fast', name: 'Hızlı Namlu', desc: 'Atış aralığı %35 kısalır, hasar %10 azalır.', fx: { rateMul: 0.65, dmgMul: 0.9 } },
+            ],
+            5: [
+                { id: 'puf-gas', name: 'Zehirli Gaz', desc: 'Patlama yerinde 3,5 sn kalan bir gaz bulutu bırakır: içindekilere zırh saymayan hasar verir.', fx: { gas: { dpsMul: 0.45, time: 3.5, radiusMul: 0.85 } } },
+                { id: 'puf-goo', name: 'Yapışkan Sıvı', desc: 'Patlamadan etkilenen herkes 3 sn %50 yavaşlar.', fx: { slow: { factor: 0.5, time: 3 } } },
+            ],
+        },
+    };
+
+    const perkOptions = (type, level) => (PERKS[type] && PERKS[type][level]) || null;
+    const findPerk = (type, level, id) => {
+        const list = perkOptions(type, level);
+        return list ? (list.find(o => o.id === id) || null) : null;
+    };
+
     const MAX_LEVEL = 5;
     const SLOW_VULNERABILITY = 1.2;   // yavaşlamış düşman %20 fazla hasar alır (Deniz Anası ile birlikte oynamak karşılığını verir)
     const ADAPT_FROM_WAVE = 4;        // düşmanlar bu dalgadan sonra en çok hasar veren türe alışmaya başlar
@@ -240,6 +314,12 @@
             this.damage = this.mini ? Math.round(st.damage * 0.5) : st.damage;
             this.slowTime = 0;
             this.isSlowed = false;
+            this.markT = 0;        // işaretli: tüm kulelerden fazla hasar alır
+            this.markPct = 0;
+            this.dotT = 0;         // zehir / yanık (zırh saymayan zamanla hasar)
+            this.dotDps = 0;
+            this.dotType = null;
+            this.auraMul = 1;      // ışık ağı gibi alan etkilerinden gelen hız çarpanı
             this.traveled = 0;
             this.segment = 0;
             this.path = world.paths[lane] || world.paths[0];
@@ -279,7 +359,7 @@
                 return false;
             }
             this.zoneMul = this.pathMul ? this.pathMul(this.traveled / this.path.length) : 1;
-            this.traveled += this.speed * this.zoneMul * dt;
+            this.traveled += this.speed * this.zoneMul * this.auraMul * dt;
             if (this.traveled >= this.path.length) return true;
 
             const d = this.path.dist;
@@ -296,10 +376,14 @@
             return false;
         }
 
-        takeDamage(amount, towerType, pierce) {
-            if (towerType === 'octopus' && this.heavy) amount *= 0.5;
-            if (towerType === 'swordfish' && this.type === 'boss') amount *= 1.5;
+        // o: kulenin vuruş ayarları (Tower.strikeOpts): noHeavy, bossHit, executeBelow, executeMul
+        takeDamage(amount, towerType, pierce, o) {
+            o = o || {};
+            if (towerType === 'octopus' && this.heavy && !o.noHeavy) amount *= 0.5;
+            if (this.type === 'boss') amount *= o.bossHit || (towerType === 'swordfish' ? 1.5 : 1);
             if (this.isSlowed) amount *= SLOW_VULNERABILITY;      // yavaşlayan düşman daha kolay vurulur
+            if (this.markT > 0) amount *= 1 + this.markPct;       // işaretli düşman her kuleden fazla hasar alır
+            if (o.executeBelow && this.health <= this.maxHealth * o.executeBelow) amount *= o.executeMul;
             const armor = this.armor * (1 - (pierce || 0));
             const actual = amount * (1 - armor / (armor + 100));
             this.health -= actual;
@@ -333,40 +417,72 @@
             this.firedAt = -10;
             this.stun = 0;        // lav patlaması gibi olaylarla geçici susturma (sn)
             this.dark = false;    // karanlık haritada ışık dışında kalma
+            this.perks = {};      // seviye (3, 5) -> seçilen yeteneğin kimliği
+            this.shotCount = 0;   // 'her n. atış' yetenekleri için sayaç
+            this.auraBonus = 0;   // yakındaki Fener Balığı'ndan gelen hasar bonusu
             this.derive();
         }
 
-        // seviyeye, zemine ve destek kulelerine göre güncel değerler
+        // seçilen yeteneklerin birleşik etkisi
+        perkFx() {
+            const out = { dmgMul: 1, rateMul: 1, rangeMul: 1, aoeMul: 1, shotsAdd: 0, pierceAdd: 0, lightBonus: 0, auraDmg: 0 };
+            for (const lv of [3, 5]) {
+                if (this.level < lv) continue;
+                const opt = findPerk(this.type, lv, this.perks[lv]);
+                if (!opt) continue;
+                for (const [k, v] of Object.entries(opt.fx)) {
+                    if (k.endsWith('Mul')) out[k] *= v;
+                    else if (k === 'shotsAdd' || k === 'pierceAdd' || k === 'lightBonus' || k === 'auraDmg') out[k] += v;
+                    else out[k] = v;
+                }
+            }
+            return out;
+        }
+
+        // seçilmiş yeteneklerin adı ve açıklaması (arayüz için)
+        perkLines() {
+            const out = [];
+            for (const lv of [3, 5]) {
+                const opt = this.level >= lv ? findPerk(this.type, lv, this.perks[lv]) : null;
+                if (opt) out.push({ level: lv, name: opt.name, desc: opt.desc, id: opt.id });
+            }
+            return out;
+        }
+
+        // seviyeye, zemine, yeteneklere ve destek kulelerine göre güncel değerler
         derive() {
             const st = TOWER_TYPES[this.type];
             const L = this.level - 1;
-            const lv3 = this.level >= 3;
-            const lv5 = this.level >= 5;
+            const fx = this.fx = this.perkFx();
             const high = this.spot.kind === 'high' ? HIGH_GROUND_RANGE : 1;
-            this.dmg = Math.round(st.dmg * (1 + 0.35 * L));
+            this.dmg = Math.round(st.dmg * (1 + 0.35 * L) * fx.dmgMul * (1 + (this.auraBonus || 0)));
             const w = this.world;
             const envMul = (w ? w.rangeMul : 1) * (this.dark && w ? w.darkMul : 1);
-            this.range = Math.round(st.range * (1 + 0.07 * L) * high * envMul);
-            this.rate = +(st.rate * (1 - 0.11 * L)).toFixed(2);
-            const aoeMul = this.type === 'puffer' ? (lv5 ? 1.5 : lv3 ? 1.25 : 1) : (lv5 ? 1.8 : lv3 ? 1.4 : 1);
-            this.aoe = st.aoe ? Math.round(st.aoe * aoeMul) : 0;
-            this.slow = st.slow ? (lv5 ? 0.3 : lv3 ? 0.4 : st.slow) : 0;
-            this.slowTime = st.slowTime ? (lv5 ? 5 : lv3 ? 4 : st.slowTime) : 0;
-            this.shots = this.type === 'octopus' ? (lv5 ? 3 : lv3 ? 2 : 1) : 1;
-            this.pierce = (st.pierce || 0) + (this.type === 'swordfish' && lv3 ? 0.2 : 0);
-            if (this.type === 'puffer' && lv5) { this.slow = 0.7; this.slowTime = 2; }
+            this.range = Math.round(st.range * (1 + 0.07 * L) * high * envMul * fx.rangeMul);
+            this.rate = +(st.rate * (1 - 0.11 * L) * fx.rateMul).toFixed(2);
+            this.aoe = st.aoe ? Math.round(st.aoe * (1 + 0.05 * L) * fx.aoeMul) : 0;
+            this.slow = st.slow || 0;
+            this.slowTime = st.slowTime ? st.slowTime + 0.25 * L : 0;
+            if (fx.slow) { this.slow = fx.slow.factor; this.slowTime = fx.slow.time; }
+            this.shots = 1 + fx.shotsAdd;
+            this.pierce = (st.pierce || 0) + fx.pierceAdd;
+            this.strikeOpts = {
+                noHeavy: !!fx.noHeavy,
+                bossHit: fx.bossHit || (this.type === 'swordfish' ? 1.5 : 1),
+                executeBelow: fx.execute ? fx.execute.below : 0,
+                executeMul: fx.execute ? fx.execute.mul : 1,
+            };
         }
 
+        // Yükseltme ve yetenek özeti
         perk() {
-            switch (this.type) {
-                case 'octopus': return 'Sv 3: iki hedefe birden · Sv 5: üç hedefe birden mürekkep fırlatır';
-                case 'eel': return 'Sv 3: şok alanı %40 genişler · Sv 5: alan %80 genişler';
-                case 'jellyfish': return 'Sv 3: yavaşlatma %60, 4 sn · Sv 5: yavaşlatma %70, 5 sn';
-                case 'swordfish': return 'Patronlara %50 fazla hasar · Sv 3: zırhın büyük kısmını deler';
-                case 'angler': return 'Karanlık haritada çevresini aydınlatır: ışığındaki kuleler menzil cezası almaz. Işık alanı menziliyle büyür';
-                case 'puffer': return 'Sv 3: patlama %25 büyür · Sv 5: %50 büyür ve düşmanı yavaşlatır';
-                default: return '';
-            }
+            const lines = this.perkLines().map(l => `${l.name}: ${l.desc}`);
+            return lines.length ? lines.join('\n') : (this.type === 'angler' ? 'Karanlık haritada çevresini aydınlatır: ışığındaki kuleler menzil cezası almaz.' : '');
+        }
+
+        // bir sonraki seviyeye çıkarken yetenek seçimi gerekiyorsa seçenekler
+        nextPerkOptions() {
+            return this.level < MAX_LEVEL ? perkOptions(this.type, this.level + 1) : null;
         }
 
         upgradeCost() {
@@ -471,6 +587,7 @@
             this.result = null;
             this.stats = { kills: 0, leaks: 0, earned: 0 };
             this.plans = {};
+            this.gas = [];        // Balon Balığı'nın zehirli gaz bulutları
             this.dealt = {};      // tür başına verilen hasar (alışma hesabı için)
             this.adapt = {};      // tür -> düşmanların o türe karşı kazandığı direnç (0..0.3)
         }
@@ -526,7 +643,7 @@
         // Fener Balığı'nın ışık yarıçapı (karanlık haritada kulelerin cezadan kurtulduğu alan)
         lightRadius(t) {
             const d = (this.map.mechanics || []).find(m => m.type === 'darkness');
-            return t.range * (d && d.lightMul ? d.lightMul : 1);
+            return t.range * (d && d.lightMul ? d.lightMul : 1) * (1 + (t.fx ? t.fx.lightBonus : 0));
         }
 
         setRangeMul(m) {
@@ -766,15 +883,22 @@
             return { ok: true, tower, cost };
         }
 
-        upgradeTower(tower) {
+        // choice: yetenek seçimi gereken seviyelerde seçenek sırası (0 ya da 1); verilmezse ilk seçenek
+        upgradeTower(tower, choice) {
             const cost = tower.upgradeCost();
             if (cost === null || this.money < cost) return false;
             this.money -= cost;
             tower.level++;
             tower.invested += cost;
+            let perk = null;
+            const opts = perkOptions(tower.type, tower.level);
+            if (opts) {
+                perk = opts[choice === 1 ? 1 : 0];
+                tower.perks[tower.level] = perk.id;
+            }
             tower.derive();
             this.refreshLight();
-            this.emit('upgrade', { tower, cost });
+            this.emit('upgrade', { tower, cost, perk });
             return true;
         }
 
@@ -793,6 +917,12 @@
         refreshLight() {
             const lights = this.towers.filter(t => t.type === 'angler');
             for (const t of this.towers) {
+                // Aydınlık Çevre yeteneği: ışığındaki diğer kuleler daha çok hasar verir
+                let bonus = 0;
+                for (const l of lights) {
+                    if (l !== t && l.fx && l.fx.auraDmg && Math.hypot(l.x - t.x, l.y - t.y) <= this.lightRadius(l)) bonus += l.fx.auraDmg;
+                }
+                t.auraBonus = Math.min(0.2, bonus);
                 t.dark = this.darkMul < 1 && !lights.some(l => Math.hypot(l.x - t.x, l.y - t.y) <= this.lightRadius(l));
                 t.derive();
             }
@@ -830,7 +960,7 @@
                 nextTowerId: this.nextTowerId,
                 dealt: Object.assign({}, this.dealt),
                 adapt: Object.assign({}, this.adapt),
-                towers: this.towers.map(t => ({ id: t.id, type: t.type, x: t.spot.x, y: t.spot.y, level: t.level, mode: t.mode, invested: t.invested, lastFire: r(t.lastFire), stun: r(Math.max(0, t.stun)) })),
+                towers: this.towers.map(t => ({ id: t.id, type: t.type, x: t.spot.x, y: t.spot.y, level: t.level, mode: t.mode, invested: t.invested, lastFire: r(t.lastFire), stun: r(Math.max(0, t.stun)), perks: Object.assign({}, t.perks), shotCount: t.shotCount })),
                 enemies: this.enemies.filter(e => e.health > 0).map(e => ({
                     id: e.id, type: e.type, lane: e.lane, kind: e.kind, mini: e.mini, waveNo: e.waveNo,
                     health: r(e.health), maxHealth: e.maxHealth, traveled: r(e.traveled), speed: r(e.speed), slowTime: r(Math.max(0, e.slowTime)),
@@ -868,6 +998,13 @@
                 t.invested = st.invested;
                 t.lastFire = st.lastFire;
                 t.stun = st.stun;
+                t.perks = Object.assign({}, st.perks);
+                t.shotCount = st.shotCount || 0;
+                // eski kayıtlarda seçim yoksa ilk seçenek verilir
+                for (const lv of [3, 5]) {
+                    const opts = perkOptions(t.type, lv);
+                    if (t.level >= lv && opts && !findPerk(t.type, lv, t.perks[lv])) t.perks[lv] = opts[0].id;
+                }
                 spot.tower = t;
                 w.towers.push(t);
             }
@@ -960,6 +1097,8 @@
                 }
             }
 
+            this.tickEffects(dt);
+
             for (const e of this.enemies) {
                 if (e.health > 0 && e.update(dt)) {
                     e.reached = true;
@@ -1016,18 +1155,12 @@
         fire(t) {
             this.emit('fire', { tower: t, target: t.target });
             t.firedAt = this.time;
+            t.shotCount++;
+            const fx = t.fx;
             const lob = !!TOWER_TYPES[t.type].lob;
+            if (fx.pulse && t.shotCount % fx.pulse.every === 0) this.pulseSlow(t);
             if (t.aoe && !lob) {
-                // anlık alan (yılan balığı)
-                const cx = t.target.x;
-                const cy = t.target.y;
-                this.emit('aoe', { x: cx, y: cy, radius: t.aoe });
-                for (const e of this.enemies) {
-                    if (e.health > 0 && !e.flying && Math.hypot(e.x - cx, e.y - cy) < t.aoe) {
-                        const res = this.strike(e, t.type, t.dmg, t.pierce);
-                        this.afterHit(e, t, res, false);
-                    }
-                }
+                this.shockwave(t);       // anlık alan (yılan balığı)
                 return;
             }
             if (lob) {
@@ -1039,9 +1172,19 @@
                 this.projectiles.push(new Projectile(t, target, ahead));
                 return;
             }
-            this.projectiles.push(new Projectile(t, t.target));
+            let targets = [t.target];
+            if (fx.salvo && t.shotCount % fx.salvo.every === 0) {
+                // Kılıç Yağmuru: menzildeki en güçlü düşmanlara birden
+                const strong = this.enemies
+                    .filter(e => e.health > 0 && t.canTarget(e) && Math.hypot(e.x - t.x, e.y - t.y) <= t.range)
+                    .sort((a, b) => b.health - a.health)
+                    .slice(0, fx.salvo.count);
+                if (strong.length) targets = strong;
+                this.emit('salvo', { tower: t, targets });
+            }
+            targets.forEach(e => this.projectiles.push(new Projectile(t, e)));
             if (t.shots > 1) {
-                const used = [t.target];
+                const used = targets.slice();
                 for (let i = 1; i < t.shots; i++) {
                     const extra = this.extraTarget(t, used);
                     if (!extra) break;
@@ -1049,6 +1192,45 @@
                     this.projectiles.push(new Projectile(t, extra));
                 }
             }
+        }
+
+        // Yılan Balığı'nın şoku: alandaki yer düşmanlarına vurur; Aşırı Yük, Zincir Şoku ve Elektrik Yanığı yetenekleri burada işler
+        shockwave(t) {
+            const fx = t.fx;
+            const cx = t.target.x;
+            const cy = t.target.y;
+            const over = !!(fx.overload && t.shotCount % fx.overload.every === 0);
+            this.emit('aoe', { x: cx, y: cy, radius: t.aoe, big: over });
+            const hit = this.enemies.filter(e => e.health > 0 && !e.flying && Math.hypot(e.x - cx, e.y - cy) < t.aoe);
+            for (const e of hit) {
+                const res = this.strike(e, t, t.dmg, t.pierce, over ? fx.overload.mul : 1);
+                if (over && !res.dead) e.stunTime = Math.max(e.stunTime, e.type === 'boss' ? fx.overload.stunBoss : fx.overload.stun);
+                this.afterHit(e, t, res, false);
+            }
+            if (over) this.emit('overload', { x: cx, y: cy, radius: t.aoe });
+            if (fx.chain) {
+                const pool = this.enemies
+                    .filter(e => e.health > 0 && !e.flying && !hit.includes(e) && Math.hypot(e.x - cx, e.y - cy) <= t.aoe + fx.chain.range)
+                    .sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy))
+                    .slice(0, fx.chain.count);
+                const pts = [{ x: cx, y: cy }];
+                for (const e of pool) {
+                    const res = this.strike(e, t, t.dmg, t.pierce, fx.chain.mul);
+                    this.afterHit(e, t, res, false);
+                    pts.push({ x: e.x, y: e.y });
+                }
+                if (pts.length > 1) this.emit('chain', { points: pts });
+            }
+        }
+
+        // Deniz Anası'nın Derin Nabız yeteneği: menzildeki herkesi yavaşlatır
+        pulseSlow(t) {
+            const p = t.fx.pulse;
+            const r = t.range * p.rangeMul;
+            for (const e of this.enemies) {
+                if (e.health > 0 && Math.hypot(e.x - t.x, e.y - t.y) <= r) e.slowDown(p.factor, p.time);
+            }
+            this.emit('pulse', { x: t.x, y: t.y, radius: r });
         }
 
         extraTarget(t, used) {
@@ -1086,7 +1268,10 @@
             p.angle = Math.atan2(dy, dx);
             if (dist <= Math.max(stepLen, 14)) {
                 p.active = false;
-                const res = this.strike(p.target, p.type, p.dmg, p.pierce);
+                const fx = p.owner.fx;
+                const crit = !!(fx.crit && this.rng() < fx.crit.chance);
+                const res = this.strike(p.target, p.owner, p.dmg, p.pierce, crit ? fx.crit.mul : 1);
+                if (crit) this.emit('crit', { x: p.target.x, y: p.target.y, dmg: res.dmg });
                 if (p.slow && !res.dead) p.target.slowDown(p.slow, p.slowTime);
                 this.afterHit(p.target, p.owner, res, !!p.slow);
                 return;
@@ -1103,18 +1288,70 @@
                 const d = Math.hypot(e.x - p.tx, e.y - p.ty);
                 if (d > p.aoe) continue;
                 const falloff = 1 - 0.5 * (d / p.aoe);
-                const res = this.strike(e, p.type, p.dmg * falloff, p.pierce);
+                const res = this.strike(e, p.owner, p.dmg * falloff, p.pierce);
                 if (p.slow && !res.dead) e.slowDown(p.slow, p.slowTime);
                 this.afterHit(e, p.owner, res, !!p.slow);
             }
+            const gas = p.owner.fx && p.owner.fx.gas;
+            if (gas) {
+                this.gas.push({ x: p.tx, y: p.ty, r: p.aoe * gas.radiusMul, t: gas.time, max: gas.time, dps: p.dmg * gas.dpsMul });
+                if (this.gas.length > 14) this.gas.shift();
+                this.emit('gas', { x: p.tx, y: p.ty, radius: p.aoe * gas.radiusMul, time: gas.time });
+            }
         }
 
-        // bir kulenin düşmana vuruşu. Düşmanlar son dalgalarda en çok hasar veren türe alışır (adapt).
-        strike(e, type, dmg, pierce) {
+        // Bir kulenin düşmana vuruşu. tower bir Tower (yetenek ayarlarıyla) ya da tür adı olabilir.
+        // Düşmanlar son dalgalarda en çok hasar veren türe alışır (adapt).
+        strike(e, tower, dmg, pierce, extraMul) {
+            const type = typeof tower === 'string' ? tower : tower.type;
+            const opts = typeof tower === 'string' ? null : tower.strikeOpts;
             const mul = 1 - (this.adapt[type] || 0);
-            const res = e.takeDamage(dmg * mul, type, pierce);
+            const res = e.takeDamage(dmg * mul * (extraMul || 1), type, pierce, opts);
             this.dealt[type] = (this.dealt[type] || 0) + res.dmg / mul;
             return res;
+        }
+
+        // zamanla hasar (zehir, yanık, gaz): zırh saymaz, alışma uygulanır, öldürürse ödül verir
+        dotDamage(e, amount, type) {
+            if (e.health <= 0 || amount <= 0) return;
+            const mul = 1 - (this.adapt[type] || 0);
+            const dmg = amount * mul;
+            e.health -= dmg;
+            this.dealt[type] = (this.dealt[type] || 0) + dmg / mul;
+            if (e.health <= 0) {
+                e.health = 0;
+                this.money += e.reward;
+                this.stats.kills++;
+                this.stats.earned += e.reward;
+                this.emit('kill', { enemy: e, reward: e.reward, dot: true });
+            }
+        }
+
+        // her adımda: işaret/zehir süreleri, gaz bulutları, ışık ağı yavaşlatması
+        tickEffects(dt) {
+            const lamps = this.towers.filter(t => t.fx && t.fx.auraSlow);
+            for (const e of this.enemies) {
+                if (e.health <= 0) continue;
+                if (e.markT > 0) e.markT -= dt;
+                if (e.dotT > 0) {
+                    e.dotT -= dt;
+                    this.dotDamage(e, e.dotDps * dt, e.dotType);
+                }
+                let m = 1;
+                for (const l of lamps) {
+                    if (Math.hypot(e.x - l.x, e.y - l.y) <= this.lightRadius(l)) m = Math.min(m, l.fx.auraSlow);
+                }
+                e.auraMul = m;
+            }
+            if (this.gas.length) {
+                for (const g of this.gas) {
+                    g.t -= dt;
+                    for (const e of this.enemies) {
+                        if (e.health > 0 && !e.flying && Math.hypot(e.x - g.x, e.y - g.y) <= g.r) this.dotDamage(e, g.dps * dt, 'puffer');
+                    }
+                }
+                this.gas = this.gas.filter(g => g.t > 0);
+            }
         }
 
         // Dalga başında: hangi tür hasarın büyük kısmını veriyor? Payı yarıdan fazlaysa düşmanlar o türe alışır.
@@ -1169,7 +1406,25 @@
                 this.stats.kills++;
                 this.stats.earned += enemy.reward;
                 this.emit('kill', { enemy, reward: enemy.reward });
-            } else if (enemy.splits && !enemy.didSplit && enemy.health <= enemy.maxHealth * 0.5) {
+                return;
+            }
+            const fx = tower.fx;
+            if (fx) {
+                // yetenek etkileri: işaret, zehir, yanık, alan yavaşlatma
+                if (fx.mark) { enemy.markT = fx.mark.time; enemy.markPct = Math.max(enemy.markPct, fx.mark.pct); }
+                if (fx.poison) { enemy.dotT = fx.poison.time; enemy.dotDps = Math.max(enemy.dotDps, tower.dmg * fx.poison.dpsMul); enemy.dotType = tower.type; }
+                if (fx.burn) {
+                    enemy.dotT = fx.burn.time;
+                    enemy.dotDps = Math.max(enemy.dotDps, enemy.maxHealth * (enemy.type === 'boss' ? fx.burn.bossPct : fx.burn.pct));
+                    enemy.dotType = tower.type;
+                }
+                if (fx.slowArea && slowed) {
+                    for (const o of this.enemies) {
+                        if (o !== enemy && o.health > 0 && Math.hypot(o.x - enemy.x, o.y - enemy.y) <= fx.slowArea.radius) o.slowDown(tower.slow, tower.slowTime);
+                    }
+                }
+            }
+            if (enemy.splits && !enemy.didSplit && enemy.health <= enemy.maxHealth * 0.5) {
                 this.spawnBrood(enemy);
             }
         }
@@ -1200,7 +1455,7 @@
         ENEMY_TYPES, BOSS_KINDS, ENEMY_NAMES, TOWER_TYPES, DIFFICULTY, MAX_LEVEL, BUILD_SPOT_RADIUS, HIGH_GROUND_RANGE, TARGET_MODES,
         World, Enemy, Tower, Projectile,
         buildPath, generateSmoothPath, mapPaths, buildWavePlan, summarizePlan, totalWavesOf, waveHpScale, mulberry32,
-        pointAt, describeDifficulty,
+        pointAt, describeDifficulty, PERKS, perkOptions, findPerk,
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = Core;

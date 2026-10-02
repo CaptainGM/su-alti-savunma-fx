@@ -139,7 +139,7 @@ let frameDue = 0;
 const perf = { frames: 0, since: 0, fps: 0, drawMs: 0, drawAcc: 0 };
 let endDelay = 0;
 let endShown = false;
-let fx = { floaters: [], rings: [], bubbles: [], flash: 0, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [], meteors: [], chomps: [] };
+let fx = { floaters: [], rings: [], bubbles: [], flash: 0, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [], meteors: [], chomps: [], arcs: [] };
 let ambient = null;
 let res = 1;
 
@@ -330,6 +330,13 @@ function onWorldEvent(type, d) {
             break;
         case 'upgrade':
             sfx('upgrade');
+            if (d.perk) {
+                notify(`${d.tower.name}: ${d.perk.name} yeteneği açıldı`, '#ffd45a');
+                for (let i = 0; i < 14; i++) {
+                    const a = Math.random() * 6.2832;
+                    fx.sparks.push({ x: d.tower.x, y: d.tower.y, vx: Math.cos(a) * 150, vy: Math.sin(a) * 150 - 40, life: 0.7, max: 0.7, r: 3, c: '255,212,90' });
+                }
+            }
             addLog(`'${d.tower.name}-ID${pad3(d.tower.id)}' Seviye ${d.tower.level}'e yükseltildi. Kalan Enerji: ${world.money}.`);
             fx.rings.push({ x: d.tower.x, y: d.tower.y, r: 25, max: 90, life: 0.6, maxLife: 0.6, color: '255,220,90' });
             break;
@@ -366,6 +373,37 @@ function onWorldEvent(type, d) {
             break;
         case 'aoe':
             fx.rings.push({ x: d.x, y: d.y, r: 10, max: d.radius * 1.15, life: 0.45, maxLife: 0.45, color: '255,230,80', aoeImg: true });
+            break;
+        case 'chain':
+            sfx('zap_small', 60);
+            fx.arcs.push({ pts: d.points, life: 0.32, max: 0.32, color: '170,235,255', seed: Math.random() * 100 });
+            break;
+        case 'overload':
+            sfx('fire_eel');
+            fx.shake = Math.max(fx.shake || 0, 0.3);
+            fx.rings.push({ x: d.x, y: d.y, r: 10, max: d.radius * 1.5, life: 0.6, maxLife: 0.6, color: '255,255,150', fill: true });
+            addFloater({ x: d.x, y: d.y - 24, text: 'AŞIRI YÜK', color: '#fff27a', life: 1.0, maxLife: 1.0, important: true });
+            break;
+        case 'pulse':
+            sfx('rumble', 300, 0.5);
+            fx.rings.push({ x: d.x, y: d.y, r: 20, max: d.radius, life: 0.8, maxLife: 0.8, color: '90,190,255', fill: true });
+            fx.rings.push({ x: d.x, y: d.y, r: 10, max: d.radius * 0.7, life: 0.6, maxLife: 0.6, color: '170,225,255' });
+            break;
+        case 'crit':
+            sfx('hit', 30);
+            addFloater({ x: d.x, y: d.y - 20, text: 'KRİTİK ' + Math.round(d.dmg), color: '#ffd45a', life: 0.9, maxLife: 0.9, important: true });
+            for (let i = 0; i < 10; i++) {
+                const a = Math.random() * 6.2832;
+                fx.sparks.push({ x: d.x, y: d.y, vx: Math.cos(a) * 200, vy: Math.sin(a) * 200, life: 0.4, max: 0.4, r: 2.5, c: '255,226,110' });
+            }
+            break;
+        case 'salvo':
+            sfx('fire_swordfish');
+            fx.rings.push({ x: d.tower.x, y: d.tower.y, r: 30, max: 90, life: 0.4, maxLife: 0.4, color: '255,255,255' });
+            break;
+        case 'gas':
+            sfx('splash', 80, 0.5);
+            fx.rings.push({ x: d.x, y: d.y, r: 10, max: d.radius, life: 0.6, maxLife: 0.6, color: '120,230,80', fill: true });
             break;
         case 'splash':
             sfx('splash', 50);
@@ -545,7 +583,7 @@ function selectMap(mapIndex, resumeSnap) {
     }
     lastSaveAt = performance.now();
     ambient = buildAmbient(currentMap);
-    fx = { floaters: [], rings: [], bubbles: [], flash: 0, tension: 0, shake: 0, alert: null, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [], meteors: [], chomps: [] };
+    fx = { floaters: [], rings: [], bubbles: [], flash: 0, tension: 0, shake: 0, alert: null, warns: [], sparks: [], guardGlow: [], toasts: [], furies: [], meteors: [], chomps: [], arcs: [] };
     paused = false;
     speedMultiplier = 1;
     selectedTower = null;
@@ -690,6 +728,8 @@ function updateFx(dt) {
     fx.meteors = fx.meteors.filter(m => m.life > 0);
     fx.chomps.forEach(c => { c.life -= dt; });
     fx.chomps = fx.chomps.filter(c => c.life > 0);
+    fx.arcs.forEach(a => { a.life -= dt; });
+    fx.arcs = fx.arcs.filter(a => a.life > 0);
     fx.sparks.forEach(p => { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 260 * dt; p.vx *= 0.985; });
     fx.sparks = fx.sparks.filter(p => p.life > 0);
     for (let i = 0; i < fx.guardGlow.length; i++) fx.guardGlow[i] = Math.max(0, (fx.guardGlow[i] || 0) - dt * 1.1);
@@ -717,6 +757,7 @@ function draw() {
     if (fancy) drawAmbientBack();
     drawPath();
     drawSpots();
+    drawGas();
     drawEntities();
     drawMechanics();
     drawChomps();
@@ -1435,6 +1476,26 @@ function drawEnemy(e) {
         ctx.fillStyle = pct > 0.5 ? '#3ddc6b' : pct > 0.25 ? '#f2c230' : '#ef4b4b';
         ctx.fillRect(e.x - bw / 2, by, bw * pct, 6);
     }
+    // yetenek göstergeleri: işaretli düşmanda hedef halkası, zehir/yanıkta dönen noktalar
+    if (e.markT > 0) {
+        ctx.strokeStyle = 'rgba(255,130,70,0.95)';
+        ctx.lineWidth = 2.2;
+        const my = e.y - size * 0.72;
+        ctx.beginPath();
+        ctx.arc(e.x, my, 8, 0, 6.2832);
+        ctx.moveTo(e.x - 13, my); ctx.lineTo(e.x - 4, my);
+        ctx.moveTo(e.x + 4, my); ctx.lineTo(e.x + 13, my);
+        ctx.stroke();
+    }
+    if (e.dotT > 0) {
+        ctx.fillStyle = e.dotType === 'eel' ? 'rgba(255,170,60,0.95)' : 'rgba(130,255,110,0.95)';
+        for (let i = 0; i < 3; i++) {
+            const a = animTime * 4 + i * 2.094 + e.id;
+            ctx.beginPath();
+            ctx.arc(e.x + Math.cos(a) * size * 0.34, e.y + bob + Math.sin(a) * size * 0.2 - size * 0.1, 3, 0, 6.2832);
+            ctx.fill();
+        }
+    }
     if (e.stunTime > 0) {
         ctx.strokeStyle = 'rgba(120,255,235,0.95)';
         ctx.lineWidth = 3;
@@ -1504,7 +1565,7 @@ function drawTower(t) {
         drawLock(t.x, t.y - 66, '#ff9a3a', Math.max(0, t.stun / (t.stunMax || 5)), Math.ceil(t.stun));
     }
 
-    if (t.level > 1) drawLevelBar(t.x, t.y + 52, t.level);
+    if (t.level > 1) drawLevelBar(t.x, t.y + 52, t);
 
     if (selected) {
         ctx.beginPath();
@@ -1520,7 +1581,15 @@ function drawTower(t) {
 const LEVEL_BASE = '#35c8ff';
 const LEVEL_UP = '#ffc83d';
 
-function drawLevelBar(x, y, level) {
+// 3. ve 5. dilim, seçilen yeteneğe göre turuncu (A) ya da mor (B) boyanır
+const PERK_COLORS = ['#ff9a3a', '#b58cff'];
+function perkIndex(t, lv) {
+    const o = Core.perkOptions(t.type, lv);
+    return o && t.level >= lv ? o.findIndex(x => x.id === t.perks[lv]) : -1;
+}
+
+function drawLevelBar(x, y, t) {
+    const level = t.level;
     const w = 9;
     const gap = 2;
     const total = Core.MAX_LEVEL * w + (Core.MAX_LEVEL - 1) * gap;
@@ -1529,7 +1598,8 @@ function drawLevelBar(x, y, level) {
     ctx.fillStyle = 'rgba(4,10,18,0.7)';
     ctx.fillRect(x0 - 2, y - 2, total + 4, 8);
     for (let i = 0; i < Core.MAX_LEVEL; i++) {
-        ctx.fillStyle = i >= level ? 'rgba(255,255,255,0.14)' : (i === 0 ? LEVEL_BASE : LEVEL_UP);
+        const pi = (i === 2 || i === 4) && i < level ? perkIndex(t, i + 1) : -1;
+        ctx.fillStyle = i >= level ? 'rgba(255,255,255,0.14)' : (i === 0 ? LEVEL_BASE : (pi >= 0 ? PERK_COLORS[pi] : LEVEL_UP));
         ctx.fillRect(x0 + i * (w + gap), y, w, 4);
     }
     ctx.restore();
@@ -1706,7 +1776,63 @@ function drawProjectile(p) {
     }
 }
 
+// Zincir Şoku: iki nokta arasında titreyen yıldırım
+function drawArcs() {
+    fx.arcs.forEach(a => {
+        const k = a.life / a.max;
+        ctx.globalAlpha = Math.min(1, k * 1.6);
+        for (let pass = 0; pass < 2; pass++) {
+            ctx.strokeStyle = pass === 0 ? `rgba(${a.color},0.45)` : 'rgba(255,255,255,0.95)';
+            ctx.lineWidth = pass === 0 ? 7 : 2.5;
+            ctx.beginPath();
+            ctx.moveTo(a.pts[0].x, a.pts[0].y);
+            for (let i = 1; i < a.pts.length; i++) {
+                const p0 = a.pts[i - 1];
+                const p1 = a.pts[i];
+                const n = 6;
+                for (let j = 1; j <= n; j++) {
+                    const t = j / n;
+                    const jit = j === n ? 0 : (Math.sin(a.seed + i * 7.3 + j * 12.9 + Math.floor(animTime * 30) * 3.1) * 11);
+                    const dx = p1.x - p0.x;
+                    const dy = p1.y - p0.y;
+                    const len = Math.hypot(dx, dy) || 1;
+                    ctx.lineTo(p0.x + dx * t - (dy / len) * jit, p0.y + dy * t + (dx / len) * jit);
+                }
+            }
+            ctx.stroke();
+        }
+    });
+    ctx.globalAlpha = 1;
+}
+
+// Balon Balığı'nın zehirli gaz bulutları
+function drawGas() {
+    if (!world.gas.length) return;
+    world.gas.forEach((g, gi) => {
+        const k = Math.min(1, g.t / 0.6) * Math.min(1, (g.max - g.t) / 0.25 + 0.2);
+        for (let i = 0; i < 6; i++) {
+            const a = animTime * 0.5 + i * 1.047 + gi;
+            const rr = g.r * (0.35 + 0.25 * Math.sin(animTime * 0.9 + i * 2));
+            const px = g.x + Math.cos(a) * rr;
+            const py = g.y + Math.sin(a) * rr * 0.8;
+            ctx.globalAlpha = 0.5 * k;
+            const sz = g.r * 0.95;
+            ctx.drawImage(glowSprite('110,225,70', 60), px - sz / 2, py - sz / 2, sz, sz);
+        }
+        ctx.globalAlpha = 0.25 * k;
+        ctx.strokeStyle = 'rgb(140,240,90)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 8]);
+        ctx.beginPath();
+        ctx.arc(g.x, g.y, g.r, 0, 6.2832);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    });
+    ctx.globalAlpha = 1;
+}
+
 function drawFx() {
+    drawArcs();
     fx.sparks.forEach(p => {
         ctx.globalAlpha = Math.max(0, p.life / p.max);
         ctx.fillStyle = `rgb(${p.c})`;
@@ -1985,10 +2111,12 @@ function statBarHtml(label, cur, next, max, tip) {
         `<div class="stat-bar"><i class="base" style="width:${base.toFixed(1)}%"></i><i class="gain" style="width:${gain.toFixed(1)}%"></i></div></div>`;
 }
 
-function levelBarHtml(level, withNext) {
+function levelBarHtml(t, withNext) {
+    const level = t.level;
     let h = '<div class="stat-row"><span class="stat-name">Seviye</span><div class="lv-bar">';
     for (let i = 1; i <= Core.MAX_LEVEL; i++) {
-        const cls = i > level ? (withNext && i === level + 1 ? 'next' : 'off') : (i === 1 ? 'base' : 'up');
+        const pi = (i === 3 || i === 5) && i <= level ? perkIndex(t, i) : -1;
+        const cls = i > level ? (withNext && i === level + 1 ? 'next' : 'off') : (i === 1 ? 'base' : (pi >= 0 ? (pi === 0 ? 'pa' : 'pb') : 'up'));
         h += `<i class="${cls}"></i>`;
     }
     return h + '</div></div>';
@@ -2003,7 +2131,7 @@ function towerBarsHtml(t) {
     }
     const val = (a, b, f) => (b != null && b !== a ? `${f(a)} → ${f(b)}` : f(a));
     const dps = x => x.dmg * x.shots;
-    let h = levelBarHtml(t.level, !!n);
+    let h = levelBarHtml(t, !!n);
     h += statBarHtml('Hasar', dps(t), n ? dps(n) : null, mx.dmg, `Hasar: ${val(dps(t), n && dps(n), v => v)}`);
     h += statBarHtml('Menzil', t.range, n ? n.range : null, mx.range, `Menzil: ${val(t.range, n && n.range, v => v)}`);
     h += statBarHtml('Atış hızı', 1 / t.rate, n ? 1 / n.rate : null, mx.speed, `Atış aralığı: ${val(t.rate, n && n.rate, v => v.toFixed(2) + ' sn')}`);
@@ -2017,7 +2145,7 @@ function openTowerModal(tower) {
     document.getElementById('towerModalName').innerText = tower.name;
 
     document.getElementById('towerModalStats').innerHTML = towerBarsHtml(tower);
-    document.getElementById('towerModalPerk').innerText = tower.perk();
+    document.getElementById('towerModalPerk').innerHTML = perkHtml(tower);
     document.getElementById('modeBtn').innerText = 'Hedef: ' + MODE_LABEL[tower.mode];
 
     const cost = tower.upgradeCost();
@@ -2026,12 +2154,30 @@ function openTowerModal(tower) {
         upgradeBtn.innerText = 'MAKSİMUM SEVİYE';
         upgradeBtn.disabled = true;
     } else {
-        upgradeBtn.innerText = `YÜKSELT (${cost} Enerji)`;
+        upgradeBtn.innerText = tower.nextPerkOptions() ? `YÜKSELT (${cost} Enerji)\nyetenek seç` : `YÜKSELT (${cost} Enerji)`;
         upgradeBtn.disabled = world.money < cost;
     }
     document.getElementById('sellBtn').innerText = `SAT (+${tower.sellValue()} Enerji)`;
+    document.getElementById('perkChoice').classList.add('hidden');
+    document.getElementById('towerMain').classList.remove('hidden');
     document.getElementById('towerModal').classList.remove('hidden');
     renderTowerList();
+}
+
+// seçilmiş yetenekler; yoksa bir sonraki yetenek seçiminin ne zaman geleceği
+function perkHtml(t) {
+    const lines = t.perkLines();
+    let h = lines.map(l => {
+        const pi = perkIndex(t, l.level);
+        return `<div class="perk-line ${pi === 0 ? 'a' : 'b'}"><b>Sv ${l.level} · ${l.name}</b>${l.desc}</div>`;
+    }).join('');
+    const next = t.level < Core.MAX_LEVEL ? [3, 5].find(lv => lv > t.level) : null;
+    if (next) {
+        const o = Core.perkOptions(t.type, next);
+        h += `<div class="perk-hint">${next}. seviyede yetenek seçersin: <span style="color:#ff9a3a">${o[0].name}</span> ya da <span style="color:#b58cff">${o[1].name}</span></div>`;
+    }
+    if (!lines.length && t.type === 'angler') h = '<div class="perk-hint">Karanlık haritada çevresini aydınlatır: ışığındaki kuleler menzil cezası almaz.</div>' + h;
+    return h;
 }
 
 function closeTowerModal() {
@@ -2049,7 +2195,37 @@ function cycleTargetMode() {
 
 function upgradeSelectedTower() {
     if (!selectedTower) return;
+    const opts = selectedTower.nextPerkOptions();
+    if (opts) { openPerkChoice(selectedTower, opts); return; }
     if (world.upgradeTower(selectedTower)) {
+        updateUI();
+        openTowerModal(selectedTower);
+    }
+}
+
+// 3. ve 5. seviyeye çıkarken iki yetenekten birini seçtiren panel
+function openPerkChoice(t, opts) {
+    const cost = t.upgradeCost();
+    document.getElementById('perkChoiceTitle').innerText = `Seviye ${t.level + 1} yeteneği`;
+    document.getElementById('perkChoiceSub').innerText = `${t.name} için birini seç (${cost} Enerji). Seçim sonradan değişmez.`;
+    opts.forEach((o, i) => {
+        const card = document.getElementById('perkCard' + i);
+        card.innerHTML = `<span class="perk-tag ${i === 0 ? 'a' : 'b'}">SEÇENEK ${i === 0 ? 'A' : 'B'}</span><b>${o.name}</b><span class="perk-desc">${o.desc}</span>`;
+        card.disabled = world.money < cost;
+        card.onclick = () => confirmPerk(i);
+    });
+    document.getElementById('towerMain').classList.add('hidden');
+    document.getElementById('perkChoice').classList.remove('hidden');
+}
+
+function closePerkChoice() {
+    document.getElementById('perkChoice').classList.add('hidden');
+    document.getElementById('towerMain').classList.remove('hidden');
+}
+
+function confirmPerk(i) {
+    if (!selectedTower) return;
+    if (world.upgradeTower(selectedTower, i)) {
         updateUI();
         openTowerModal(selectedTower);
     }
@@ -2079,7 +2255,8 @@ function renderTowerList() {
         bar.className = 'lv-bar mini';
         for (let i = 1; i <= Core.MAX_LEVEL; i++) {
             const seg = document.createElement('i');
-            seg.className = i > t.level ? 'off' : (i === 1 ? 'base' : 'up');
+            const pi = (i === 3 || i === 5) && i <= t.level ? perkIndex(t, i) : -1;
+            seg.className = i > t.level ? 'off' : (i === 1 ? 'base' : (pi >= 0 ? (pi === 0 ? 'pa' : 'pb') : 'up'));
             bar.appendChild(seg);
         }
         row.appendChild(name);

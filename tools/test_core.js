@@ -343,5 +343,185 @@ for (let i = 0; i < 900; i++) { w.update(1 / 30); r.update(1 / 30); }
 ok(Math.abs(r.money - w.money) < 60 && Math.abs(r.stats.kills - w.stats.kills) <= 3, 'devam edilen oyun orijinaline yakın ilerliyor');
 ok(r.serialize().towers.length === 2, 'geri kurulan oyun yeniden kaydedilebiliyor');
 
+// ---------------------------------------------------------------- yetenek seçimi (3. ve 5. seviye)
+{
+    const types = Object.keys(Core.TOWER_TYPES);
+    ok(types.every(t => [3, 5].every(lv => { const o = Core.perkOptions(t, lv); return o && o.length === 2 && o[0].id !== o[1].id; })),
+        'her kulenin 3. ve 5. seviyede iki yeteneği var (6 kule x 4 = 24 yetenek)');
+    const ids = types.flatMap(t => [3, 5].flatMap(lv => Core.perkOptions(t, lv).map(o => o.id)));
+    ok(new Set(ids).size === 24, 'yetenek kimlikleri benzersiz');
+
+    // yardımcı: haritada kule kur, istenen seçimlerle 5. seviyeye çıkar
+    const build = (w, type, spotIdx, picks, lvl) => {
+        const t = w.placeTower(type, w.spots[spotIdx]).tower;
+        const choices = { 3: picks[0], 5: picks[1] };
+        while (t.level < lvl) w.upgradeTower(t, choices[t.level + 1]);
+        return t;
+    };
+    const foe = (w, type, traveled) => {
+        const e = new Core.Enemy(w, type || 'standard', 0, w.nextEnemyId++, 3, {});
+        e.traveled = traveled == null ? 300 : traveled; e.speed = e.originalSpeed = 0.001; e.update(0);
+        w.enemies.push(e);
+        return e;
+    };
+    const rich = (id, diff) => { const w = mk(id || 'cukur', { difficulty: diff || 'easy' }); w.money = 99999; return w; };
+
+    // seçim kaydediliyor, B seçeneği farklı etki veriyor
+    let w1 = rich('mercan');
+    let tw = build(w1, 'octopus', 0, [0, 0], 5);
+    ok(tw.perks[3] === 'oct-twin' && tw.perks[5] === 'oct-rain' && tw.shots === 3, 'Ahtapot: Çift Mürekkep + Mürekkep Yağmuru = 3 hedef');
+    w1 = rich('mercan');
+    tw = build(w1, 'octopus', 0, [1, 1], 5);
+    ok(tw.perks[3] === 'oct-pierce' && tw.shots === 1 && tw.pierce >= 0.4 && tw.strikeOpts.noHeavy, 'Ahtapot: Delici Mürekkep zırh deler, tek hedef');
+    const lob0 = new Core.Enemy(w1, 'armored', 0, 90, 1, {}), lob1 = new Core.Enemy(w1, 'armored', 0, 91, 1, {});
+    const dA = lob0.takeDamage(10, 'octopus', 0, {}).dmg, dB = lob1.takeDamage(10, 'octopus', tw.pierce, tw.strikeOpts).dmg;
+    ok(dB > dA * 2.4, 'Delici Mürekkep zırhlıya çok daha fazla hasar veriyor');
+    w1 = rich('mercan');
+    tw = build(w1, 'octopus', 0, [0, 1], 5);
+    const tgt = foe(w1, 'standard', 300);
+    tgt.maxHealth = tgt.health = 99999;
+    tw.target = tgt; w1.fire(tw);
+    for (let i = 0; i < 60; i++) w1.update(1 / 30);
+    ok(tgt.markT > 0, 'Karartma Bulutu hedefi işaretliyor');
+    const m0 = foe(w1, 'standard', 320), m1 = foe(w1, 'standard', 330);
+    m1.markT = 3; m1.markPct = 0.2;
+    ok(Math.abs(m1.takeDamage(10, 'eel', 0).dmg / m0.takeDamage(10, 'eel', 0).dmg - 1.2) < 0.001, 'işaretli düşman %20 fazla hasar alıyor');
+
+    // Yılan Balığı: zincir, aşırı yük, yanık
+    let w2 = rich('buz');
+    let eel = build(w2, 'eel', 0, [0, 0], 5);
+    const near = foe(w2, 'standard', 250);
+    near.x = eel.x + 40; near.y = eel.y;                  // hedef
+    const far1 = foe(w2, 'standard', 260), far2 = foe(w2, 'standard', 270), far3 = foe(w2, 'standard', 280);
+    far1.x = eel.x + 40 + eel.aoe + 60; far1.y = eel.y;   // alanın dışında ama zincir menzilinde
+    far2.x = eel.x + 40 + eel.aoe + 100; far2.y = eel.y;
+    far3.x = eel.x + 40 + eel.aoe + 140; far3.y = eel.y;
+    let chain = null;
+    w2.onEvent = (t, d) => { if (t === 'chain') chain = d; };
+    eel.target = near; w2.fire(eel);
+    ok(chain && chain.points.length === 3 && far1.health < far1.maxHealth && far2.health < far2.maxHealth && far3.health === far3.maxHealth, 'Zincir Şoku alan dışındaki en yakın 2 düşmana sıçrıyor');
+    w2 = rich('buz');
+    eel = build(w2, 'eel', 0, [1, 0], 5);
+    ok(eel.aoe > Core.TOWER_TYPES.eel.aoe * 1.45 && eel.dmg < Core.TOWER_TYPES.eel.dmg * 2.4, 'Geniş Şok alanı büyütüyor');
+    const o1 = foe(w2, 'standard', 250); o1.x = eel.x + 30; o1.y = eel.y; o1.maxHealth = o1.health = 99999;
+    let overloads = 0;
+    w2.onEvent = (t) => { if (t === 'overload') overloads++; };
+    for (let i = 0; i < 8; i++) { eel.target = o1; w2.fire(eel); }
+    ok(overloads === 2 && o1.stunTime > 0, 'Aşırı Yük her 4. şokta sersemletiyor');
+    w2 = rich('buz');
+    eel = build(w2, 'eel', 0, [0, 1], 5);
+    const bn = foe(w2, 'armored', 250); bn.x = eel.x + 30; bn.y = eel.y;
+    eel.target = bn; w2.fire(eel);
+    const h1 = bn.health;
+    for (let i = 0; i < 30; i++) w2.update(1 / 30);
+    ok(bn.dotT > 0 && bn.health < h1 - 2, 'Elektrik Yanığı zırhlıda da zamanla hasar veriyor');
+
+    // Deniz Anası
+    let w3 = rich('yosun');
+    let jf = build(w3, 'jellyfish', 0, [0, 0], 5);
+    ok(jf.slow === 0.35 && jf.slowTime === 4.5, 'Buz Dokunuşu yavaşlatmayı güçlendiriyor');
+    jf = build(rich('yosun'), 'jellyfish', 0, [0, 0], 5);
+    w3 = jf.world;
+    jf.fx.slowArea = { radius: 85 };                      // Elektrikli Su (5. seviye A) ile aynı etki
+    const s1 = foe(w3, 'standard', 200), s2 = foe(w3, 'standard', 200), s3 = foe(w3, 'standard', 200);
+    s2.x = s1.x + 40; s2.y = s1.y; s3.x = s1.x + 400; s3.y = s1.y;
+    const res1 = w3.strike(s1, jf, jf.dmg, jf.pierce);
+    s1.slowDown(jf.slow, jf.slowTime); w3.afterHit(s1, jf, res1, true);
+    ok(s2.isSlowed && !s3.isSlowed, 'Elektrikli Su yakındaki düşmanı da yavaşlatıyor');
+    const jfField = build(rich('yosun'), 'jellyfish', 0, [1, 0], 5);
+    ok(jfField.fx.slowArea && jfField.fx.slowArea.radius === 85, 'Elektrikli Su 5. seviyede seçilebiliyor');
+    w3 = rich('yosun');
+    jf = build(w3, 'jellyfish', 0, [1, 1], 5);
+    const ps = foe(w3, 'armored', 200);
+    const r2 = w3.strike(ps, jf, jf.dmg, jf.pierce); w3.afterHit(ps, jf, r2, true);
+    ok(ps.dotT > 0 && ps.dotDps > 0, 'Zehirli Dokunuş zehirliyor');
+    const pulseTargets = [foe(w3, 'standard', 150), foe(w3, 'flying', 160)];
+    pulseTargets.forEach(e => { e.x = jf.x + 50; e.y = jf.y + 10; });
+    let pulsed = false;
+    w3.onEvent = (t) => { if (t === 'pulse') pulsed = true; };
+    ok(jf.fx.pulse && jf.fx.pulse.every === 6, 'Derin Nabız ayarlı');
+    for (let i = 0; i < 6; i++) { jf.target = pulseTargets[0]; w3.fire(jf); }
+    ok(pulsed && pulseTargets.every(e => e.isSlowed), 'Derin Nabız 6. atışta havadakiler dahil herkesi yavaşlatıyor');
+
+    // Kılıç Balığı
+    let w4 = rich('batik');
+    let sw = build(w4, 'swordfish', 0, [0, 0], 5);
+    ok(sw.pierce >= 0.64 && sw.strikeOpts.bossHit === 1.8, 'Zırh Kesen delme ve patron hasarını artırıyor');
+    const bs = new Core.Enemy(w4, 'boss', 0, 77, 3, { kind: 'shark', hpMul: 1 });
+    const hitBoss = bs.takeDamage(10, 'swordfish', 0, sw.strikeOpts).dmg, hitBoss0 = new Core.Enemy(w4, 'boss', 0, 78, 3, { kind: 'shark', hpMul: 1 }).takeDamage(10, 'swordfish', 0, {}).dmg;
+    ok(Math.abs(hitBoss / hitBoss0 - 1.8 / 1.5) < 0.001, 'patrona %80 fazla hasar (normalde %50)');
+    const ex1 = foe(w4, 'standard', 200), ex2 = foe(w4, 'standard', 200);
+    ex2.health = ex2.maxHealth * 0.2;
+    const swHunt = build(rich('batik'), 'swordfish', 1, [0, 0], 5);
+    swHunt.fx.execute = { below: 0.3, mul: 2 }; swHunt.derive(); swHunt.strikeOpts.executeBelow = 0.3; swHunt.strikeOpts.executeMul = 2;
+    const full = ex1.takeDamage(10, 'swordfish', 0, swHunt.strikeOpts).dmg, low = ex2.takeDamage(10, 'swordfish', 0, swHunt.strikeOpts).dmg;
+    ok(Math.abs(low / full - 2) < 0.001, 'Av Başı canı az düşmana iki kat hasar veriyor');
+    const swHunt2 = build(rich('batik'), 'swordfish', 1, [0, 0], 5);
+    ok(swHunt2.perks[5] === 'swo-hunt' && swHunt2.strikeOpts.executeBelow === 0.3, 'Av Başı 5. seviye A seçeneği');
+    w4 = rich('batik');
+    sw = build(w4, 'swordfish', 0, [1, 1], 5);
+    ok(sw.fx.crit && sw.range > Core.TOWER_TYPES.swordfish.range * 1.1, 'Keskin Nişan menzili ve kritik şansı veriyor');
+    const cc = foe(w4, 'standard', 220); cc.maxHealth = cc.health = 99999;
+    w4.rng = () => 0; let crits = 0; w4.onEvent = (t) => { if (t === 'crit') crits++; };
+    sw.target = cc; w4.fire(sw);
+    for (let i = 0; i < 60; i++) w4.update(1 / 30);
+    ok(crits >= 1, 'kritik vuruş gerçekleşti');
+    const sv = [foe(w4, 'standard', 200), foe(w4, 'standard', 210), foe(w4, 'standard', 220), foe(w4, 'standard', 230)];
+    sv.forEach((e, i) => { e.x = sw.x + 80 + i * 10; e.y = sw.y; e.maxHealth = e.health = 100 + i * 100; });
+    w4.projectiles = [];
+    sw.fx.salvo = { every: 5, count: 3 };
+    sw.shotCount = 4; sw.target = sv[0]; w4.fire(sw);
+    ok(w4.projectiles.length === 3 && w4.projectiles.every(p => p.target !== sv[0]), 'Kılıç Yağmuru 5. atışta en güçlü 3 düşmanı seçiyor');
+    ok(build(rich('batik'), 'swordfish', 1, [0, 1], 5).fx.salvo.count === 3, 'Kılıç Yağmuru 5. seviye B seçeneği');
+
+    // Fener Balığı
+    let w5 = rich('cukur');
+    const lamp = build(w5, 'angler', 0, [0, 0], 5);
+    const nb = w5.placeTower('octopus', w5.spots[1]).tower;
+    nb.x = lamp.x + 60; nb.y = lamp.y;
+    w5.refreshLight();
+    ok(nb.auraBonus > 0 && nb.dmg > Core.TOWER_TYPES.octopus.dmg, 'Aydınlık Çevre yakın kulelere hasar bonusu veriyor');
+    ok(w5.lightRadius(lamp) > lamp.range * 1.4 * 1.3, 'Işık alanı büyüyor');
+    const lampB = build(rich('cukur'), 'angler', 0, [1, 1], 5);
+    ok(lampB.shots === 2 && lampB.range > Core.TOWER_TYPES.angler.range * 1.2 && lampB.dmg >= Core.TOWER_TYPES.angler.dmg * 1.25 * 2, 'Odak Işığı + Çifte Işık: menzil, hasar, iki hedef');
+    const lampDawn = build(rich('cukur'), 'angler', 0, [0, 0], 5);
+    lampDawn.fx.auraSlow = 0.88;
+    const w5b = lampDawn.world;
+    const lit = foe(w5b, 'standard', 300); lit.x = lampDawn.x + 40; lit.y = lampDawn.y;
+    const dark = foe(w5b, 'standard', 310); dark.x = lampDawn.x + 3000; dark.y = lampDawn.y;
+    w5b.update(1 / 30);
+    ok(lit.auraMul === 0.88 && dark.auraMul === 1, 'Şafak Ağı ışıktaki düşmanı yavaşlatıyor');
+    ok(!!build(rich('cukur'), 'angler', 0, [0, 0], 5).world && Core.perkOptions('angler', 5)[0].fx.auraSlow === 0.88, 'Şafak Ağı 5. seviye A seçeneği');
+
+    // Balon Balığı
+    let w6 = rich('yosun');
+    let pf2 = build(w6, 'puffer', 0, [0, 0], 5);
+    pf2.fx.gas = { dpsMul: 0.45, time: 3.5, radiusMul: 0.85 };   // Zehirli Gaz (5. seviye A)
+    ok(pf2.aoe >= Core.TOWER_TYPES.puffer.aoe * 1.35, 'Büyük Patlama alanı büyütüyor');
+    const gx = foe(w6, 'armored', 200); gx.x = pf2.x + 120; gx.y = pf2.y;
+    const pr = new Core.Projectile(pf2, gx, { x: gx.x, y: gx.y });
+    pr.x = gx.x; pr.y = gx.y;
+    w6.projectiles.push(pr);
+    for (let i = 0; i < 10; i++) w6.update(1 / 30);
+    const gh = gx.health;
+    ok(w6.gas.length === 1, 'zehirli gaz bulutu oluştu');
+    for (let i = 0; i < 60; i++) w6.update(1 / 30);
+    ok(gx.health < gh - 3, 'gaz bulutu zırhlıya da zamanla hasar veriyor');
+    w6 = rich('yosun');
+    pf2 = build(w6, 'puffer', 0, [1, 1], 5);
+    ok(pf2.rate < Core.TOWER_TYPES.puffer.rate * 0.65 * 0.8 && pf2.slow === 0.5 && pf2.slowTime === 3, 'Hızlı Namlu + Yapışkan Sıvı');
+
+    // kayıt: seçilen yetenekler geri geliyor, eski kayıtlarda boşluk doldurulur
+    const w7 = rich('mercan');
+    build(w7, 'swordfish', 0, [1, 0], 5);
+    const sn = JSON.parse(JSON.stringify(w7.serialize()));
+    const r7 = Core.World.restore(mapOf('mercan'), sn, {});
+    const rt = r7.towers[0];
+    ok(rt.perks[3] === 'swo-aim' && rt.perks[5] === 'swo-hunt' && rt.fx.crit && rt.fx.execute, 'kaydedilen yetenekler geri yüklendi');
+    delete sn.towers[0].perks;
+    const r8 = Core.World.restore(mapOf('mercan'), sn, {});
+    ok(r8.towers[0].perks[3] === 'swo-cut' && r8.towers[0].perks[5] === 'swo-hunt', 'eski kayıtlarda eksik yetenek ilk seçenekle doldurulur');
+}
+
 console.log(fails ? `${fails} BASARISIZ` : 'HEPSI GECTI');
 process.exit(fails ? 1 : 0);
