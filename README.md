@@ -4,6 +4,17 @@ Deniz canlısı temalı bir kule savunma (tower defense) oyunu. Aynı oyun üç 
 
 ![Ana menü](docs/menu.jpg)
 
+## İndir
+
+**[Son sürümü indir (Releases)](https://github.com/CaptainGM/su-alti-savunma-fx/releases/latest)** — giriş yapmadan indirilir, iki dosya vardır:
+
+| Platform | Dosya | Kurulum |
+|---|---|---|
+| Windows | `SuAltiSavunma-Windows-….zip` | Zip'i çıkar, `SuAltiSavunma.exe` dosyasına çift tıkla. Java kurmak gerekmez |
+| Android | `SuAltiSavunma-Android-….apk` | Telefona indir, dosyaya dokun, "bilinmeyen kaynaklardan yükleme"ye izin ver, **Yükle**. Yatay ekranda açılır, izin istemez |
+
+Tarayıcıdan oynamak ya da kendin derlemek için aşağıdaki [Çalıştırma](#çalıştırma) bölümüne bak. APK'yı kendi bilgisayarında üretmek için kök klasördeki **`apk_uret.bat`** yeterli (Android Studio kurulu olmalı).
+
 Derin Çukur haritasından bir kare: Fener Balıkları karanlığı aydınlatıyor, kulelerin altındaki renkli çubuklar seviyeyi ve seçilen yetenekleri gösteriyor, sağ üstteki kutu sıradaki dalgaya karşı hangi kulelerin işe yarayacağını söylüyor. Ekranda şifacı denizatı ve vatozlar var.
 
 ![Oynanış](docs/oynanis.jpg)
@@ -19,7 +30,7 @@ Oyun telefonda **yatay ekranda** oynanır (Clash of Clans gibi); masaüstündeki
 - **Ses her yerde aynı:** efektler ve müzik Java'da değil, saf JavaScript'te (`js/ses_dsp.js`) üretilir ve Web Audio ile çalınır. Java sürümünün üretimiyle **örnek örnek aynıdır** (`node tools/ses_karsilastir.js` bunu Java'nın yazdığı WAV'larla karşılaştırır: en büyük fark 1 LSB). Üretim bir Worker içinde yapılır, telefonda birkaç saniye sürer
 - **Hafif başlangıç ayarları:** mobilde görüntü kalitesi Orta, FPS 60; kare hızı 4 sn boyunca düşük kalırsa kalite kendiliğinden bir basamak iner (en çok iki kez, bildirimle)
 - **Tarayıcı / PWA:** `src/main/resources/web` klasörü olduğu gibi bir web sunucusuna konabilir. `manifest.webmanifest` ve `sw.js` sayesinde telefonda "Ana ekrana ekle" ile tam ekran, yatay ve çevrimdışı çalışır. Yerelde denemek için `node tools/serve.js` (telefondan `http://<bilgisayar-ip>:8080`); `?mobil=1` ile masaüstü tarayıcıda da mobil düzen açılır. Dikey tutulursa "telefonu yan çevir" uyarısı çıkar
-- **Android uygulaması:** `android/` klasöründeki küçük bir Gradle projesidir; web dosyalarını (`src/main/resources/web`) kopyalamadan doğrudan paketler ve `https://appassets.androidplatform.net` altından bir `WebView`'da sunar (güvenli bağlam: Web Audio, Worker ve depolama çalışır; internet izni yoktur). Tam ekran, yatay, ekran açık kalır. Derlemek için: `cd android && ./gradlew assembleDebug` (JDK 17+ ve Android SDK gerekir); çıktı `android/app/build/outputs/apk/debug/app-debug.apk`. GitHub Actions her çalışmada APK'yı derler ve **emülatörde gerçek dokunuşlarla test eder**; APK çalışmanın çıktıları arasında `SuAltiSavunma-android-debug` adıyla durur
+- **Android uygulaması:** `android/` klasöründeki küçük bir Gradle projesidir; web dosyalarını (`src/main/resources/web`) kopyalamadan doğrudan paketler ve `https://appassets.androidplatform.net` altından bir `WebView`'da sunar (güvenli bağlam: Web Audio, Worker ve depolama çalışır; internet izni yoktur). Tam ekran, yatay, ekran açık kalır. Windows'ta APK üretmenin en kolay yolu kök klasördeki **`apk_uret.bat`**'tır (JDK'yı ve Android SDK'yı kendi bulur, ilk çalışmada imza anahtarını üretir, çıktı `dist\SuAltiSavunma.apk`; `apk_uret.bat debug` hata ayıklama APK'sı üretir). Elle: `cd android && ./gradlew assembleRelease` (JDK 17-23 ve Android SDK gerekir). GitHub Actions her çalışmada APK'yı derler ve **emülatörde gerçek dokunuşlarla test eder**
 
 ![Android: kule penceresi](docs/mobil-kule.jpg)
 
@@ -234,9 +245,9 @@ Proje bu haliyle tamamlanmış sayılır. Devam edilmek istenirse en çok değer
 
 ## Çalıştırma
 
-**Hazır uygulama (Java kurmadan):** GitHub'daki *Actions* sekmesinde son başarılı çalışmanın `SuAltiSavunma-windows` çıktısını indirip zip'i açın ve `SuAltiSavunma.exe` dosyasını çalıştırın (JavaFX ve Java çalışma ortamı içindedir, ~110 MB). Kendiniz üretmek için JDK 25+ ve Maven ile `powershell -File tools\paketle.ps1`; çıktı `dist\` altında oluşur.
+**Hazır uygulama (Java kurmadan):** [Releases](https://github.com/CaptainGM/su-alti-savunma-fx/releases/latest) sayfasından `SuAltiSavunma-Windows-….zip` dosyasını indirip çıkarın ve `SuAltiSavunma.exe` dosyasını çalıştırın (JavaFX ve Java çalışma ortamı içindedir, ~110 MB). Kendiniz üretmek için JDK 25+ ve Maven ile `powershell -File tools\paketle.ps1`; çıktı `dist\` altında oluşur.
 
-**Android:** GitHub *Actions* çıktılarında `SuAltiSavunma-android-debug` (APK). Telefona kurmak için "bilinmeyen kaynaklardan yükleme" izni gerekir. Kendiniz derlemek için `cd android && ./gradlew assembleDebug`.
+**Android:** [Releases](https://github.com/CaptainGM/su-alti-savunma-fx/releases/latest) sayfasındaki `.apk` (telefona kurmak için "bilinmeyen kaynaklardan yükleme" izni gerekir). Kendiniz üretmek için `apk_uret.bat`.
 
 **Tarayıcı:** `node tools/serve.js` ve telefondan `http://<bilgisayar-ip>:8080`. Gerçek bir adrese (HTTPS) konursa "Ana ekrana ekle" ile uygulama gibi kurulur.
 
@@ -247,6 +258,17 @@ mvn javafx:run
 ```
 
 Windows'ta `start.bat` ile de çalıştırılabilir. Geliştirirken `-Dsavunma.hash="#map=2&diff=hard"` ile doğrudan bir haritayı açabilirsiniz; `-Duser.home=<klasör>` ile kayıt dosyası başka bir yere alınır (testlerde gerçek ayarlara dokunmamak için). `-Dsavunma.perf=true` ile saniyedeki kare sayısı ve kare başına betik süresi konsola yazılır.
+
+## Sürüm yayınlama
+
+`pom.xml` içindeki sürüm tek kaynaktır (Windows uygulaması ve Android `versionName/versionCode` buradan gelir). Yeni sürüm çıkarmak için sürümü `pom.xml`'de yükselt, değişiklikleri gönder ve etiketle:
+
+```bash
+git tag v2.2.0
+git push origin v2.2.0
+```
+
+`Sürüm yayınla` iş akışı Windows zip'ini ve **imzalı** APK'yı derleyip *Releases* sayfasında yayınlar (SHA-256 özetleri ve kurulum notuyla). Önce denemek için GitHub'da *Actions → Sürüm yayınla → Run workflow* (taslak oluşturur; *Releases* sayfasında kontrol edip *Publish release* diyebilir ya da silebilirsin). APK imzası için depoda `ANAHTAR_B64`, `ANAHTAR_PAROLA`, `ANAHTAR_TAKMA_AD` sırları tanımlıdır; yerelde `apk_uret.bat` aynı anahtarla (`android/anahtar/`, depoya girmez, yedeklenmeli) imzaladığı için her iki yoldan çıkan APK'lar birbirinin üstüne güncelleme olarak kurulur.
 
 ## Araçlar
 

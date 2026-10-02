@@ -1,0 +1,28 @@
+# Bağımlılıkları ve CI eylemlerini aylık denetler; güncelleme önerilerini çekme isteği olarak açar.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels: [bagimlilik]
+  - package-ecosystem: npm
+    directory: /tools/e2e
+    schedule:
+      interval: monthly
+    labels: [bagimlilik]
+  - package-ecosystem: npm
+    directory: /tools/lint
+    schedule:
+      interval: monthly
+    labels: [bagimlilik]
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: monthly
+    labels: [bagimlilik]
+  - package-ecosystem: gradle
+    directory: /android
+    schedule:
+      interval: monthly
+    labels: [bagimlilik]

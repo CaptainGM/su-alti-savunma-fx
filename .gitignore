@@ -23,3 +23,6 @@ android/.idea/
 tools/e2e/node_modules/
 tools/e2e/ciktilar/
 tools/lint/node_modules/
+
+# APK imza anahtari (yedekleyin, paylasmayin)
+android/anahtar/

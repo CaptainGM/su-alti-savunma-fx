@@ -2,6 +2,24 @@ plugins {
     id 'com.android.application'
 }
 
+// Sürüm numarası tek yerden gelir: kök pom.xml. 2.1.0 -> versionName 2.1.0, versionCode 20100
+def pomText = file('../../pom.xml').getText('UTF-8')
+def pomVersion = (pomText =~ /<version>(\d+)\.(\d+)\.(\d+)<\/version>/)[0]
+def surumAdi = "${pomVersion[1]}.${pomVersion[2]}.${pomVersion[3]}".toString()
+def surumKodu = (pomVersion[1] as int) * 10000 + (pomVersion[2] as int) * 100 + (pomVersion[3] as int)
+
+// İmza anahtarı: yerelde android/anahtar/anahtar.properties (apk_uret.bat ilk çalışmada üretir), GitHub'da ortam değişkenleri.
+// İkisi de yoksa sürüm APK'sı hata ayıklama anahtarıyla imzalanır (kurulabilir, ama Play Store için uygun değildir).
+def anahtarDosyasi = file('../anahtar/anahtar.properties')
+def anahtar = new Properties()
+if (anahtarDosyasi.exists()) {
+    anahtarDosyasi.withInputStream { anahtar.load(it) }
+}
+def anahtarYolu = System.getenv('ANAHTAR_DOSYASI') ?: (anahtar.getProperty('storeFile') ? new File(anahtarDosyasi.parentFile, anahtar.getProperty('storeFile')).path : null)
+def anahtarParola = System.getenv('ANAHTAR_PAROLA') ?: anahtar.getProperty('storePassword')
+def anahtarTakmaAd = System.getenv('ANAHTAR_TAKMA_AD') ?: anahtar.getProperty('keyAlias')
+def anahtarVar = anahtarYolu != null && new File(anahtarYolu).exists() && anahtarParola != null && anahtarTakmaAd != null
+
 android {
     namespace 'com.kule.savunma.mobil'
     compileSdk 35
@@ -10,13 +28,25 @@ android {
         applicationId 'com.kule.savunma.mobil'
         minSdk 24
         targetSdk 35
-        versionCode 21
-        versionName '2.1.0'
+        versionCode surumKodu
+        versionName surumAdi
+    }
+
+    signingConfigs {
+        if (anahtarVar) {
+            surum {
+                storeFile new File(anahtarYolu)
+                storePassword anahtarParola
+                keyAlias anahtarTakmaAd
+                keyPassword anahtarParola
+            }
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig anahtarVar ? signingConfigs.surum : signingConfigs.debug
         }
     }
 
@@ -34,5 +64,11 @@ android {
 
     lint {
         abortOnError false
+    }
+}
+
+tasks.register('surumBilgisi') {
+    doLast {
+        println "SURUM=${surumAdi} KOD=${surumKodu} IMZA=${anahtarVar ? 'ozel anahtar' : 'hata ayiklama anahtari'}"
     }
 }
