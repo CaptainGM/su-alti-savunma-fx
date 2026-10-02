@@ -10,26 +10,6 @@
 
 <body>
 
-    <div id="infoModal" class="hidden">
-        <h3 style="color:#00d4ff; font-size:2em; margin-bottom:14px;">Nasıl Oynanır?</h3>
-        <div class="help-text">
-            <p><b>Amaç:</b> Düşmanlar yolun başından girip sonuna ulaşırsa üssün canı azalır. Tüm dalgaları bitirmeden canın tükenmesin.</p>
-            <p><b>Kule kurmak:</b> Sağ paneldeki bir kuleyi haritadaki <b>yeşil alana</b> sürükle, ya da kuleye tıklayıp sonra alana tıkla. Altın halkalı yerler yüksek zemindir (+%20 menzil).</p>
-            <p><b>Kuleyi geliştirmek:</b> Kuleye tıkla; yükselt, sat ya da hedef önceliğini değiştir (Öncelikli / İlk / Son / En Güçlü / En Yakın). Kuleler 5 seviyedir. <b>3. ve 5. seviyeye çıkarken iki yetenekten birini seçersin</b> (her kule için farklı; seçim sonradan değişmez). Seviye çubuğunda turuncu dilim A, mor dilim B yeteneğini gösterir.</p>
-            <p><b>Özel düşmanlar:</b> <b>Kalkanlı Kaplumbağa</b> önce kalkanını erittirir (zehir ve gaz kalkanı deler). <b>Şifacı Denizatı</b> yakındakileri iyileştirir, önce onu vur. <b>Hayalet Kalamar</b> belli aralıkla gizlenir; Fener Balığı ışığı ya da alan hasarı (Yılan, Balon) onu ortaya çıkarır. <b>Elektrikli Müren</b> yakınındaki kuleyi sersemletir, uzaktan vur. "Öncelikli" hedef modu bunları önce seçer.</p>
-            <p><b>Strateji:</b> Rastgele kule dizmek kazandırmaz. Sağ üstteki kutu sıradaki dalganın içeriğini ve hangi kulelerin işe yarayacağını söyler: <b>zırhlılara</b> Ahtapot çok az hasar verir (zırh deler: Yılan, Kılıç, Fener Balığı), <b>uçanları</b> Yılan ve Balon Balığı vuramaz, <b>sürüyü</b> alan hasarı eritir, patronlara Kılıç Balığı %50 fazla vurur.</p>
-            <p><b>Eşleşme:</b> Deniz Anası'nın yavaşlattığı düşman her kuleden %20 fazla hasar alır. Uzak ve yüksek (altın halkalı) yerler yalnızca uzun menzilli kulelere uyar.</p>
-            <p><b>Alışma:</b> 4. dalgadan sonra hasarın yarısından fazlasını tek bir türe yaptırırsan düşmanlar ona alışır ve o türden en fazla %25 az hasar alır (kutuda "Ahtapot %25 daha az hasar veriyor" gibi yazar). Türleri karıştırırsan alışma kalkar.</p>
-            <p><b>Fiyatlar:</b> Kule fiyatları 50 ile 100 arasındadır ve kolay ile normalde sabittir; zorda aynı türden her yeni kule %6 pahalanır. Başlangıç enerjisi kolayda 300, normalde 250, zorda 200'dür. Yükseltme çoğu zaman yeni kuleden verimlidir; çubuklar mevcut gücü (mavi) ve yükseltmeyle gelecek kazancı (sarı) gösterir.</p>
-            <p><b>Kaydetme:</b> Bir oyunu bırakıp haritalara döndüğünde ya da oyunu kapattığında kaydedilir. Haritaya tekrar tıklayınca <b>devam edebilir</b> ya da yeniden başlayabilirsin.</p>
-            <p><b>Patronlar:</b> Belirli dalgalarda güçlü bir patron gelir. Patron zaman zaman en yüksek seviyeli yakın kuleni önce çenesini açarak hedef alır, sonra <b>yer</b>: kule yok olur, para iadesi yoktur. Patronu menzil dışında yavaşlatıp önce öldürmek gerekir.</p>
-            <p><b>Harita kuralları:</b> Her haritanın kendine özel bir kuralı vardır (haritanın başında ve sağ üst kutuda yazar). Volkanda gökten düşen lav kayası uyarısız bir kuleyi yok edebilir.</p>
-            <p><b>Müzik:</b> sakin su altı müziği dalga aralarında çalar; dalga başlayınca bas ve davul girer, patron gelince tempo ve gerilim artar. Ayarlardan Müzik ve Efekt sesi ayrı kısılır.</p>
-            <p class="help-keys">Kısayollar: Boşluk dalga başlat · P duraklat · F hız (1x, 2x, 0,5x) · 1-6 kule seç · F11 tam ekran · Esc geri</p>
-        </div>
-        <button class="close-btn" onclick="toggleInfo()">ANLAŞILDI</button>
-    </div>
-
     <div id="towerModal" class="hidden">
         <h3 id="towerModalName" style="color:#00ff88; font-size:1.6em; margin-bottom:12px;">Kule</h3>
         <div id="towerMain">
@@ -70,7 +50,7 @@
         <h1>SU ALTI SAVUNMA</h1>
         <button class="menu-button" onclick="showMapSelect()">Oyunu Başlat</button>
         <button class="menu-button" onclick="openSettings()">Ayarlar</button>
-        <button class="menu-button" onclick="toggleInfo()">Yardım</button>
+        <button class="menu-button" onclick="openGuide()">Rehber</button>
         <button class="menu-button" onclick="exitGame()">Çıkış</button>
     </div>
 
@@ -130,6 +110,27 @@
         </div>
     </div>
 
+    <div id="guideScreen" class="screen hidden">
+        <div class="guide-card">
+            <div class="guide-head">
+                <h2>Rehber</h2>
+                <div class="guide-tabs" id="guideTabs"></div>
+                <button class="guide-close" onclick="closeGuide()">✕ Kapat</button>
+            </div>
+            <div class="guide-body">
+                <nav id="guideList"></nav>
+                <section id="guideMain">
+                    <div class="guide-stage">
+                        <canvas id="guideCanvas" width="960" height="600"></canvas>
+                        <div id="guideCaption"></div>
+                        <div id="guideControls"></div>
+                    </div>
+                    <div id="guideText"></div>
+                </section>
+            </div>
+        </div>
+    </div>
+
     <div id="mapSelectScreen" class="screen hidden">
         <h1 class="select-title">HARİTA SEÇ</h1>
         <div id="difficultyPills"></div>
@@ -145,6 +146,7 @@
                 <canvas id="gameCanvas" width="1350" height="900"></canvas>
                 <button id="backToMapSelectBtn" onclick="quitToMapSelect()" title="Harita Seçimine Dön (Esc)">← Haritalar</button>
                 <button id="settingsBtn" onclick="openSettings()" title="Ayarlar">⚙ Ayarlar</button>
+                <button id="guideBtn" onclick="openGuide()" title="Rehber: kuleler, düşmanlar, haritalar">? Rehber</button>
                 <div id="mapBanner"></div>
             </div>
 
@@ -211,6 +213,7 @@
     <script src="js/settings.js"></script>
     <script src="js/maps.js"></script>
     <script src="js/game.js"></script>
+    <script src="js/rehber.js"></script>
 </body>
 
 </html>

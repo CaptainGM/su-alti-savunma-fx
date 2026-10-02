@@ -1013,3 +1013,155 @@ body {
 .perk-card .perk-tag { display: block; font-size: 0.72em; font-weight: 800; letter-spacing: 0.08em; margin-bottom: 2px; }
 .perk-card b { display: block; font-size: 1.08em; margin-bottom: 4px; color: #fff; }
 .perk-card .perk-desc { font-size: 0.86em; color: #b9ccd6; line-height: 1.35; }
+
+/* ------------------------------------------------------------------ Rehber */
+#guideBtn {
+    position: absolute;
+    top: 15px;
+    left: 300px;
+    z-index: 500;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border: 2px solid #3a6a80;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+}
+#guideBtn:hover { border-color: #ffd45a; }
+
+#guideScreen { background: rgba(0, 10, 22, 0.84); z-index: 3100; }
+
+.guide-card {
+    width: min(1260px, 97vw);
+    height: min(800px, 95vh);
+    background: rgba(9, 22, 37, 0.99);
+    border: 3px solid #00d4ff;
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 0 90px rgba(0, 0, 0, 0.85);
+    text-align: left;
+}
+
+.guide-head {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 10px 20px;
+    border-bottom: 1px solid #1d3a52;
+}
+.guide-head h2 { color: #00d4ff; font-size: 1.6em; margin: 0; }
+.guide-tabs { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; }
+.g-tab {
+    background: #12293d; color: #cfe7f5; border: 2px solid #2b5a78; border-radius: 10px;
+    padding: 7px 16px; font-weight: bold; font-size: 0.98em; cursor: pointer; font-family: inherit;
+}
+.g-tab:hover { border-color: #00d4ff; }
+.g-tab.on { background: #00d4ff; color: #062030; border-color: #00d4ff; }
+.guide-close {
+    background: #3a4a5a; color: #fff; border: none; border-radius: 10px; padding: 8px 16px;
+    font-weight: bold; cursor: pointer; font-family: inherit;
+}
+.guide-close:hover { background: #ff4757; }
+
+.guide-body { flex: 1; display: flex; min-height: 0; }
+#guideList {
+    width: 236px; flex: none; overflow-y: auto; border-right: 1px solid #1d3a52;
+    padding: 8px; display: flex; flex-direction: column; gap: 6px;
+}
+.g-nav {
+    display: flex; align-items: center; gap: 10px; text-align: left; width: 100%;
+    background: rgba(255, 255, 255, 0.04); border: 2px solid #284a63; border-radius: 10px;
+    padding: 6px 8px; color: #dbe9f1; cursor: pointer; font-family: inherit;
+}
+.g-nav:hover { border-color: #5fb8d8; }
+.g-nav.on { border-color: #ffd45a; background: rgba(255, 212, 90, 0.1); }
+.g-nav b { display: block; font-size: 0.95em; }
+.g-nav small { color: #8fb4c4; font-size: 0.78em; }
+.g-ico { width: 40px; height: 40px; object-fit: contain; flex: none; }
+.g-ico.big { width: 56px; height: 56px; vertical-align: middle; margin-right: 6px; }
+.g-thumb { width: 64px; height: 42px; object-fit: cover; border-radius: 6px; flex: none; }
+.g-glyph { width: 40px; height: 40px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 1.6em; }
+.g-glyph.big { display: inline-flex; width: 56px; height: 56px; font-size: 2em; vertical-align: middle; }
+
+#guideMain {
+    flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 18px; padding: 14px 18px; overflow: hidden;
+}
+#guideMain.nostage { grid-template-columns: 1fr; }
+#guideMain.nostage .guide-stage { display: none; }
+.guide-stage { display: flex; flex-direction: column; gap: 8px; align-self: start; }
+#guideCanvas { width: 100%; height: auto; border-radius: 12px; border: 2px solid #2b5a78; background: #0a3c58; display: block; }
+#guideCaption { color: #ffe3a0; font-size: 0.92em; min-height: 2.4em; line-height: 1.3; }
+#guideText { overflow-y: auto; padding-right: 10px; line-height: 1.5; color: #d6e6ee; font-size: 0.98em; }
+#guideText h3 { color: #fff; font-size: 1.5em; margin-bottom: 4px; }
+#guideText h4 { color: #ffd45a; margin: 14px 0 5px; font-size: 1.02em; }
+#guideText p { margin-bottom: 8px; }
+#guideText .lead { color: #aee6ff; font-size: 1.05em; margin-bottom: 10px; }
+#guideText ul { margin: 0 0 6px 18px; }
+#guideText li { margin-bottom: 3px; }
+.g-small { color: #8fb4c4; font-size: 0.86em; }
+.g-rule { background: rgba(255, 190, 60, 0.1); border-left: 3px solid #ffb83d; padding: 6px 10px; border-radius: 4px; color: #ffd98a; }
+.g-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.g-chip { background: rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 3px 11px; font-size: 0.88em; }
+.g-chip b { color: #8fd8ff; font-weight: 600; margin-right: 3px; }
+.g-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.g-good h4 { color: #6fe39a; margin-top: 8px; }
+.g-bad h4 { color: #ff8a8a; margin-top: 8px; }
+.g-lvrow { display: flex; align-items: center; gap: 6px; margin: 4px 0 6px; color: #9fc3d4; font-size: 0.9em; }
+.g-lv {
+    width: 34px; height: 30px; border-radius: 8px; border: 2px solid #2b5a78; background: #12293d; color: #fff;
+    font-weight: bold; cursor: pointer; font-family: inherit;
+}
+.g-lv.on { background: #ffd45a; color: #1a1a22; border-color: #ffd45a; }
+.g-perks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.g-perk {
+    text-align: left; padding: 8px 10px; border-radius: 10px; border: 2px solid #34506a; background: rgba(255, 255, 255, 0.05);
+    color: #dbe9f1; cursor: pointer; font-family: inherit; display: flex; flex-direction: column; gap: 2px; font-size: 0.86em; line-height: 1.3;
+}
+.g-perk b { color: #fff; font-size: 1.02em; }
+.g-perk:hover { border-color: #ffd45a; }
+.g-perk.on.a { border-color: #ff9a3a; background: rgba(255, 154, 58, 0.12); }
+.g-perk.on.b { border-color: #b58cff; background: rgba(181, 140, 255, 0.12); }
+.g-perk-tag { font-size: 0.72em; font-weight: 800; letter-spacing: 0.06em; }
+.g-perk.a .g-perk-tag { color: #ff9a3a; }
+.g-perk.b .g-perk-tag { color: #b58cff; }
+.g-tl { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+.g-t { display: inline-flex; align-items: center; gap: 4px; background: rgba(255, 255, 255, 0.07); border-radius: 10px; padding: 2px 10px 2px 4px; font-size: 0.9em; }
+.g-t .g-ico { width: 30px; height: 30px; }
+.g-table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; font-size: 0.92em; }
+.g-table th, .g-table td { border-bottom: 1px solid #1d3a52; padding: 4px 8px; text-align: center; }
+.g-table td:first-child { text-align: left; color: #9fc3d4; }
+.g-table th { color: #ffd45a; }
+
+@media (max-width: 1060px) {
+    #guideMain { grid-template-columns: 1fr; overflow-y: auto; }
+    #guideText { overflow: visible; }
+    #guideList { width: 170px; }
+}
+
+/* sağ panel: dalga ipuçları (düşman simgesi, iyi ve kötü kuleler) */
+.guide-link {
+    float: right; background: rgba(255, 212, 90, 0.14); color: #ffd45a; border: 1px solid #b8942f; border-radius: 8px;
+    font-size: 0.85em; padding: 1px 8px; cursor: pointer; font-family: inherit;
+}
+.guide-link:hover { background: rgba(255, 212, 90, 0.3); }
+.chip { cursor: pointer; }
+.advice-box { margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+.advice-title { font-size: 0.74em; color: #8fb4c4; margin-bottom: 4px; }
+.advice-row {
+    display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 8px; cursor: pointer; margin-bottom: 2px;
+}
+.advice-row:hover { background: rgba(255, 255, 255, 0.08); }
+.adv-enemy { width: 30px; height: 30px; object-fit: contain; margin-right: 4px; }
+.adv-tower { width: 24px; height: 24px; object-fit: contain; }
+.adv-good { color: #5fe08f; font-weight: 900; margin: 0 2px 0 4px; }
+.adv-bad { color: #ff7b7b; font-weight: 900; margin: 0 2px 0 8px; }
+
+#guideControls { margin-top: 2px; }
+#guideControls h4 { color: #ffd45a; margin: 8px 0 5px; font-size: 0.98em; }
+.g-vs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 6px; font-size: 0.9em; color: #9fc3d4; }
+.g-vs .adv-tower { width: 30px; height: 30px; }
