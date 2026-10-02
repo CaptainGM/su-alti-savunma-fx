@@ -1,12 +1,12 @@
 ## Nasıl kurulur
 
 **Windows (bilgisayar)**
-1. `SuAltiSavunma-Windows-….zip` dosyasını indir ve bir klasöre çıkar.
+1. `SuAltiSavunma-Windows.zip` dosyasını indir ve bir klasöre çıkar.
 2. Klasördeki `SuAltiSavunma.exe` dosyasına çift tıkla. Java kurmak gerekmez (içinde gelir).
 3. Windows "bilinmeyen yayıncı" uyarısı verirse *Daha fazla bilgi → Yine de çalıştır* de.
 
 **Android (telefon / tablet)**
-1. `SuAltiSavunma-Android-….apk` dosyasını telefona indir (tarayıcıdan ya da bilgisayardan kabloyla aktar).
+1. `SuAltiSavunma.apk` dosyasını telefona indir (tarayıcıdan ya da bilgisayardan kabloyla aktar).
 2. Dosyaya dokun; Android "bilinmeyen kaynaklardan yükleme" izni isterse ayarlardan bu uygulama için aç ve **Yükle**'ye bas.
 3. Oyun yatay ekranda açılır. İnternet gerekmez; uygulama hiçbir izin istemez.
 

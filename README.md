@@ -6,12 +6,24 @@ Deniz canlısı temalı bir kule savunma (tower defense) oyunu. Aynı oyun üç 
 
 ## İndir
 
-**[Son sürümü indir (Releases)](https://github.com/CaptainGM/su-alti-savunma-fx/releases/latest)** — giriş yapmadan indirilir, iki dosya vardır:
+<p align="center">
+  <a href="https://github.com/CaptainGM/su-alti-savunma-fx/releases/latest/download/SuAltiSavunma.apk"><img alt="Android için indir (APK)" src="https://img.shields.io/badge/Android-APK%20indir-3DDC84?style=for-the-badge&logo=android&logoColor=white"></a>
+  &nbsp;
+  <a href="https://github.com/CaptainGM/su-alti-savunma-fx/releases/latest/download/SuAltiSavunma-Windows.zip"><img alt="Windows için indir (zip)" src="https://img.shields.io/badge/Windows-ZIP%20indir-0078D4?style=for-the-badge&logo=windows&logoColor=white"></a>
+  &nbsp;
+  <a href="https://github.com/CaptainGM/su-alti-savunma-fx/releases/latest"><img alt="Tüm sürümler" src="https://img.shields.io/github/v/release/CaptainGM/su-alti-savunma-fx?style=for-the-badge&label=s%C3%BCr%C3%BCm"></a>
+</p>
+
+Düğmeler giriş yapmadan, tek tıkla **en son sürümü** indirir. Telefondan bakıyorsan Android düğmesine, bilgisayardan bakıyorsan telefonunla aşağıdaki kodu okutabilirsin:
+
+<p align="center"><img src="docs/apk-qr.png" alt="APK indirme QR kodu" width="180"></p>
 
 | Platform | Dosya | Kurulum |
 |---|---|---|
-| Windows | `SuAltiSavunma-Windows-….zip` | Zip'i çıkar, `SuAltiSavunma.exe` dosyasına çift tıkla. Java kurmak gerekmez |
-| Android | `SuAltiSavunma-Android-….apk` | Telefona indir, dosyaya dokun, "bilinmeyen kaynaklardan yükleme"ye izin ver, **Yükle**. Yatay ekranda açılır, izin istemez |
+| Windows | `SuAltiSavunma-Windows.zip` | Zip'i çıkar, `SuAltiSavunma.exe` dosyasına çift tıkla. Java kurmak gerekmez |
+| Android | `SuAltiSavunma.apk` | Telefona indir, dosyaya dokun, "bilinmeyen kaynaklardan yükleme"ye izin ver, **Yükle**. Yatay ekranda açılır, izin istemez |
+
+Yeni sürüm çıkınca aynı APK'nın üstüne güncelleme olarak kurulur (aynı imza). Sürüm geçmişi ve SHA-256 özetleri [Releases](https://github.com/CaptainGM/su-alti-savunma-fx/releases) sayfasında.
 
 Tarayıcıdan oynamak ya da kendin derlemek için aşağıdaki [Çalıştırma](#çalıştırma) bölümüne bak. APK'yı kendi bilgisayarında üretmek için kök klasördeki **`apk_uret.bat`** yeterli (Android Studio kurulu olmalı).
 
@@ -245,7 +257,7 @@ Proje bu haliyle tamamlanmış sayılır. Devam edilmek istenirse en çok değer
 
 ## Çalıştırma
 
-**Hazır uygulama (Java kurmadan):** [Releases](https://github.com/CaptainGM/su-alti-savunma-fx/releases/latest) sayfasından `SuAltiSavunma-Windows-….zip` dosyasını indirip çıkarın ve `SuAltiSavunma.exe` dosyasını çalıştırın (JavaFX ve Java çalışma ortamı içindedir, ~110 MB). Kendiniz üretmek için JDK 25+ ve Maven ile `powershell -File tools\paketle.ps1`; çıktı `dist\` altında oluşur.
+**Hazır uygulama (Java kurmadan):** [Releases](https://github.com/CaptainGM/su-alti-savunma-fx/releases/latest) sayfasından `SuAltiSavunma-Windows.zip` dosyasını indirip çıkarın ve `SuAltiSavunma.exe` dosyasını çalıştırın (JavaFX ve Java çalışma ortamı içindedir, ~110 MB). Kendiniz üretmek için JDK 25+ ve Maven ile `powershell -File tools\paketle.ps1`; çıktı `dist\` altında oluşur.
 
 **Android:** [Releases](https://github.com/CaptainGM/su-alti-savunma-fx/releases/latest) sayfasındaki `.apk` (telefona kurmak için "bilinmeyen kaynaklardan yükleme" izni gerekir). Kendiniz üretmek için `apk_uret.bat`.
 
@@ -261,14 +273,13 @@ Windows'ta `start.bat` ile de çalıştırılabilir. Geliştirirken `-Dsavunma.h
 
 ## Sürüm yayınlama
 
-`pom.xml` içindeki sürüm tek kaynaktır (Windows uygulaması ve Android `versionName/versionCode` buradan gelir). Yeni sürüm çıkarmak için sürümü `pom.xml`'de yükselt, değişiklikleri gönder ve etiketle:
+`pom.xml` içindeki sürüm tek kaynaktır (Windows uygulaması ve Android `versionName/versionCode` buradan gelir). Yeni sürüm çıkarmak için **yalnızca `pom.xml`'deki sürümü yükseltip main'e gönder** (örn. `2.1.0` → `2.2.0`): `Sürüm yayınla` iş akışı o sürüm için sayfa olmadığını görür, Windows zip'ini ve **imzalı** APK'yı derler ve *Releases* sayfasında yayınlar (SHA-256 özetleri ve kurulum notuyla). Dosya adları sürümden bağımsız olduğu için README'deki indirme düğmeleri her zaman en yeni sürümü indirir.
 
-```bash
-git tag v2.2.0
-git push origin v2.2.0
-```
+Elle etiketlemek istersen `git tag v2.2.0 && git push origin v2.2.0` de aynı işi yapar. Önce denemek için GitHub'da *Actions → Sürüm yayınla → Run workflow* (taslak oluşturur; *Releases* sayfasında kontrol edip *Publish release* diyebilir ya da silebilirsin).
 
-`Sürüm yayınla` iş akışı Windows zip'ini ve **imzalı** APK'yı derleyip *Releases* sayfasında yayınlar (SHA-256 özetleri ve kurulum notuyla). Önce denemek için GitHub'da *Actions → Sürüm yayınla → Run workflow* (taslak oluşturur; *Releases* sayfasında kontrol edip *Publish release* diyebilir ya da silebilirsin). APK imzası için depoda `ANAHTAR_B64`, `ANAHTAR_PAROLA`, `ANAHTAR_TAKMA_AD` sırları tanımlıdır; yerelde `apk_uret.bat` aynı anahtarla (`android/anahtar/`, depoya girmez, yedeklenmeli) imzaladığı için her iki yoldan çıkan APK'lar birbirinin üstüne güncelleme olarak kurulur.
+APK imzası için depoda `ANAHTAR_B64`, `ANAHTAR_PAROLA`, `ANAHTAR_TAKMA_AD` sırları tanımlıdır; yerelde `apk_uret.bat` aynı anahtarla (`android/anahtar/`, depoya girmez, yedeklenmeli) imzaladığı için her iki yoldan çıkan APK'lar birbirinin üstüne güncelleme olarak kurulur.
+
+**Bağımlılık güncellemeleri:** Dependabot aylık olarak güncelleme önerir (çekme isteği açar) ama bunları kendiliğinden birleştirmeyiz: birleştirilen her Dependabot commit'i katkıda bulunanlar listesine bot olarak girer. Güvenli olanlar elle uygulanıp normal commit olarak gönderilir.
 
 ## Araçlar
 
