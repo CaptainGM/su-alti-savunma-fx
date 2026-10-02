@@ -68,7 +68,7 @@ ok(anglerShot, 'fener balığı düşmana ateş etti');
 const easy = mk('mercan', { difficulty: 'easy' });
 const hard = mk('mercan', { difficulty: 'hard' });
 ok(easy.money > hard.money && easy.health > hard.health, 'başlangıç enerjisi ve üs canı zorluğa göre değişir');
-ok(mk('mercan').money === 250 && easy.money === 300 && hard.money === 220, 'başlangıç enerjisi yuvarlak sayılar: 300 / 250 / 220');
+ok(mk('mercan').money === 250 && easy.money === 300 && hard.money === 230, 'başlangıç enerjisi yuvarlak sayılar: 300 / 250 / 230');
 const e1 = new Core.Enemy(easy, 'standard', 0, 1, 3, {});
 const e2 = new Core.Enemy(hard, 'standard', 0, 1, 3, {});
 ok(e2.maxHealth > e1.maxHealth && e2.speed > e1.speed, 'düşman canı ve hızı zorluğa göre değişir');
@@ -650,6 +650,110 @@ ok(r.serialize().towers.length === 2, 'geri kurulan oyun yeniden kaydedilebiliyo
     const sn2 = JSON.parse(JSON.stringify(w.serialize()));
     const rr = Core.World.restore(mapOf('buz'), sn2, {});
     ok(rr.enemies[0].special === 'shield' && Math.abs(rr.enemies[0].shield - ss.shield) < 1, 'kalkan durumu kayıttan geri geliyor');
+}
+
+// ---------------------------------------------------------------- patron evreleri
+{
+    const w = mk('mercan');
+    w.money = 9999;
+    const boss = new Core.Enemy(w, 'boss', 0, 500, 5, { kind: 'shark', hpMul: 1 });
+    boss.speed = boss.originalSpeed = 0.001; boss.update(0);
+    w.enemies.push(boss);
+    let phases = 0, lastShield = 0;
+    w.onEvent = (t, d) => { if (t === 'bossPhase') { phases++; lastShield = d.shield; } };
+    ok(boss.phases.length === 3 && Core.BOSS_PHASES.join() === '0.7,0.4,0.15', 'patronun üç evresi var (%70, %40, %15)');
+    const mini = new Core.Enemy(w, 'boss', 0, 501, 5, { kind: 'shark', hpMul: 0.5, mini: true });
+    ok(mini.phases.length === 1, 'ara patronun tek evresi var');
+
+    // can %70'in altına inince kalkan + öfke
+    w.strike(boss, 'swordfish', boss.maxHealth * 0.4, 0);       // zırh ve çarpanlardan sonra ~%30'dan fazlası düşer
+    w.afterHit(boss, { fx: {}, type: 'swordfish' }, { dmg: 1, dead: false }, false);
+    ok(phases >= 1 && boss.shield > 0 && boss.rageT > 0, 'eşik aşılınca patron kalkan kazandı ve öfkelendi');
+    ok(lastShield === Math.round(boss.maxHealth * Core.BOSS_SHIELD), 'kalkan maksimum canın %12\'si');
+    boss.stunTime = 3; boss.update(0.1);
+    ok(boss.stunTime === 0, 'öfkeliyken sersemletilemez');
+    const x0 = boss.traveled;
+    const normalBoss = new Core.Enemy(w, 'boss', 0, 502, 5, { kind: 'shark', hpMul: 1 });
+    boss.speed = boss.originalSpeed = 20; normalBoss.speed = normalBoss.originalSpeed = 20;
+    boss.update(1); normalBoss.update(1);
+    ok(boss.traveled - x0 > normalBoss.traveled * 1.3, 'öfkeli patron daha hızlı ilerliyor');
+
+    // tek büyük vuruş birden fazla eşiği aşsa bile her biri sayılır, ama kalkan bir kez yenilenir
+    const b2 = new Core.Enemy(w, 'boss', 0, 503, 5, { kind: 'shark', hpMul: 1 });
+    b2.health = b2.maxHealth * 0.1; b2.crossPhases();
+    ok(b2.phases.length === 0 && b2.phasePending === 3, 'çok eşik aynı anda geçilebilir');
+
+    // kalkan emilimi: kalkan varken hasar önce kalkana gider
+    const b3 = new Core.Enemy(w, 'boss', 0, 504, 5, { kind: 'shark', hpMul: 1 });
+    b3.health = b3.maxHealth * 0.69; b3.crossPhases();
+    const hp3 = b3.health;
+    b3.takeDamage(b3.shield * 0.5, 'eel', 0, {});
+    ok(b3.health === hp3, 'kalkan varken can düşmüyor');
+    w.dotDamage(b3, b3.shield * 2, 'jellyfish');
+    ok(b3.shield === 0 && b3.health < hp3, 'zehir de önce evre kalkanını yiyor');
+
+    // yeni patron canı ayarı: harita çarpanı uygulanıyor
+    const m1 = Object.assign({}, mapOf('mercan'), { bossScale: 1 });
+    const m2 = Object.assign({}, mapOf('mercan'), { bossScale: 2 });
+    const e1 = new Core.Enemy(new Core.World(m1, { seed: 1 }), 'boss', 0, 1, 5, { kind: 'shark', hpMul: 1 });
+    const e2 = new Core.Enemy(new Core.World(m2, { seed: 1 }), 'boss', 0, 1, 5, { kind: 'shark', hpMul: 1 });
+    ok(Math.abs(e2.maxHealth / e1.maxHealth - 2) < 0.01, 'bossScale yalnızca patron canını çarpıyor');
+    ok(MAPS.every(m => m.bossScale > 0 && m.miniHp > 0), 'her haritada patron çarpanı tanımlı');
+
+    // kaydet/yükle: evre ve kalkan korunuyor
+    const w2 = mk('mercan');
+    const b4 = new Core.Enemy(w2, 'boss', 0, 600, 5, { kind: 'shark', hpMul: 1 });
+    b4.speed = b4.originalSpeed = 0.001; b4.update(0);
+    w2.enemies.push(b4);
+    b4.health = b4.maxHealth * 0.65; b4.crossPhases(); b4.phasePending = 0;
+    const r4 = Core.World.restore(mapOf('mercan'), JSON.parse(JSON.stringify(w2.serialize())), {});
+    const rb = r4.enemies[0];
+    ok(rb.phases.length === 2 && rb.shield > 0 && rb.rageT > 0, 'patron evresi kayıttan geri geliyor');
+}
+
+// ---------------------------------------------------------------- patron düellosu ve Rehber içeriği
+{
+    // Tek bir güçlü kule ara patronu yolun başında eritemez (kullanıcı şikâyeti: 3. seviye Kılıç Balığı patronu çeyrek yolu bile gitmeden öldürüyordu)
+    const cover = (w, sp, r) => {
+        let c = 0;
+        for (const p of w.paths) for (let i = 1; i < p.points.length; i++) if (Math.hypot(p.points[i].x - sp.x, p.points[i].y - sp.y) <= r) c += p.dist[i] - p.dist[i - 1];
+        return c;
+    };
+    const duel = (map, diff, lvl) => {
+        const w = new Core.World(map, { difficulty: diff, seed: 5, onEvent: () => { } });
+        w.money = 1e7;
+        const spot = w.spots.slice().sort((a, b) => cover(w, b, 380) - cover(w, a, 380))[0];
+        const t = w.placeTower('swordfish', spot).tower;
+        while (t.level < lvl) w.upgradeTower(t, 0);
+        const total = Core.totalWavesOf(map);
+        const e = new Core.Enemy(w, 'boss', 0, 1, Math.floor(total / 2), { kind: map.boss, hpMul: map.miniHp || Core.MINI_HP_MUL, mini: true });
+        w.enemies.push(e);
+        for (let i = 0; i < 30 * 400 && e.health > 0 && !e.reached; i++) w.update(1 / 30);
+        return e.health <= 0 ? Math.min(1, e.progress) : 1;
+    };
+    const withSword = MAPS.filter(m => m.towers.includes('swordfish'));
+    const early = withSword.map(m => [m.id, duel(m, 'easy', 3)]).filter(([, p]) => p < 0.40);
+    ok(early.length === 0, `tek 3. seviye Kılıç Balığı ara patronu kolayda bile yolun %40'ından önce öldüremez ${early.map(([id, p]) => id + ' %' + Math.round(p * 100)).join(', ')}`);
+
+    // Rehber içeriği: her kule, düşman, patron ve kural için sayfa var; her yetenek ve harita kuralı anlatılıyor
+    const guideSrc = require('fs').readFileSync(path.join(web, 'rehber.js'), 'utf8');
+    const has = id => new RegExp(`(^|\\s|'|")${id}['"]?\\s*:`).test(guideSrc);
+    ok(Object.keys(Core.TOWER_TYPES).every(has), 'Rehber: her kule türünün bilgi sayfası var');
+    const enemyKeys = Object.keys(Core.ENEMY_TYPES).filter(k => k !== 'boss').concat(Object.keys(Core.BOSS_KINDS).map(k => 'boss_' + k));
+    ok(enemyKeys.every(has), 'Rehber: her düşman ve patron türünün bilgi sayfası var');
+    ok(Object.keys(Core.BOSS_KINDS).every(k => guideSrc.includes(`boss: '${k}'`)), 'Rehber: her patronun gösterim sahnesi var');
+    const mechTypes = [...new Set(MAPS.flatMap(m => (m.mechanics || []).map(x => x.type)))];
+    ok(mechTypes.every(t => guideSrc.includes(`case '${t}'`)), `Rehber: her harita kuralı için açıklama ve gösterim sahnesi var (${mechTypes.join(', ')})`);
+    ok(['start', 'high', 'armor', 'slow', 'adapt', 'bossrule', 'difficulty'].every(id => guideSrc.includes(`id: '${id}'`)), 'Rehber: kural sayfaları tam (başlarken, yüksek zemin, zırh, yavaşlatma, alışma, patronlar, zorluk)');
+    const indexHtml = require('fs').readFileSync(path.join(web, '..', 'index.html'), 'utf8');
+    ok(indexHtml.includes('id="guideScreen"') && indexHtml.includes('js/rehber.js') && indexHtml.includes('id="guideBtn"'), 'Rehber ekranı, oyun içi düğmesi ve betiği sayfada');
+    ok(!indexHtml.includes('id="infoModal"'), 'eski uzun yardım penceresi kaldırıldı (yerini Rehber aldı)');
+
+    // dalga ipuçları yapısal ve yalnızca haritadaki kuleleri öneriyor
+    const wa = new Core.World(mapOf('cukur'), { seed: 3 });
+    const items = wa.waveAdviceItems(10);
+    ok(items.length >= 3 && items.every(it => it.good.concat(it.bad).every(t => wa.available.includes(t))), 'sidebar ipuçları haritada olmayan kule önermiyor');
+    ok(items.some(it => it.enemy === 'stealth' && it.good.includes('angler')), 'gizlenen düşman için Fener Balığı öneriliyor');
 }
 
 console.log(fails ? `${fails} BASARISIZ` : 'HEPSI GECTI');
