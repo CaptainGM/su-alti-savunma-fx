@@ -4,7 +4,7 @@
     python tools/mapgen/spots.py --write     maps.js içindeki buildSpots listelerini günceller
 
 Kurallar:
-  - Yer, yolun ekseninden en az MIN_PATH uzakta olmalı (yol görseli ve kule gövdesi için).
+  - Yer, yolun kenarından en az SPOT_R + CLEAR uzakta olmalı: halka yola değmez (ROAD_HALF haritaya göre).
   - Normal yer yola en çok NORMAL_MAX, yüksek zemin (menzil %20 artar) en çok HIGH_MAX uzakta olabilir.
   - Her yer, en kısa menzilli kuleyle (200 piksel) yolun en az MIN_COVER pikselini kapsamalı: yani oraya konan kule
     gerçekten geçen düşmanlara ulaşır. Yola yetişmeyen "boşluk doldurma" yerleri yoktur.
@@ -25,9 +25,14 @@ WEB = os.path.join(HERE, '..', '..', 'src', 'main', 'resources', 'web')
 MAPS_JS = os.path.join(WEB, 'js', 'maps.js')
 
 W, H = 1350, 900
-MIN_PATH = 80          # yolun eksenine en az uzaklık
-NORMAL_MAX = 185       # normal yer için yola en çok uzaklık
-HIGH_MAX = 235         # yüksek zemin için (menzil x1.2)
+# Yolun (kum şeridi, nehir, buz kanalı) merkez çizgisinden kenarına uzaklığı maps.js içinde `roadHalf` olarak durur;
+# arka planların üstüne merkez çizgisinden 40/55/70/85/100/120 piksellik konturlar çizilip gözle okunmuştur.
+# Kule halkası (yarıçap 55) yola değmesin diye yerler en az roadHalf + SPOT_R + CLEAR uzakta olmalı.
+# `padSpots` olan haritada (Girdap) yerler resimdeki taş kaidelerdir ve olduğu gibi korunur.
+SPOT_R = 55
+CLEAR = 8
+NORMAL_MAX = 190       # normal yer için yola en çok uzaklık
+HIGH_MAX = 240         # yüksek zemin için (menzil x1.2)
 SHORTEST_RANGE = 200   # en kısa menzilli kule (Ahtapot 210, Deniz Anası 200, Fener 200)
 HIGH_RANGE = 1.2
 MIN_COVER = 150        # yer, en kısa menzille yolun en az bu kadar pikselini kapsamalı
@@ -39,7 +44,7 @@ KEEP_OUT = 96          # koruyucu baş / hazine sandığı çevresi
 
 def load_maps():
     js = ("const M=require(%s);console.log(JSON.stringify(M.map(m=>({id:m.id,paths:m.paths||[m.pathPoints],"
-          "spots:m.buildSpots,bg:m.bg,guardians:m.guardians||[],treasure:m.treasure||null}))))" % json.dumps(os.path.abspath(MAPS_JS)))
+          "spots:m.buildSpots,roadHalf:m.roadHalf,padSpots:!!m.padSpots,bg:m.bg,guardians:m.guardians||[],treasure:m.treasure||null}))))" % json.dumps(os.path.abspath(MAPS_JS)))
     out = subprocess.check_output(['node', '-e', js])
     return json.loads(out.decode('utf-8'))
 
@@ -93,11 +98,11 @@ def busyness(m):
     return np.sqrt(var)
 
 
-def classify(mids, lens, x, y):
+def classify(mids, lens, x, y, min_path):
     """Bir noktanın uygun olup olmadığı ve türü: (geçerli mi, 'normal' ya da 'high')."""
     xs, ys = np.array([float(x)]), np.array([float(y)])
     d = path_dist(mids, xs, ys)[0]
-    if d < MIN_PATH or d > HIGH_MAX:
+    if d < min_path or d > HIGH_MAX:
         return False, None
     kind = 'normal' if d <= NORMAL_MAX else 'high'
     r = SHORTEST_RANGE * (HIGH_RANGE if kind == 'high' else 1)
@@ -107,6 +112,7 @@ def classify(mids, lens, x, y):
 
 
 def solve(m):
+    min_path = m['roadHalf'] + SPOT_R + CLEAR
     mids, lens = segments(m['paths'])
     busy = busyness(m)
     gx, gy = np.meshgrid(np.arange(MARGIN_X, W - MARGIN_X + 1, 9.0), np.arange(MARGIN_TOP, H - MARGIN_BOTTOM + 1, 9.0))
@@ -115,7 +121,7 @@ def solve(m):
     cov_h = cover(mids, lens, gx, gy, SHORTEST_RANGE * HIGH_RANGE)
     busy_at = busy[gy.astype(int), gx.astype(int)]
 
-    near_ok = (d_path >= MIN_PATH) & (d_path <= NORMAL_MAX) & (cov_n >= MIN_COVER)
+    near_ok = (d_path >= min_path) & (d_path <= NORMAL_MAX) & (cov_n >= MIN_COVER)
     far_ok = (d_path > NORMAL_MAX) & (d_path <= HIGH_MAX) & (cov_h >= MIN_COVER)
     ok = near_ok | far_ok
     for g in m['guardians']:
@@ -129,7 +135,7 @@ def solve(m):
     # mevcut yerlerden uygun olanları koru; yola uzak olanın türünü yüksek zemin yap
     spots, dropped = [], []
     for s in m['spots']:
-        valid, kind = classify(mids, lens, s['x'], s['y'])
+        valid, kind = classify(mids, lens, s['x'], s['y'], 70 if m['padSpots'] else min_path)
         if not valid:
             dropped.append(s)
             continue
@@ -139,7 +145,7 @@ def solve(m):
         spots.append(ns)
 
     # yola yakın bölgelerde boşluk kalmayana kadar yeni yer ekle
-    band = (d_path >= MIN_PATH - 20) & (d_path <= HIGH_MAX) & (np.maximum(cov_n, cov_h) >= MIN_COVER)
+    band = (d_path >= min_path - 20) & (d_path <= HIGH_MAX) & (np.maximum(cov_n, cov_h) >= MIN_COVER)
     for _ in range(80):
         near = np.full(gx.shape, 1e9)
         for s in spots:
@@ -181,7 +187,8 @@ def preview(m, spots, dropped, folder):
     for s in spots:
         new = (s['x'], s['y']) not in old
         col = (255, 215, 60, 200) if s.get('kind') == 'high' else (80, 255, 170, 200)
-        d.ellipse([s['x'] - 28, s['y'] - 28, s['x'] + 28, s['y'] + 28], outline=(255, 255, 255, 255) if new else col, width=4, fill=col[:3] + (70,))
+        r = SPOT_R   # gerçek halka yarıçapı
+        d.ellipse([s['x'] - r, s['y'] - r, s['x'] + r, s['y'] + r], outline=(255, 255, 255, 255) if new else col, width=3, fill=col[:3] + (60,))
     os.makedirs(folder, exist_ok=True)
     bg.convert('RGB').resize((900, 600)).save(os.path.join(folder, m['id'] + '.jpg'), quality=82)
 
