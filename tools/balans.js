@@ -9,6 +9,7 @@
 //   spam     her yere tek tür kule dikip yükselten oyuncu
 //   rastgele düşünmeden rastgele tür / rastgele yer / rastgele yükseltme ile enerjiyi bitiren oyuncu
 //   karisik  türleri sırayla kullanan, en iyi yerlere dizen oyuncu
+//   keskin   erken keskin nişancıya (Kılıç Balığı; yoksa Fener Balığı) yatırım yapıp 5. seviyeye çıkaran, sonra karışık dizen oyuncu
 //   akilli   sıradaki dalgayı inceleyip ona göre tür seçen, uzun menzilliyi uzak yere, kısa menzilliyi yola yakın dizen oyuncu
 // Amaç: spam ve rastgele kaybetsin, karisik ve özellikle akilli kazansın (strateji karşılığını versin).
 const path = require('path');
@@ -134,6 +135,26 @@ function counterPick(world, dflt, n) {
     return dflt;
 }
 
+// Erken dönemde parayı keskin nişancıya yığan oyuncu: kullanıcıların en sık denediği "tek güçlü kule" stratejisi.
+// Patronun bu stratejiye karşı ne kadar yol aldığını ölçmek için kullanılır.
+function makeSniperBot() {
+    const mix = makeMixBot(false);
+    return function keskin(world) {
+        const sniper = world.available.includes('swordfish') ? 'swordfish' : world.available.includes('angler') ? 'angler' : world.available[0];
+        const dark = world.darkMul < 1;
+        for (;;) {
+            const mine = world.towers.filter(t => t.type === sniper);
+            const free = rankedSpots(world).find(sp => !sp.tower);
+            if (dark && !world.towers.some(t => t.type === 'angler') && sniper !== 'angler') break;      // karanlıkta önce fener (karışık botun mantığı)
+            if (mine.length < 2 && free && world.money >= world.towerCost(sniper)) { world.placeTower(sniper, free); continue; }
+            const up = mine.filter(t => t.upgradeCost() !== null && world.money >= t.upgradeCost()).sort((a, b) => a.level - b.level)[0];
+            if (up && mine.length >= 2 && mine.some(t => t.level < 5)) { world.upgradeTower(up, 0); continue; }
+            break;
+        }
+        mix(world);
+    };
+}
+
 function lit(world, spot, frees) {
     const r = Core.TOWER_TYPES.angler.range * 1.4;
     return frees.filter(s => Math.hypot(s.x - spot.x, s.y - spot.y) <= r).length;
@@ -141,10 +162,16 @@ function lit(world, spot, frees) {
 
 function play(map, botName, diff, seed) {
     const world = new Core.World(map, { difficulty: diff, seed });
-    const bot = botName === 'rastgele' ? makeRandomBot(seed * 31 + 7) : BOTS[botName];
+    const bot = botName === 'rastgele' ? makeRandomBot(seed * 31 + 7) : botName === 'keskin' ? makeSniperBot() : BOTS[botName];
     const leaks = {};
+    const bosses = [];      // patronların öldüğü / üsse ulaştığı yol oranı (0..1)
     world.onEvent = (type, d) => {
-        if (type === 'leak') { const k = d.enemy.type + '@w' + world.wave; leaks[k] = (leaks[k] || 0) + 1; }
+        if (type === 'leak') {
+            const k = d.enemy.type + '@w' + world.wave;
+            leaks[k] = (leaks[k] || 0) + 1;
+            if (d.enemy.type === 'boss') bosses.push({ mini: d.enemy.mini, at: 1, secs: world.time - d.enemy.born, leaked: true });
+        }
+        if (type === 'kill' && d.enemy.type === 'boss') bosses.push({ mini: d.enemy.mini, at: Math.min(1, d.enemy.progress), secs: world.time - d.enemy.born });
     };
     let t = 0;
     let nextAct = 0;
@@ -167,29 +194,44 @@ function play(map, botName, diff, seed) {
         money: world.money,
         sec: Math.round(t),
         leaks,
+        bosses,
     };
 }
 
-if (process.env.BOSSHP) Core.ENEMY_TYPES.boss.hp = +process.env.BOSSHP;   // patron canını denemek için
-const [mapArg, diffArg] = process.argv.slice(2);
-const maps = MAPS.filter(m => !mapArg || m.id === mapArg)
-    .map(m => (process.env.HPSCALE ? Object.assign({}, m, { hpScale: +process.env.HPSCALE }) : m))
-    .map(m => (process.env.NOMECH ? Object.assign({}, m, { mechanics: [] }) : m));
-const diffs = diffArg === 'all' ? ['easy', 'normal', 'hard'] : [diffArg || 'normal'];
-const SEEDS = (process.env.SEEDS ? process.env.SEEDS.split(',').map(Number) : [11, 23, 37]);
+function main() {
+    if (process.env.BOSSHP) Core.ENEMY_TYPES.boss.hp = +process.env.BOSSHP;   // patron canını denemek için
+    const [mapArg, diffArg] = process.argv.slice(2);
 
-console.log('harita'.padEnd(10), 'zorluk'.padEnd(7), 'bot'.padEnd(8), 'kazanma', 'ort.can', 'ort.dalga', 'kule', 'enerji', 'sure');
-for (const map of maps) {
-    for (const diff of diffs) {
-        for (const bot of (process.env.BOTS ? process.env.BOTS.split(',') : ['spam', 'rastgele', 'karisik', 'akilli'])) {
-            const runs = SEEDS.map(s => play(map, bot, diff, s));
-            if (process.env.DEBUG) console.log(JSON.stringify(runs));
-            const wins = runs.filter(r => r.result === 'win').length;
-            const avg = k => (runs.reduce((a, r) => a + r[k], 0) / runs.length).toFixed(0);
-            console.log(
-                map.id.padEnd(10), diff.padEnd(7), bot.padEnd(8),
-                `${wins}/${runs.length}`.padEnd(7), avg('health').padStart(7), `${avg('wave')}/${Core.totalWavesOf(map)}`.padStart(9),
-                avg('towers').padStart(4), avg('money').padStart(6), avg('sec').padStart(5) + 's');
+    // patronların ortalama öldüğü yol yüzdesi ("-" = hiç patron çıkmadı)
+    function bossPct(runs, mini) {
+        const v = runs.flatMap(r => r.bosses.filter(b => !!b.mini === mini).map(b => b.at));
+        return v.length ? Math.round(100 * v.reduce((a, b) => a + b, 0) / v.length) + '%' : '-';
+    }
+    const maps = MAPS.filter(m => !mapArg || m.id === mapArg)
+        .map(m => (process.env.HPSCALE ? Object.assign({}, m, { hpScale: +process.env.HPSCALE }) : m))
+        .map(m => (process.env.BOSSSCALE ? Object.assign({}, m, { bossScale: +process.env.BOSSSCALE }) : m))
+        .map(m => (process.env.MINIHP ? Object.assign({}, m, { miniHp: +process.env.MINIHP }) : m))
+        .map(m => (process.env.NOMECH ? Object.assign({}, m, { mechanics: [] }) : m));
+    const diffs = diffArg === 'all' ? ['easy', 'normal', 'hard'] : [diffArg || 'normal'];
+    const SEEDS = (process.env.SEEDS ? process.env.SEEDS.split(',').map(Number) : [11, 23, 37]);
+
+    console.log('harita'.padEnd(10), 'zorluk'.padEnd(7), 'bot'.padEnd(8), 'kazanma', 'ort.can', 'ort.dalga', 'kule', 'enerji', 'sure', '  ara-patron  son-patron (öldüğü yol %)');
+    for (const map of maps) {
+        for (const diff of diffs) {
+            for (const bot of (process.env.BOTS ? process.env.BOTS.split(',') : ['spam', 'rastgele', 'karisik', 'akilli'])) {
+                const runs = SEEDS.map(s => play(map, bot, diff, s));
+                if (process.env.DEBUG) console.log(JSON.stringify(runs));
+                const wins = runs.filter(r => r.result === 'win').length;
+                const avg = k => (runs.reduce((a, r) => a + r[k], 0) / runs.length).toFixed(0);
+                console.log(
+                    map.id.padEnd(10), diff.padEnd(7), bot.padEnd(8),
+                    `${wins}/${runs.length}`.padEnd(7), avg('health').padStart(7), `${avg('wave')}/${Core.totalWavesOf(map)}`.padStart(9),
+                    avg('towers').padStart(4), avg('money').padStart(6), avg('sec').padStart(5) + 's',
+                    bossPct(runs, true).padStart(8), bossPct(runs, false).padStart(10));
+            }
         }
     }
 }
+
+module.exports = { play, BOTS, makeRandomBot, makeSniperBot, makeMixBot };
+if (require.main === module) main();

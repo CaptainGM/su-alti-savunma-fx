@@ -17,8 +17,8 @@ jobs:
           node-version: 20
       - name: Birim testleri (kurallar, yetenekler, düşmanlar, kayıt)
         run: node tools/test_core.js
-      - name: Denge simülasyonu (hızlı kontrol)
-        run: BOTS=karisik SEEDS=11 node tools/balans.js mercan normal
+      - name: Zorluk ve strateji ölçütleri (3 harita, botlarla)
+        run: node tools/zorluk_testi.js hizli
 
   paketle:
     name: Windows uygulaması

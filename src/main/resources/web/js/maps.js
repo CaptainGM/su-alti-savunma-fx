@@ -13,6 +13,7 @@
 //   waves        : dalga sayısı (varsayılan 10).
 //   countScale   : düşman sayısı çarpanı.
 //   hpScale      : düşman canı çarpanı (haritanın genel zorluğu; ilk dalgada 1, son dalgada bu değer).
+//   bossScale    : patron canı çarpanı (hpScale ile çarpılmaz); miniHp: ara patronun asıl patrona can oranı.
 //   rule         : haritaya özel kural metni (arayüzde gösterilir)
 //   mechanics    : kuralın ayarları (core.js World.initMechanics): tangle | pull | eruption | blizzard | guardians | darkness | treasure
 //   ambient      : arka plan canlandırma ayarları (bkz. game.js, drawAmbientBack/Front).
@@ -27,6 +28,8 @@
             stars: 1,
             hpScale: 0.92,
             roadHalf: 56,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
+            bossScale: 1.2,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            miniHp: 0.42,           // ara patronun asıl patrona oranı
             speedScale: 1,
             startMoney: 250,
             waves: 10,
@@ -66,6 +69,8 @@
             stars: 2,
             hpScale: 2.15,
             roadHalf: 46,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
+            bossScale: 0.55,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            miniHp: 0.6,           // ara patronun asıl patrona oranı
             speedScale: 1,
             startMoney: 250,
             waves: 10,
@@ -109,6 +114,8 @@
             stars: 2,
             hpScale: 1.08,
             roadHalf: 56,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
+            bossScale: 0.6,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            miniHp: 0.5,           // ara patronun asıl patrona oranı
             speedScale: 1.0,
             startMoney: 250,
             waves: 10,
@@ -160,6 +167,8 @@
             stars: 3,
             hpScale: 0.88,
             roadHalf: 46,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
+            bossScale: 0.8,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            miniHp: 0.5,           // ara patronun asıl patrona oranı
             speedScale: 1,
             startMoney: 250,
             waves: 10,
@@ -205,6 +214,8 @@
             stars: 3,
             hpScale: 2.05,
             roadHalf: 42,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
+            bossScale: 0.6,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            miniHp: 0.5,           // ara patronun asıl patrona oranı
             speedScale: 1.0,
             startMoney: 250,
             waves: 10,
@@ -247,6 +258,8 @@
             stars: 3,
             hpScale: 0.55,
             roadHalf: 60,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
+            bossScale: 0.9,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            miniHp: 0.25,           // ara patronun asıl patrona oranı
             speedScale: 1.0,
             startMoney: 250,
             waves: 10,
@@ -290,6 +303,8 @@
             stars: 4,
             hpScale: 2.1,
             roadHalf: 44,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
+            bossScale: 0.5,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            miniHp: 0.5,           // ara patronun asıl patrona oranı
             padSpots: true,       // kule yerleri resimdeki taş kaideler: yola yakın olmaları tasarım gereği
             speedScale: 1.12,
             startMoney: 250,
@@ -337,6 +352,8 @@
             stars: 4,
             hpScale: 1.5,
             roadHalf: 46,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
+            bossScale: 0.8,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            miniHp: 0.5,           // ara patronun asıl patrona oranı
             speedScale: 1.0,
             startMoney: 250,
             waves: 10,
@@ -381,6 +398,8 @@
             stars: 5,
             hpScale: 1.05,
             roadHalf: 46,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
+            bossScale: 0.6,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            miniHp: 0.5,           // ara patronun asıl patrona oranı
             speedScale: 1,
             startMoney: 300,
             waves: 12,
