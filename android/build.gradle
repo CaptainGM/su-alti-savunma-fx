@@ -1,4 +1,4 @@
 // Su Altı Savunma Android uygulaması: aynı web oyununu (src/main/resources/web) yatay ekranda bir WebView içinde çalıştırır.
 plugins {
-    id 'com.android.application' version '8.13.1' apply false
+    id 'com.android.application' version '8.13.2' apply false
 }
