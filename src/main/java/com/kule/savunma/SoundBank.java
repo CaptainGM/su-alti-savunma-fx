@@ -67,6 +67,10 @@ public final class SoundBank {
         LEVEL.put("zap_small", -27.0);
         LEVEL.put("chomp", -17.5);
         LEVEL.put("meteor", -24.0);
+        LEVEL.put("heal", -26.0);
+        LEVEL.put("shield_break", -21.0);
+        LEVEL.put("vanish", -29.0);
+        LEVEL.put("shock", -19.0);
     }
 
     private static final Map<String, float[]> BANK = new LinkedHashMap<>();
@@ -319,6 +323,41 @@ public final class SoundBank {
                 noise(b, 0.15, 0.25, 1200, 80, 12, 0.5, r);
                 sweep(b, 0, 640, 120, 0.14, 0.3, true);
                 echo(b, 0.11, 0.3, 2);
+                break;
+            case "heal":
+                // şifacı denizatı: yukarı çıkan üç yumuşak çan sesi
+                b = new float[ms(900)];
+                tone(b, 0.00, 659.3, 0.45, 0.45, 0.004, 5, 3, 1.2);
+                tone(b, 0.10, 784.0, 0.45, 0.45, 0.004, 5, 3, 1.2);
+                tone(b, 0.20, 987.8, 0.60, 0.45, 0.004, 4, 3, 1.2);
+                echo(b, 0.13, 0.35, 3);
+                break;
+            case "shield_break":
+                // kalkan kırılır: cam gibi çatlak ve minik parçalar
+                b = new float[ms(700)];
+                noise(b, 0, 0.12, 9500, 2800, 45, 0.9, r);
+                sweep(b, 0, 3200, 900, 0.16, 0.28, false);
+                thump(b, 0, 260, 90, 0.12, 30, 0.6);
+                for (int i = 0; i < 6; i++) {
+                    tone(b, 0.04 + i * 0.045, 1800 + r.nextInt(1800), 0.12, 0.14, 0.001, 30, 2, 1.0);
+                }
+                echo(b, 0.09, 0.25, 2);
+                break;
+            case "vanish":
+                // kalamar kaybolur: kabarcıklı kısa bir süzülme
+                b = new float[ms(600)];
+                noise(b, 0, 0.45, 1500, 200, 0.0, 0.7, r);
+                sweep(b, 0, 260, 900, 0.4, 0.2, false);
+                swell(b, 0, 0.45, 0.2, 1.6);
+                break;
+            case "shock":
+                // müren kuleyi çarpar: çatırtılı elektrik
+                b = new float[ms(800)];
+                sweep(b, 0, 2400, 160, 0.3, 0.45, true);
+                noise(b, 0, 0.35, 7000, 800, 6, 0.9, r);
+                amplitudeMod(b, 0, 0.3, 85, 0.7);
+                thump(b, 0, 150, 48, 0.4, 9, 0.9);
+                echo(b, 0.1, 0.3, 2);
                 break;
             case "meteor":
                 // lav kayası düşüyor: inen ıslık ve artan hışırtı

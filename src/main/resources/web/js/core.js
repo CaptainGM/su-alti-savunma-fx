@@ -9,7 +9,22 @@
         flying: { speed: 75, hp: 50, reward: 15, damage: 5, armor: 0, flying: true, size: 80 },
         swarm: { speed: 92, hp: 22, reward: 5, damage: 3, armor: 0, flying: false, size: 56 },
         boss: { speed: 22, hp: 800, reward: 130, damage: 55, armor: 45, flying: false, size: 175 },
+        // özel düşmanlar: her biri farklı bir kule yeteneğini ya da dizilişi gerektirir
+        shield: { speed: 40, hp: 70, reward: 20, damage: 8, armor: 20, flying: false, size: 92, shield: 0.7 },   // kalkan: canın %70'i kadar ek koruma
+        healer: { speed: 46, hp: 45, reward: 22, damage: 5, armor: 0, flying: false, size: 86 },                  // yakındakileri iyileştirir
+        stealth: { speed: 60, hp: 45, reward: 16, damage: 5, armor: 0, flying: false, size: 88 },                 // belli aralıkla gizlenir
+        shocker: { speed: 36, hp: 80, reward: 24, damage: 8, armor: 15, flying: false, size: 90 },                // yakındaki kuleyi sersemletir
     };
+
+    // özel düşmanların ilk görüneceği dalga (haritanın enemyPool'unda varsa)
+    const ENEMY_INTRO = { shield: 3, stealth: 4, healer: 5, shocker: 6 };
+    const SPECIAL_ENEMIES = Object.keys(ENEMY_INTRO);
+    const HEAL_RANGE = 140;
+    const HEAL_EVERY = 2.5;
+    const SHOCK_RANGE = 175;
+    const SHOCK_EVERY = 7;
+    const SHOCK_WIND = 0.9;
+    const SHOCK_STUN = 3.5;
 
     // Patron çeşitleri: her harita birini seçer (map.boss)
     const BOSS_KINDS = {
@@ -26,6 +41,7 @@
     const ENEMY_NAMES = {
         standard: 'Köpek Balığı', armored: 'Istakoz', flying: 'Vatoz',
         swarm: 'Yavru Köpek Balığı', boss: 'Patron',
+        shield: 'Kalkanlı Kaplumbağa', healer: 'Şifacı Denizatı', stealth: 'Hayalet Kalamar', shocker: 'Elektrikli Müren',
     };
 
     // role: markette görünen kısa açıklama
@@ -119,15 +135,15 @@
     const ADAPT_MAX = 0.25;           // en çok %25 hasar azalması
     const BUILD_SPOT_RADIUS = 55;
     const HIGH_GROUND_RANGE = 1.2;
-    const TARGET_MODES = ['first', 'last', 'strong', 'close'];
+    const TARGET_MODES = ['first', 'last', 'strong', 'close', 'priority'];
 
     // Zorluk: oyunu gerçekten değiştiren ayarlar (arayüzde de gösterilir).
-    // startBonus: haritanın başlangıç enerjisine eklenir (kolay +50, zor -50: yuvarlak sayılar).
+    // startBonus: haritanın başlangıç enerjisine eklenir (kolay +50, zor -30).
     // costStep: aynı türden her yeni kulenin fiyat artışı (yalnızca zorda var; yığılmayı alışma da cezalandırır).
     const DIFFICULTY = {
         easy: { label: 'Kolay', hp: 0.9, speed: 0.97, startBonus: 50, reward: 1.08, bonus: 1.15, refund: 0.6, health: 120, costStep: 0 },
         normal: { label: 'Normal', hp: 1.0, speed: 1.0, startBonus: 0, reward: 1.0, bonus: 1.0, refund: 0.5, health: 100, costStep: 0 },
-        hard: { label: 'Zor', hp: 1.06, speed: 1.03, startBonus: -50, reward: 0.97, bonus: 0.95, refund: 0.45, health: 90, costStep: 0.06 },
+        hard: { label: 'Zor', hp: 1.04, speed: 1.02, startBonus: -30, reward: 0.98, bonus: 0.96, refund: 0.45, health: 95, costStep: 0.05 },
     };
 
     function describeDifficulty(d) {
@@ -235,12 +251,51 @@
         const gap = Math.max(0.55, 1.5 - 0.06 * n);
         items.forEach(it => { it.gap = gap * (0.85 + rng() * 0.3); });
 
+        // ---- özel düşmanlar ve dizilişleri (haritanın havuzunda olanlar, belirli dalgadan sonra)
+        let specials = 0;
+        const ins = (at, list) => { items.splice(Math.max(0, Math.min(items.length, at)), 0, ...list); specials += list.length; };
+        const spec = t => has(t) && n >= ENEMY_INTRO[t];
+        if (spec('shield')) {
+            // kalkanlılar çiftler halinde yürür
+            const c = Math.max(2, Math.round(base * clamp(0.05 * (n - ENEMY_INTRO.shield + 1), 0, 0.2) * (mix.shield || 1)));
+            for (let i = 0; i < c; i += 2) ins(Math.floor(rng() * (items.length + 1)), [{ type: 'shield', gap: 1.6 }, { type: 'shield', gap: 0.9 }]);
+        }
+        if (spec('healer')) {
+            // şifacı bir konvoyun ortasında yürür: önce o vurulmazsa konvoy dayanır
+            const c = Math.min(3, 1 + Math.floor((n - ENEMY_INTRO.healer) / 3));
+            for (let k = 0; k < c; k++) {
+                const at = Math.floor(rng() * Math.max(1, items.length - 4));
+                ins(at + 2, [{ type: 'healer', gap: 0.7 }]);
+                for (let j = Math.max(0, at - 1); j < Math.min(items.length, at + 5); j++) items[j].gap = Math.min(items[j].gap, 0.75);
+            }
+        }
+        if (spec('shocker')) {
+            // elektrikli mürenler dalganın son üçte birinde, ayrı ayrı gelir
+            const c = Math.min(3, 1 + Math.floor((n - ENEMY_INTRO.shocker) / 2));
+            for (let k = 0; k < c; k++) ins(Math.floor(items.length * (0.55 + 0.4 * rng())), [{ type: 'shocker', gap: 2.4 }]);
+        }
+        if (spec('stealth')) {
+            // gizlenenler tek sıra halinde, sık aralıkla gelir
+            const c = Math.min(7, 2 + Math.floor((n - ENEMY_INTRO.stealth) * 0.9));
+            const line = [];
+            for (let i = 0; i < c; i++) line.push({ type: 'stealth', gap: i === 0 ? 2.0 : 0.8 });
+            ins(Math.floor(rng() * (items.length + 1)), line);
+        }
+        // toplam düşman sayısı şişmesin: eklenen özel düşmanlar kadar, en kalabalık sıradan türden (köpek balığı, ıstakoz, vatoz) çıkarılır
+        for (let r = 0; r < specials; r++) {
+            const counts = ['standard', 'armored', 'flying'].map(t => [t, items.filter(it => it.type === t).length]).sort((x, y) => y[1] - x[1]);
+            if (counts[0][1] <= 2) break;
+            items.splice(items.findIndex(it => it.type === counts[0][0]), 1);
+        }
+
         if (has('swarm') && n >= 2 && n % 2 === 0) {
             const count = Math.round((6 + 1.2 * n) * mix.swarm);
             const pack = [];
             for (let i = 0; i < count; i++) pack.push({ type: 'swarm', gap: 0.32 });
             pack[0].gap = 2.2;
-            const at = Math.floor(rng() * (items.length + 1));
+            let at = Math.floor(rng() * (items.length + 1));
+            // gizlenen kalamar sırası bölünmesin
+            while (at > 0 && at < items.length && items[at - 1].type === 'stealth' && items[at].type === 'stealth') at++;
             items.splice(at, 0, ...pack);
         }
 
@@ -302,12 +357,25 @@
             this.armor = bk ? bk.armor : st.armor;
             this.heavy = type === 'armored' || (bk ? bk.heavy : false);
             this.splits = bk && bk.splits && !this.mini ? bk.splits : 0;
+            this.special = SPECIAL_ENEMIES.includes(type) ? type : null;
+            this.priority = type === 'healer' || type === 'shocker';   // 'Öncelikli' hedef modunda önce vurulur
             this.size = st.size * (this.mini ? 0.75 : 1);
             // hpScale ilk dalgada 1'dir, son dalgada haritanın değerine ulaşır: erken oyun herkes için yumuşak kalır
             const base = totalWavesOf(world.map);
             const mapRamp = 1 + ((world.map.hpScale || 1) - 1) * Math.min(1, (waveNo - 1) / Math.max(1, base - 1));
             this.maxHealth = Math.round(st.hp * (bk ? bk.hp : 1) * hpMul * waveHpScale(waveNo) * diff.hp * mapRamp);
             this.health = this.maxHealth;
+            // kalkan: önce kalkan erir (zırh hesabı sonrası hasar); zehir ve gaz kalkanı deler
+            this.shieldMax = st.shield ? Math.round(this.maxHealth * st.shield) : 0;
+            this.shield = this.shieldMax;
+            this.healT = HEAL_EVERY * 0.6;      // şifacı: bir sonraki iyileştirmeye kalan süre
+            this.hidden = false;                // gizlenen: kuleler hedef alamaz (ışıkta ya da alan hasarıyla ortaya çıkar)
+            this.hideT = 3.2 + (id % 5) * 0.35; // gizlenen: durum değişimine kalan süre
+            this.revealT = 0;                   // vurulunca / ışıkta kısa süre görünür
+            this.shockT = SHOCK_EVERY * 0.55;   // müren: sonraki şoka kalan süre
+            this.shockPhase = 'idle';
+            this.shockTarget = null;
+            this.shockWind = 0;
             this.speed = st.speed * (bk ? bk.speed : 1) * (world.map.speedScale || 1) * diff.speed * (1 + 0.012 * (waveNo - 1));
             this.originalSpeed = this.speed;
             this.reward = Math.round(st.reward * (1 + 0.05 * (waveNo - 1)) * diff.reward * (this.mini ? 1.4 : 1));
@@ -359,7 +427,7 @@
                 return false;
             }
             this.zoneMul = this.pathMul ? this.pathMul(this.traveled / this.path.length) : 1;
-            this.traveled += this.speed * this.zoneMul * this.auraMul * dt;
+            this.traveled += this.speed * this.zoneMul * this.auraMul * (this.hidden ? 1.25 : 1) * dt;
             if (this.traveled >= this.path.length) return true;
 
             const d = this.path.dist;
@@ -386,14 +454,23 @@
             if (o.executeBelow && this.health <= this.maxHealth * o.executeBelow) amount *= o.executeMul;
             const armor = this.armor * (1 - (pierce || 0));
             const actual = amount * (1 - armor / (armor + 100));
-            this.health -= actual;
+            let toHealth = actual;
+            let broke = false;
+            if (this.shield > 0) {
+                const absorbed = Math.min(this.shield, actual);
+                this.shield -= absorbed;
+                toHealth = actual - absorbed;
+                if (this.shield <= 0) { this.shield = 0; broke = true; }
+            }
+            this.health -= toHealth;
             const dead = this.health <= 0;
             if (dead) this.health = 0;
-            return { dead, dmg: actual };
+            return { dead, dmg: actual, shieldBroke: broke };
         }
 
         slowDown(factor, time) {
             if (this.type === 'boss') factor = 1 - (1 - factor) * 0.5;
+            if (this.shield > 0) factor = 1 - (1 - factor) * 0.4;   // kalkan varken yavaşlatma çok zayıf
             this.speed = this.originalSpeed * factor;
             this.slowTime = time;
             this.isSlowed = true;
@@ -412,7 +489,7 @@
             this.level = 1;
             this.lastFire = 0;
             this.target = null;
-            this.mode = TOWER_TYPES[type].defaultMode || 'first';
+            this.mode = TOWER_TYPES[type].defaultMode || 'priority';   // özel düşman yoksa 'İlk' ile aynı davranır
             this.invested = 0;
             this.firedAt = -10;
             this.stun = 0;        // lav patlaması gibi olaylarla geçici susturma (sn)
@@ -494,6 +571,7 @@
         sellValue(refund) { return Math.round(this.invested * (refund != null ? refund : 0.5)); }
 
         canTarget(enemy) {
+            if (enemy.hidden && enemy.revealT <= 0) return false;      // gizlenen düşman ışık ya da alan hasarı olmadan hedeflenemez
             return !(TOWER_TYPES[this.type].groundOnly && enemy.flying);
         }
 
@@ -509,6 +587,7 @@
                     case 'last': score = -e.progress; break;
                     case 'strong': score = e.health; break;
                     case 'close': score = -d; break;
+                    case 'priority': score = (e.priority ? 10 : 0) + (e.hidden ? 5 : 0) + e.progress; break;
                     default: score = e.progress;
                 }
                 if (score > bestScore) { bestScore = score; best = e; }
@@ -965,6 +1044,7 @@
                     id: e.id, type: e.type, lane: e.lane, kind: e.kind, mini: e.mini, waveNo: e.waveNo,
                     health: r(e.health), maxHealth: e.maxHealth, traveled: r(e.traveled), speed: r(e.speed), slowTime: r(Math.max(0, e.slowTime)),
                     stunTime: r(Math.max(0, e.stunTime)), didSplit: e.didSplit, furyCasts: e.furyCasts, furyTimer: r(e.furyTimer),
+                    shield: r(e.shield), hidden: e.hidden, hideT: r(e.hideT), healT: r(e.healT), shockT: r(e.shockT),
                 })),
                 queue: this.queue.map(it => Object.assign({}, it)),
                 spawnTimer: r(this.spawnTimer),
@@ -1021,6 +1101,7 @@
                 e.isSlowed = se.slowTime > 0;
                 e.stunTime = se.stunTime;
                 e.didSplit = se.didSplit;
+                if (se.shield != null) { e.shield = se.shield; e.hidden = !!se.hidden; e.hideT = se.hideT; e.healT = se.healT; e.shockT = se.shockT; }
                 e.furyCasts = se.furyCasts;
                 e.furyTimer = Math.max(se.furyTimer, 1.5);
                 e.furyPhase = e.fury && e.furyCasts >= e.fury.casts ? 'done' : 'idle';
@@ -1327,11 +1408,13 @@
             }
         }
 
-        // her adımda: işaret/zehir süreleri, gaz bulutları, ışık ağı yavaşlatması
+        // her adımda: işaret/zehir süreleri, gaz bulutları, ışık ağı, özel düşmanların yetenekleri
         tickEffects(dt) {
             const lamps = this.towers.filter(t => t.fx && t.fx.auraSlow);
+            const lanterns = this.towers.filter(t => t.type === 'angler');
             for (const e of this.enemies) {
                 if (e.health <= 0) continue;
+                if (e.special) this.tickSpecial(e, dt, lanterns);
                 if (e.markT > 0) e.markT -= dt;
                 if (e.dotT > 0) {
                     e.dotT -= dt;
@@ -1391,6 +1474,10 @@
                 out.push(`Uçan: ${no ? no + ' vuramaz; ' : ''}${list(['octopus', 'angler', 'jellyfish', 'swordfish'])} kullan.`);
             }
             if (counts.swarm >= 5) out.push(`Sürü: ${list(['puffer', 'eel', 'jellyfish'])} alan hasarıyla temizler.`);
+            if (counts.shield) out.push(`Kalkanlı: zehir ve gaz kalkanı deler${has('swordfish') ? `; ${name('swordfish')} kalkanı çabuk kırar` : ''}. Kalkan varken yavaşlatma zayıf.`);
+            if (counts.healer) out.push('Şifacı: konvoyu iyileştirir, önce onu vur (hedef modu "Öncelikli").');
+            if (counts.stealth) out.push(`Gizlenen: kuleler görmez; ${list(['angler'])} ışığı ya da ${list(['eel', 'puffer'])} alan hasarı gerekir.`);
+            if (counts.shocker) out.push(`Müren: yakınındaki kuleyi ${SHOCK_STUN} sn sersemletir; uzaktan vur${has('swordfish') ? ` (${name('swordfish')})` : ''} ya da yavaşlat.`);
             if (counts.boss) {
                 const fury = BOSS_KINDS[(this.planFor(n).find(i => i.type === 'boss') || {}).kind || 'shark'];
                 out.push(`Patron: en yüksek seviyeli kuleni yer.${has('swordfish') ? ` ${name('swordfish')} +%50 vurur.` : ''}${fury && fury.flying ? ' Havadan gelir.' : ''}`);
@@ -1398,8 +1485,70 @@
             return out;
         }
 
+        // özel düşmanların yetenekleri: şifacı iyileştirir, kalamar gizlenir, müren kule sersemletir
+        tickSpecial(e, dt, lanterns) {
+            if (e.revealT > 0) e.revealT -= dt;
+            if (e.special === 'healer') {
+                e.healT -= dt;
+                if (e.healT <= 0) {
+                    e.healT = HEAL_EVERY;
+                    let n = 0;
+                    for (const o of this.enemies) {
+                        if (o === e || o.health <= 0 || o.health >= o.maxHealth || Math.hypot(o.x - e.x, o.y - e.y) > HEAL_RANGE) continue;
+                        o.health = Math.min(o.maxHealth, o.health + o.maxHealth * (o.type === 'boss' ? 0.015 : 0.06));
+                        n++;
+                    }
+                    if (n) this.emit('heal', { enemy: e, radius: HEAL_RANGE, count: n });
+                }
+            } else if (e.special === 'stealth') {
+                // Fener Balığı'nın ışığı gizlenenleri ortaya çıkarır (menzili içinde)
+                if (lanterns.some(l => Math.hypot(l.x - e.x, l.y - e.y) <= this.lightRadius(l))) e.revealT = Math.max(e.revealT, 0.4);
+                e.hideT -= dt;
+                if (e.hideT <= 0) {
+                    e.hidden = !e.hidden;
+                    e.hideT = e.hidden ? 3.0 : 4.0;
+                    this.emit(e.hidden ? 'vanish' : 'appear', { enemy: e });
+                }
+            } else if (e.special === 'shocker') {
+                if (e.shockPhase === 'idle') {
+                    e.shockT -= dt;
+                    if (e.shockT <= 0) {
+                        let best = null;
+                        let bd = SHOCK_RANGE;
+                        for (const t of this.towers) {
+                            const d = Math.hypot(t.x - e.x, t.y - e.y);
+                            if (d < bd && t.stun <= 0) { bd = d; best = t; }
+                        }
+                        if (best) {
+                            e.shockPhase = 'wind';
+                            e.shockWind = SHOCK_WIND;
+                            e.shockTarget = best;
+                            this.emit('shockWarn', { enemy: e, tower: best, time: SHOCK_WIND });
+                        } else {
+                            e.shockT = 1.2;
+                        }
+                    }
+                } else {
+                    e.shockWind -= dt;
+                    if (e.shockWind <= 0) {
+                        const t = e.shockTarget;
+                        if (t && this.towers.includes(t)) {
+                            t.stun = Math.max(t.stun, SHOCK_STUN);
+                            this.emit('towerStun', { tower: t, time: SHOCK_STUN });
+                            this.emit('towerShock', { enemy: e, tower: t });
+                        }
+                        e.shockPhase = 'idle';
+                        e.shockTarget = null;
+                        e.shockT = SHOCK_EVERY;
+                    }
+                }
+            }
+        }
+
         afterHit(enemy, tower, res, slowed) {
             enemy.lastHit = this.time;
+            if (enemy.hidden) enemy.revealT = Math.max(enemy.revealT, 1.2);      // alan hasarı vuruldu: kısa süre görünür
+            if (res.shieldBroke) this.emit('shieldBreak', { enemy });
             this.emit('hit', { enemy, tower, dmg: res.dmg, slowed, dead: res.dead });
             if (res.dead) {
                 this.money += enemy.reward;
@@ -1455,7 +1604,7 @@
         ENEMY_TYPES, BOSS_KINDS, ENEMY_NAMES, TOWER_TYPES, DIFFICULTY, MAX_LEVEL, BUILD_SPOT_RADIUS, HIGH_GROUND_RANGE, TARGET_MODES,
         World, Enemy, Tower, Projectile,
         buildPath, generateSmoothPath, mapPaths, buildWavePlan, summarizePlan, totalWavesOf, waveHpScale, mulberry32,
-        pointAt, describeDifficulty, PERKS, perkOptions, findPerk,
+        pointAt, describeDifficulty, PERKS, perkOptions, findPerk, ENEMY_INTRO, SPECIAL_ENEMIES, HEAL_RANGE, SHOCK_RANGE, SHOCK_STUN,
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = Core;

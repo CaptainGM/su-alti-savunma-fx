@@ -68,7 +68,7 @@ ok(anglerShot, 'fener balığı düşmana ateş etti');
 const easy = mk('mercan', { difficulty: 'easy' });
 const hard = mk('mercan', { difficulty: 'hard' });
 ok(easy.money > hard.money && easy.health > hard.health, 'başlangıç enerjisi ve üs canı zorluğa göre değişir');
-ok(mk('mercan').money === 250 && easy.money === 300 && hard.money === 200, 'başlangıç enerjisi yuvarlak sayılar: 300 / 250 / 200');
+ok(mk('mercan').money === 250 && easy.money === 300 && hard.money === 220, 'başlangıç enerjisi yuvarlak sayılar: 300 / 250 / 220');
 const e1 = new Core.Enemy(easy, 'standard', 0, 1, 3, {});
 const e2 = new Core.Enemy(hard, 'standard', 0, 1, 3, {});
 ok(e2.maxHealth > e1.maxHealth && e2.speed > e1.speed, 'düşman canı ve hızı zorluğa göre değişir');
@@ -521,6 +521,135 @@ ok(r.serialize().towers.length === 2, 'geri kurulan oyun yeniden kaydedilebiliyo
     delete sn.towers[0].perks;
     const r8 = Core.World.restore(mapOf('mercan'), sn, {});
     ok(r8.towers[0].perks[3] === 'swo-cut' && r8.towers[0].perks[5] === 'swo-hunt', 'eski kayıtlarda eksik yetenek ilk seçenekle doldurulur');
+}
+
+// ---------------------------------------------------------------- özel düşmanlar
+{
+    const spawn = (w, type, traveled) => {
+        const e = new Core.Enemy(w, type, 0, w.nextEnemyId++, 4, {});
+        e.traveled = traveled == null ? 300 : traveled; e.speed = e.originalSpeed = 0.001; e.update(0);
+        w.enemies.push(e);
+        return e;
+    };
+    const count = (plan, t) => plan.filter(it => it.type === t).length;
+
+    // dalga planı: yalnızca haritanın havuzundaki türler, belirli dalgadan sonra
+    const mercan = mapOf('mercan'), cukur = mapOf('cukur');
+    ok(count(Core.buildWavePlan(mercan, 2, 5), 'shield') === 0 && count(Core.buildWavePlan(mercan, 4, 5), 'shield') >= 2, 'kalkanlılar 3. dalgadan sonra çıkıyor');
+    ok(MAPS.every(m => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].every(n => Core.buildWavePlan(m, n, 7).every(it => (m.enemyPool || []).includes(it.type)))), 'hiçbir haritada havuz dışı düşman çıkmıyor');
+    const late = Core.buildWavePlan(cukur, 10, 5);
+    ok(count(late, 'stealth') >= 3 && count(late, 'healer') >= 1 && count(late, 'shocker') >= 1, 'Derin Çukur 10. dalgada gizlenen, şifacı ve müren var');
+    const lineIdx = late.map((it, i) => it.type === 'stealth' ? i : -1).filter(i => i >= 0);
+    ok(lineIdx[lineIdx.length - 1] - lineIdx[0] === lineIdx.length - 1, 'gizlenenler yan yana tek sıra halinde geliyor');
+    const plain = Object.assign({}, cukur, { enemyPool: ['standard', 'armored', 'flying', 'swarm', 'boss'] });
+    ok(Core.buildWavePlan(cukur, 8, 7).length - Core.buildWavePlan(plain, 8, 7).length <= 4, 'özel düşmanlar toplam sayıyı şişirmiyor');
+    ok(MAPS.every(m => Core.buildWavePlan(m, 10, 3).some(it => Core.SPECIAL_ENEMIES.includes(it.type))), 'her haritada son dalgalarda en az bir özel düşman türü var');
+
+    // kalkan
+    let w = mk('mercan');
+    const sh = spawn(w, 'shield');
+    ok(sh.shield > 0 && Math.abs(sh.shield - sh.maxHealth * 0.7) < 2, 'kalkanlı düşmanın canının %70\'i kadar kalkanı var');
+    const h0 = sh.health;
+    const r1 = sh.takeDamage(10, 'eel', 0, {});
+    ok(sh.health === h0 && sh.shield < sh.shieldMax && !r1.shieldBroke, 'hasar önce kalkana gidiyor');
+    const sh2 = spawn(w, 'shield');
+    sh2.originalSpeed = sh2.speed = 40;
+    sh2.slowDown(0.5, 3);
+    const sh3 = spawn(w, 'standard');
+    sh3.originalSpeed = sh3.speed = 40;
+    sh3.slowDown(0.5, 3);
+    ok(sh2.speed > sh3.speed + 1, 'kalkan varken yavaşlatma zayıf');
+    const r2 = sh.takeDamage(99999, 'eel', 0, {});
+    ok(r2.shieldBroke && sh.shield === 0, 'kalkan kırılınca bayrak çıkıyor');
+    const sh4 = spawn(w, 'shield');
+    const hp4 = sh4.health;
+    w.dotDamage(sh4, 5, 'puffer');
+    ok(sh4.health === hp4 - 5 && sh4.shield === sh4.shieldMax, 'zehir/gaz kalkanı deler');
+    let broke = 0;
+    w.onEvent = (t) => { if (t === 'shieldBreak') broke++; };
+    const sh5 = spawn(w, 'shield'); sh5.shield = 1;
+    w.afterHit(sh5, { fx: {}, type: 'eel' }, { dmg: 5, dead: false, shieldBroke: true }, false);
+    ok(broke === 1, 'kalkan kırılma olayı yayınlanıyor');
+
+    // şifacı
+    w = mk('yosun');
+    const hl = spawn(w, 'healer', 300);
+    const hurt = spawn(w, 'standard', 305); hurt.health = hurt.maxHealth * 0.5;
+    const far = spawn(w, 'standard', 1400); far.health = far.maxHealth * 0.5;
+    let healed = 0;
+    w.onEvent = (t) => { if (t === 'heal') healed++; };
+    for (let i = 0; i < 90; i++) w.update(1 / 30);
+    ok(hurt.health > hurt.maxHealth * 0.5 && far.health === far.maxHealth * 0.5 && healed >= 1, 'şifacı yakındaki yaralıyı iyileştiriyor, uzaktakini değil');
+
+    // gizlenen
+    w = mk('mangrov');
+    w.money = 9999;
+    const sq = spawn(w, 'stealth', 300);
+    const tw = w.placeTower('octopus', w.spots[0]).tower;
+    sq.x = tw.x + 50; sq.y = tw.y;
+    sq.hidden = true; sq.hideT = 99;
+    ok(!tw.canTarget(sq) && tw.pick(w.enemies) === null, 'gizlenen düşman kuleler tarafından hedeflenemiyor');
+    const ang = new Core.Tower(w, 'angler', w.spots[1], 99);
+    ang.x = tw.x + 20; ang.y = tw.y + 20; ang.derive();
+    w.towers.push(ang);
+    w.update(1 / 30);
+    ok(sq.revealT > 0 && tw.canTarget(sq), 'Fener Balığı ışığı gizleneni ortaya çıkarıyor');
+    w.towers = w.towers.filter(t => t !== ang);
+    sq.revealT = 0;
+    ok(!tw.canTarget(sq), 'ışık gidince yine gizli');
+    const eelT = w.placeTower('eel', w.spots[2]).tower;
+    eelT.x = sq.x; eelT.y = sq.y + 30;
+    const decoy = spawn(w, 'standard', 301); decoy.x = sq.x + 10; decoy.y = sq.y; decoy.maxHealth = decoy.health = 99999;
+    const sqh = sq.health;
+    eelT.target = decoy; w.fire(eelT);
+    ok(sq.health < sqh && sq.revealT > 0, 'alan hasarı gizleneni de vuruyor ve açığa çıkarıyor');
+    let vanished = 0;
+    w.onEvent = (t) => { if (t === 'vanish') vanished++; };
+    const sq2 = spawn(w, 'stealth', 330); sq2.hideT = 0.05;
+    w.update(0.2);
+    ok(sq2.hidden && vanished === 1, 'kalamar belli aralıkla kayboluyor');
+
+    // müren
+    w = mk('batik');
+    w.money = 9999;
+    const pathMin = sp => Math.min(...w.paths[0].points.map(q => Math.hypot(q.x - sp.x, q.y - sp.y)));
+    const bySpot = w.spots.slice().sort((a, b) => pathMin(a) - pathMin(b));
+    const mt = w.placeTower('octopus', bySpot[0]).tower;
+    const far2 = w.placeTower('octopus', bySpot[bySpot.length - 1]).tower;
+    const nearestTravel = tw_ => { const P = w.paths[0]; let bi = 0, bd = 1e9; P.points.forEach((q, i) => { const d = Math.hypot(q.x - tw_.x, q.y - tw_.y); if (d < bd) { bd = d; bi = i; } }); return P.dist[bi]; };
+    const mo = spawn(w, 'shocker', nearestTravel(mt));
+    mo.shockT = 0.1;
+    let warned = null, shocked = null;
+    w.onEvent = (t, d) => { if (t === 'shockWarn') warned = d; if (t === 'towerShock') shocked = d; };
+    for (let i = 0; i < 12; i++) w.update(1 / 30);
+    ok(warned && warned.tower === mt && mt.stun <= 0, 'müren önce uyarı veriyor (kule henüz sersemlemedi)');
+    for (let i = 0; i < 20; i++) w.update(1 / 30);
+    ok(shocked && mt.stun > 2.5, 'müren kuleyi 3,5 sn sersemletiyor');
+    ok(far2.stun === 0, 'uzaktaki kule etkilenmiyor');
+    const mo2 = spawn(w, 'shocker', nearestTravel(mt) + 10); mo2.shockT = 0.05;
+    mt.stun = 0;
+    let died = false;
+    w.onEvent = (t) => { if (t === 'towerShock') died = true; };
+    w.update(1 / 30);
+    mo2.health = 0;
+    for (let i = 0; i < 40; i++) w.update(1 / 30);
+    ok(!died && mt.stun <= 0, 'müren uyarı sırasında ölürse şok olmaz');
+
+    // öncelikli hedef modu
+    w = mk('yosun');
+    w.money = 9999;
+    const pt = w.placeTower('octopus', w.spots[0]).tower;
+    pt.mode = 'priority';
+    const e1 = spawn(w, 'standard', 400), e2 = spawn(w, 'healer', 300);
+    e1.x = pt.x + 40; e1.y = pt.y; e2.x = pt.x + 60; e2.y = pt.y;
+    ok(pt.pick(w.enemies) === e2 && Core.TARGET_MODES.includes('priority'), 'Öncelikli mod şifacıyı önce seçiyor');
+
+    // kayıt: kalkan ve gizlenme durumu
+    w = mk('buz');
+    const ss = spawn(w, 'shield', 200); ss.shield = Math.round(ss.shieldMax / 2);
+    const sn2 = JSON.parse(JSON.stringify(w.serialize()));
+    const rr = Core.World.restore(mapOf('buz'), sn2, {});
+    ok(rr.enemies[0].special === 'shield' && Math.abs(rr.enemies[0].shield - ss.shield) < 1, 'kalkan durumu kayıttan geri geliyor');
 }
 
 console.log(fails ? `${fails} BASARISIZ` : 'HEPSI GECTI');

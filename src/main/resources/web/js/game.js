@@ -15,6 +15,7 @@ const SPRITE_FILES = {
         standard: 'assets/enemy_shark.png', armored: 'assets/enemy_lobster.png', flying: 'assets/enemy_ray.png',
         swarm: 'assets/enemy_pup.png', boss_shark: 'assets/enemy_king.png', boss_crab: 'assets/enemy_king_crab.png',
         boss_manta: 'assets/enemy_king_manta.png', boss_brood: 'assets/enemy_king_brood.png',
+        shield: 'assets/enemy_turtle.png', healer: 'assets/enemy_seahorse.png', stealth: 'assets/enemy_squid.png', shocker: 'assets/enemy_moray.png',
     },
     projectiles: {
         octopus: 'assets/projectile_octopus.png', eel: 'assets/projectile_eel.png', jellyfish: 'assets/projectile_jellyfish.png',
@@ -22,7 +23,16 @@ const SPRITE_FILES = {
     },
 };
 const towerOrder = () => currentMap.towers;
-const MODE_LABEL = { first: 'İlk', last: 'Son', strong: 'En Güçlü', close: 'En Yakın' };
+const MODE_LABEL = { first: 'İlk', last: 'Son', strong: 'En Güçlü', close: 'En Yakın', priority: 'Öncelikli (şifacı/gizli/müren)' };
+
+// özel düşmanlar ilk göründüğünde oyuncuya kısa bilgi
+const SPECIAL_INFO = {
+    shield: 'önce kalkanı erir; zehir ve gaz kalkanı deler, yavaşlatma zayıf kalır.',
+    healer: 'yakınındaki düşmanları iyileştirir. Önce onu vur (hedef modu: Öncelikli).',
+    stealth: 'belli aralıkla gizlenir. Fener Balığı ışığı ya da alan hasarı onu ortaya çıkarır.',
+    shocker: 'yakınındaki kuleyi 3,5 sn sersemletir. Uzaktan vur ya da yavaşlat.',
+};
+const seenSpecials = new Set();
 
 // ------------------------------------------------------------------ kayıtlar (js/settings.js)
 
@@ -348,6 +358,10 @@ function onWorldEvent(type, d) {
             const info = Object.entries(d.counts).map(([t, c]) => `${typeName(t)}: ${c}`).join(', ');
             addLog(`=== DALGA ${d.wave} BAŞLADI === (${info}, Toplam: ${d.total})`);
             sfx('wave_start');
+            Object.keys(d.counts).filter(t => SPECIAL_INFO[t] && !seenSpecials.has(t)).forEach(t => {
+                seenSpecials.add(t);
+                notify(`Yeni düşman: ${typeName(t)} · ${SPECIAL_INFO[t]}`, '#ffd27a');
+            });
             saveProgress();
             break;
         }
@@ -373,6 +387,44 @@ function onWorldEvent(type, d) {
             break;
         case 'aoe':
             fx.rings.push({ x: d.x, y: d.y, r: 10, max: d.radius * 1.15, life: 0.45, maxLife: 0.45, color: '255,230,80', aoeImg: true });
+            break;
+        case 'heal':
+            sfx('heal', 250);
+            fx.rings.push({ x: d.enemy.x, y: d.enemy.y, r: 12, max: d.radius, life: 0.8, maxLife: 0.8, color: '90,255,150', fill: true });
+            for (let i = 0; i < 6; i++) {
+                const a = Math.random() * 6.2832;
+                const rr = Math.random() * d.radius * 0.8;
+                fx.sparks.push({ x: d.enemy.x + Math.cos(a) * rr, y: d.enemy.y + Math.sin(a) * rr, vx: 0, vy: -50, life: 0.9, max: 0.9, r: 3.2, c: '130,255,170' });
+            }
+            break;
+        case 'shieldBreak':
+            sfx('shield_break');
+            fx.shake = Math.max(fx.shake || 0, 0.25);
+            fx.rings.push({ x: d.enemy.x, y: d.enemy.y, r: 20, max: 80, life: 0.45, maxLife: 0.45, color: '150,230,255', fill: true });
+            for (let i = 0; i < 16; i++) {
+                const a = Math.random() * 6.2832;
+                fx.sparks.push({ x: d.enemy.x, y: d.enemy.y, vx: Math.cos(a) * 190, vy: Math.sin(a) * 190, life: 0.5, max: 0.5, r: 2.5, c: '200,240,255' });
+            }
+            break;
+        case 'vanish':
+            sfx('vanish', 120);
+            for (let i = 0; i < 10; i++) {
+                const a = Math.random() * 6.2832;
+                fx.sparks.push({ x: d.enemy.x, y: d.enemy.y, vx: Math.cos(a) * 70, vy: Math.sin(a) * 70, life: 0.8, max: 0.8, r: 5 + Math.random() * 5, c: '70,40,130' });
+            }
+            break;
+        case 'appear':
+            fx.rings.push({ x: d.enemy.x, y: d.enemy.y, r: 10, max: 46, life: 0.35, maxLife: 0.35, color: '170,140,255' });
+            break;
+        case 'shockWarn':
+            sfx('zap_small', 80);
+            break;
+        case 'towerShock':
+            sfx('shock');
+            fx.shake = Math.max(fx.shake || 0, 0.45);
+            fx.arcs.push({ pts: [{ x: d.enemy.x, y: d.enemy.y }, { x: d.tower.x, y: d.tower.y }], life: 0.4, max: 0.4, color: '150,225,255', seed: Math.random() * 100 });
+            fx.rings.push({ x: d.tower.x, y: d.tower.y, r: 10, max: 80, life: 0.5, maxLife: 0.5, color: '170,235,255', fill: true });
+            notify(`${d.enemy.name}, ${d.tower.name} kulesini sersemletti!`, '#9fe4ff');
             break;
         case 'chain':
             sfx('zap_small', 60);
@@ -575,6 +627,7 @@ function selectMap(mapIndex, resumeSnap) {
     document.getElementById('gameScreen').classList.remove('hidden');
 
     if (world) logEnd();
+    seenSpecials.clear();
     if (resumeSnap) {
         difficulty = resumeSnap.diff;
         world = Core.World.restore(currentMap, resumeSnap, { onEvent: onWorldEvent });
@@ -659,7 +712,15 @@ function bridgeLoop(on) {
     try { if (window.javaBridge && window.javaBridge.setLoop) window.javaBridge.setLoop(on); } catch (e) { /* yoksay */ }
 }
 
-window.javaFrame = function (ms) { gameLoop(ms, true); };
+// Java her kareyi buradan çağırır; oradaki bir JS hatası sessizce yutulmasın diye burada yakalanıp kaydedilir
+window.__errs = [];
+function reportError(e) {
+    if (window.__errs.length < 20) window.__errs.push(String((e && e.stack) || e));
+    if (window.__errs.length <= 3) addLog('JS HATASI: ' + ((e && e.message) || e));
+}
+window.javaFrame = function (ms) {
+    try { gameLoop(ms, true); } catch (e) { reportError(e); }
+};
 
 function gameLoop(ts, fromJava) {
     if (!world) return;
@@ -1452,9 +1513,26 @@ function drawEnemy(e) {
     drawShadow(e.x, e.y + size * 0.36, size * 0.34, size * 0.1, 0.22);
 
     const img = enemySprite(e);
+    // gizlenen kalamar: görünürlük yumuşakça değişir (ışıkta/vurulunca yarı saydam görünür)
+    let alpha = 1;
+    if (e.special === 'stealth') {
+        const goal = e.hidden ? (e.revealT > 0 ? 0.5 : 0.13) : 1;
+        e.hideAmt = e.hideAmt === undefined ? goal : e.hideAmt + (goal - e.hideAmt) * 0.15;
+        alpha = e.hideAmt;
+    }
     ctx.save();
     ctx.translate(e.x, e.y + bob);
     if (currentMap.flipSprites && e.dirX > 0) ctx.scale(-1, 1);
+    // türe özgü hareket: kaplumbağa sallanır, denizatı salınır, kalamar jet gibi büzülür, müren kıvrılır
+    const ph = animTime * 3 + e.id;
+    switch (e.special) {
+        case 'shield': ctx.rotate(Math.sin(ph * 0.7) * 0.07); ctx.scale(1 + Math.sin(ph * 1.4) * 0.03, 1 - Math.sin(ph * 1.4) * 0.03); break;
+        case 'healer': ctx.rotate(Math.sin(ph * 1.1) * 0.12); break;
+        case 'stealth': { const k = Math.sin(ph * 1.6); ctx.scale(1 - 0.07 * k, 1 + 0.1 * k); break; }
+        case 'shocker': ctx.transform(1, 0, Math.sin(ph * 1.8) * 0.14, 1, 0, 0); ctx.rotate(Math.sin(ph * 0.9) * 0.05); break;
+        default: break;
+    }
+    if (alpha < 0.999) ctx.globalAlpha = alpha;
     if (ready(img)) {
         const spr = fit(img, e.size);
         ctx.drawImage(spr, -size / 2, -size / 2, size, size);
@@ -1467,7 +1545,79 @@ function drawEnemy(e) {
     }
     ctx.restore();
 
-    if (e.health < e.maxHealth || e.type === 'boss') {
+    // kalkan: kabarcık, çatlaklar ve ince kalkan çubuğu
+    if (e.shield > 0) {
+        const f = e.shield / e.shieldMax;
+        const r = size * 0.6 + Math.sin(animTime * 3 + e.id) * 1.5;
+        ctx.fillStyle = `rgba(130,225,255,${0.08 + 0.12 * f})`;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y + bob, r, 0, 6.2832);
+        ctx.fill();
+        ctx.strokeStyle = `rgba(190,240,255,${0.35 + 0.5 * f})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y + bob, r * 0.82, -2.6, -1.7);
+        ctx.stroke();
+        if (f < 0.4) {
+            ctx.strokeStyle = 'rgba(220,245,255,0.8)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(e.x - r * 0.5, e.y + bob - r * 0.6); ctx.lineTo(e.x - r * 0.15, e.y + bob - r * 0.15); ctx.lineTo(e.x - r * 0.35, e.y + bob + r * 0.2);
+            ctx.moveTo(e.x + r * 0.55, e.y + bob + r * 0.2); ctx.lineTo(e.x + r * 0.2, e.y + bob); ctx.lineTo(e.x + r * 0.4, e.y + bob - r * 0.45);
+            ctx.stroke();
+        }
+    }
+    // şifacı: yukarı süzülen artı işaretleri
+    if (e.special === 'healer') {
+        ctx.strokeStyle = 'rgba(120,255,160,0.9)';
+        ctx.lineWidth = 2.4;
+        for (let i = 0; i < 2; i++) {
+            const t = ((animTime * 0.7 + i * 0.5 + e.id * 0.13) % 1);
+            const px = e.x + Math.sin(e.id + i * 3) * 22;
+            const py = e.y - size * 0.4 - t * 36;
+            ctx.globalAlpha = 1 - t;
+            ctx.beginPath();
+            ctx.moveTo(px - 5, py); ctx.lineTo(px + 5, py);
+            ctx.moveTo(px, py - 5); ctx.lineTo(px, py + 5);
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+    }
+    // müren: etrafında kıvılcım atar; kuleyi hedef alınca kuleye yıldırım çizgisi uzanır
+    if (e.special === 'shocker') {
+        const seed = Math.floor(animTime * 9) + e.id * 13;
+        ctx.strokeStyle = 'rgba(190,240,255,0.9)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < 2; i++) {
+            const a = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453;
+            const ang = (a - Math.floor(a)) * 6.2832;
+            const r0 = size * 0.42;
+            ctx.moveTo(e.x + Math.cos(ang) * r0, e.y + bob + Math.sin(ang) * r0);
+            ctx.lineTo(e.x + Math.cos(ang + 0.3) * (r0 + 9), e.y + bob + Math.sin(ang + 0.3) * (r0 + 9));
+            ctx.lineTo(e.x + Math.cos(ang - 0.1) * (r0 + 17), e.y + bob + Math.sin(ang - 0.1) * (r0 + 17));
+        }
+        ctx.stroke();
+        if (e.shockPhase === 'wind' && e.shockTarget) {
+            const k = 1 - e.shockWind / 0.9;
+            ctx.strokeStyle = `rgba(150,225,255,${0.35 + 0.5 * Math.abs(Math.sin(animTime * 30))})`;
+            ctx.lineWidth = 2 + 2 * k;
+            ctx.setLineDash([10, 8]);
+            ctx.lineDashOffset = -animTime * 160;
+            ctx.beginPath();
+            ctx.moveTo(e.x, e.y);
+            ctx.lineTo(e.shockTarget.x, e.shockTarget.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.arc(e.shockTarget.x, e.shockTarget.y, 62 - 20 * k, 0, 6.2832);
+            ctx.stroke();
+        }
+    }
+    if ((e.health < e.maxHealth || e.type === 'boss' || e.shield > 0) && alpha > 0.3) {
         const bw = e.type === 'boss' ? 90 : e.size * 0.75;
         const by = e.y - e.size * 0.58;
         const pct = Math.max(0, e.health / e.maxHealth);
@@ -1475,6 +1625,12 @@ function drawEnemy(e) {
         ctx.fillRect(e.x - bw / 2 - 1, by - 1, bw + 2, 8);
         ctx.fillStyle = pct > 0.5 ? '#3ddc6b' : pct > 0.25 ? '#f2c230' : '#ef4b4b';
         ctx.fillRect(e.x - bw / 2, by, bw * pct, 6);
+        if (e.shieldMax > 0) {
+            ctx.fillStyle = 'rgba(0,0,0,0.75)';
+            ctx.fillRect(e.x - bw / 2 - 1, by - 7, bw + 2, 6);
+            ctx.fillStyle = '#6fd6ff';
+            ctx.fillRect(e.x - bw / 2, by - 6, bw * (e.shield / e.shieldMax), 4);
+        }
     }
     // yetenek göstergeleri: işaretli düşmanda hedef halkası, zehir/yanıkta dönen noktalar
     if (e.markT > 0) {
