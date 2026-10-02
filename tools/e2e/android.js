@@ -34,16 +34,32 @@ function pid() { try { return adb('shell', 'pidof', PAKET).trim().split(/\s+/)[0
 function onPlandaMi() { return adb('shell', 'dumpsys', 'activity', 'activities').split('\n').some(s => /topResumedActivity/.test(s) && s.includes(PAKET)); }
 
 async function baglan() {
-    for (let i = 0; i < 60 && !pid(); i++) await bekle(500);
+    for (let i = 0; i < 120 && !pid(); i++) await bekle(500);
     ok(pid(), 'uygulama başlamadı');
-    adb('forward', '--remove-all');
-    adb('forward', 'tcp:9222', 'localabstract:webview_devtools_remote_' + pid());
     let browser;
-    for (let i = 0; i < 40; i++) {
-        try { browser = await chromium.connectOverCDP('http://localhost:9222'); if (browser.contexts()[0] && browser.contexts()[0].pages().length) break; await browser.close(); } catch (e) { /* WebView henüz hazır değil */ }
-        await bekle(500);
+    let sonHata = '';
+    // soğuk açılışta (özellikle CI emülatöründe) WebView ve sayfa geç hazır olabilir: 2 dakikaya kadar dener
+    for (let i = 0; i < 80; i++) {
+        try {
+            adb('forward', '--remove-all');
+            adb('forward', 'tcp:9222', 'localabstract:webview_devtools_remote_' + pid());
+            browser = await chromium.connectOverCDP('http://localhost:9222', { timeout: 5000 });
+            if (browser.contexts()[0] && browser.contexts()[0].pages().length) break;
+            await browser.close();
+            browser = null;
+        } catch (e) { sonHata = String(e.message).split(String.fromCharCode(10))[0]; browser = null; }
+        await bekle(1500);
     }
-    ok(browser, 'WebView hata ayıklama bağlantısı kurulamadı');
+    if (!browser) {
+        // tanı bilgisi: neden bağlanılamadı
+        try {
+            const satirlar = adb('logcat', '-d', '-t', '300').split(String.fromCharCode(10)).filter(l => /chromium|AndroidRuntime|FATAL|kule\.savunma|WebView|died/i.test(l)).slice(-25);
+            console.log('--- logcat (son satırlar) ---');
+            satirlar.forEach(l => console.log(l));
+        } catch (e) { /* yoksay */ }
+        try { goruntu('baglanti_hatasi'); } catch (e) { /* yoksay */ }
+    }
+    ok(browser, 'WebView hata ayıklama bağlantısı kurulamadı: ' + sonHata);
     const page = browser.contexts()[0].pages().find(p => /appassets\.androidplatform\.net/.test(p.url())) || browser.contexts()[0].pages()[0];
     const hatalar = [];
     page.on('pageerror', e => hatalar.push('pageerror: ' + e.message));
@@ -56,7 +72,7 @@ async function uygulamayiBaslat() {
     adb('shell', 'am', 'force-stop', PAKET);
     for (let i = 0; i < 20 && pid(); i++) await bekle(250);          // eski işlem tamamen bitsin
     adb('shell', 'am', 'start', '-n', PAKET + '/.MainActivity');
-    await bekle(3500);                                                  // WebView işlemi ve sayfa açılsın
+    await bekle(4000);                                                  // WebView işlemi ve sayfa açılsın
 }
 
 (async () => {
