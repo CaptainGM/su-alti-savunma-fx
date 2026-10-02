@@ -1,14 +1,9 @@
 @echo off
-rem ============================================================================
-rem  Su Alti Savunma - Android APK uretir
-rem
-rem  Kullanim:  apk_uret.bat           imzali surum APK'si  -> dist\SuAltiSavunma.apk
-rem             apk_uret.bat debug     hata ayiklama APK'si -> dist\SuAltiSavunma-debug.apk
-rem
-rem  Gerekenler: Android Studio (ya da Android SDK) ve JDK 17-23 (Android Studio'nun JDK'si yeterli).
-rem  Ilk calismada imza anahtari android\anahtar\ klasorune uretilir. O klasoru YEDEKLEYIN ve kimseyle
-rem  paylasmayin: ayni anahtarla imzalanan APK'lar eskisinin ustune guncelleme olarak kurulur.
-rem ============================================================================
+rem Android APK uretir.
+rem   apk_uret.bat         imzali APK     -> dist\SuAltiSavunma.apk
+rem   apk_uret.bat debug   debug APK      -> dist\SuAltiSavunma-debug.apk
+rem Android Studio (ya da Android SDK) ve JDK 17-23 gerekiyor.
+rem Ilk calismada imza anahtari androidnahtar klasorune uretilir, o klasoru yedekleyin.
 setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul 2>&1
 cd /d "%~dp0"
