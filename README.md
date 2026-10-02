@@ -8,6 +8,20 @@ Derin Çukur haritasından bir kare: Fener Balıkları karanlığı aydınlatıy
 
 ![Oynanış](docs/oynanis.jpg)
 
+## Rehber
+
+Menüdeki **Rehber** düğmesi (oyun içinde sol üstteki **? Rehber**, sağ paneldeki **? Rehber** ve düşman/ipucu simgeleri) canlı gösterimli bir yardım ekranı açar. Gösterimler gerçek oyun kurallarıyla çalışır: küçük bir sahnede seçtiğin kule, seçtiğin seviye ve yetenekle düşmanlara ateş eder.
+
+- **Kuleler:** her kule için güçlü ve zayıf olduğu yerler, istatistikler, seviye düğmeleri ve 4 yetenek. Bir yeteneğe tıklayınca gösterimde o seviye ve o yetenekle kule çalışır (zincir şoku, gaz bulutu, kritik vuruş, ışık ağı...)
+- **Düşmanlar:** 4 temel tür, 4 özel tür ve 4 patron; kalkanın kırılması, şifacının iyileştirmesi, kalamarın gizlenmesi, mürenin kule sersemletmesi, patronun kuleyi yemesi canlı izlenir. Her sayfada o düşmana karşı iyi (✓) ve kötü (✗) kuleler gösterilir
+- **Haritalar:** 9 haritanın her biri için kuralın ayrıntılı anlatımı (sayılarıyla), kullanılabilen kuleler, patron ve özel düşmanlar; kuralın kendi gösterimi (lav, fırtına, girdap, koruyucu küreler, hazine, karanlık, sarmaşık)
+- **Kurallar:** yüksek zemin (menzil halkalarıyla), zırh ve delme, yavaşlatma eşleşmesi, alışma (hasar payı grafiğiyle), patronlar ve zorluk tablosu
+- Sağ paneldeki **dalga ipuçları** da bununla bağlantılı: sıradaki dalgadaki her düşman türü için hangi kuleler iyi (✓) ve hangileri kötü (✗) simgelerle gösterilir; simgeye tıklayınca Rehber ilgili düşman sayfasında açılır. Oyun içinden açılınca oyun duraklar, kapatınca devam eder
+
+![Rehber: kuleler](docs/rehber-kule.jpg)
+
+![Rehber: haritalar](docs/rehber-harita.jpg)
+
 ## Oynanış
 
 - **9 harita**, her birinin yolu, atmosferi ve özel kuralı farklı (aşağıdaki tabloya bak). Her haritada 15-25 kule yeri vardır; hepsi yola yetişir (yol kıvrımlarının iç tarafları dahil) ve harita boyunca dengeli dağılır. Yola yakın yerler kısa menzilli kulelere uyar, biraz daha uzak yüksek (altın halkalı) yerlerin menzili %20 artar
@@ -24,7 +38,7 @@ Derin Çukur haritasından bir kare: Fener Balıkları karanlığı aydınlatıy
   - **Şifacı Denizatı** (5. dalgadan): yakınındaki düşmanları iyileştirir. Konvoyun ortasında yürür; önce onu vurmak gerekir
   - **Elektrikli Müren** (6. dalgadan): yakınındaki kuleyi uyarı verdikten sonra 3,5 sn sersemletir. Dalganın son üçte birinde gelir, uzaktan vurulur ya da yavaşlatılır
 - Kule başına 5 seviye vardır. **3. ve 5. seviyeye çıkarken iki yetenekten birini seçersin** (6 kule x 4 seçim = 24 yetenek, aşağıda). Seviye ve güç değerleri sayı yerine çubukla gösterilir: mavi mevcut değer, sarı yükseltmeyle gelecek kazanç, turuncu ve mor dilimler seçtiğin yetenek
-- Kule fiyatları birbirine yakındır: Ahtapot 50, Deniz Anası 60, Yılan Balığı 70, Fener Balığı 80, Balon Balığı 90, Kılıç Balığı 100. Fiyat kolay ve normalde sabit kalır, yalnızca zorda aynı türden her yeni kule %6 pahalanır. Başlangıç enerjisi yuvarlak sayıdır: kolay 300, normal 250, zor 200 (Derin Çukur'da 50 fazla)
+- Kule fiyatları birbirine yakındır: Ahtapot 50, Deniz Anası 60, Yılan Balığı 70, Fener Balığı 80, Balon Balığı 90, Kılıç Balığı 100. Fiyat kolay ve normalde sabit kalır, yalnızca zorda aynı türden her yeni kule %5 pahalanır. Başlangıç enerjisi yuvarlak sayıdır: kolay 300, normal 250, zor 230 (Derin Çukur'da 50 fazla)
 - **Yarım kalan oyun kaydedilir:** haritalara dönünce ya da oyunu kapatınca durum (dalga, can, enerji, kuleler, ekrandaki düşmanlar) kaydedilir; haritaya tekrar tıklayınca *Devam et* ya da *Yeniden başla* seçilir. Her harita için bir kayıt tutulur, oyun bitince silinir
 - Kule başına hedef önceliği: **Öncelikli** (şifacı, gizlenen ve müreni önce seçer, yoksa İlk gibi davranır) / İlk / Son / En Güçlü / En Yakın
 - Dalga bonusu, sıradaki dalga önizlemesi, duraklat, **0,5x / 1x / 2x** hız
@@ -55,9 +69,14 @@ Kuleleri rastgele dizip parayı bitirmek kazandırmaz; botlarla yapılan denge t
 - **Eşleşme:** Deniz Anası ile yavaşlatılan düşman her kuleden %20 fazla hasar alır
 - **Yer seçimi:** menzil ve yer birlikte düşünülür. Altın halkalı yüksek zeminde menzil %20 artar ama bu yerler yola uzaktır
 - **Özel düşmanlar:** zehir ve gaz kalkanı deler (Deniz Anası B, Balon Balığı 5. seviye A); alan hasarı ve Fener Balığı ışığı gizlenenleri ortaya çıkarır; şifacıyı "Öncelikli" modla önce vur; müreni uzaktan (Kılıç Balığı) ya da yavaşlatarak karşıla. İlk göründüklerinde ekranda kısa bir bilgi çıkar
+- **Patron evreleri:** büyük patronun canı %70, %40 ve %15'e inince (ara patronda %60'a inince) patron maksimum canının %12'si kadar **kalkan** kazanır, 4 sn hızlanır ve sersemletilemez. Patron çubuğunda bu eşikler çizgi olarak görünür. Böylece tek bir güçlü kuleyle (ör. 3. seviye Kılıç Balığı) patron yolun başında eritilemez
 - **Patron kuleyi yer:** patron zaman zaman yakınındaki en yüksek seviyeli kuleye yönelir, önce çenesini açar (kırmızı çene ve çizgi görünür), sonra kuleyi **yutar**. Yutulan kule yok olur, para iadesi yoktur. Patron saldırı sırasında ölürse kule yenmez. Patron gelirken ekranda uyarı, can çubuğu ve kalp atışı sesi vardır
 
 ![Patron kuleyi yiyor](docs/patron-yutma.jpg)
+
+Canı bir eşikten inen patron kalkan kazanıp öfkelenir (kızıl hale, hız çizgileri, mavi kalkan çubuğu):
+
+![Patron öfkesi](docs/patron-evre.jpg)
 
 ### Zorluk
 
@@ -65,13 +84,13 @@ Zorluk seçimi harita ekranında, altında neyin değiştiği yazar:
 
 | | Kolay | Normal | Zor |
 |---|---|---|---|
-| Düşman canı | -%10 | standart | +%6 |
-| Düşman hızı | -%3 | standart | +%3 |
-| Başlangıç enerjisi | 300 | 250 | 200 |
-| Aynı türden kule fiyatı | sabit | sabit | her kule +%6 |
-| Öldürme ödülü | +%8 | standart | -%3 |
-| Dalga bonusu | +%15 | standart | -%5 |
-| Üs canı | 120 | 100 | 90 |
+| Düşman canı | -%10 | standart | +%3 |
+| Düşman hızı | -%3 | standart | +%1,5 |
+| Başlangıç enerjisi | 300 | 250 | 230 |
+| Aynı türden kule fiyatı | sabit | sabit | her kule +%5 |
+| Öldürme ödülü | +%8 | standart | -%2 |
+| Dalga bonusu | +%15 | standart | -%3 |
+| Üs canı | 120 | 100 | 95 |
 | Satış iadesi | %60 | %50 | %45 |
 
 Her haritanın düşman canı (`hpScale`) `node tools/balans.js` ile ayrı ayrı ayarlanmıştır: normal zorlukta düzenli dizilen bir oyuncu kazanır, rastgele dizen kaybeder.
@@ -106,17 +125,19 @@ Ana menüden ya da oyun içindeki **Ayarlar** düğmesinden: efekt sesi, müzik 
 
 ### Akıcılık (FPS)
 
-JavaFX `WebView`'ın kendi `requestAnimationFrame` döngüsü 60 FPS'e kilitlidir. Bu yüzden kareleri Java tarafındaki `AnimationTimer` sürer (`window.javaFrame`), hedef FPS ayarı da bunun üzerinde uygulanır. Asıl yük tuval çizimindeydi ve şunlarla azaltıldı: sprite'lar çizileceği boyuta bir kez küçültülüp önbelleğe alınır (500 piksellik resmi her karede küçültmek kare başına ~0,6 ms tutuyordu), karanlık haritanın gölgesi ve ışık huzmeleri arka plana bir kez pişirilir, boş kule yerleri küçük sprite olarak çizilir, ışık ağı tek katmandır, ray yolu arka plana pişirilir. Tuvalin iç çözünürlüğü ekrana göre 2700 piksele kadar çıkar (arka planlar 2700x1800'dür); Mercan Kanalı'nın eski 1536 piksellik arka planı da aynı boyuta büyütülüp keskinleştirildi. Sınırsız FPS'te, 12 yükseltilmiş kule ve çalışan bir dalga ile gerçek uygulamada (tam ekran) ölçülen değerler haritalara göre yaklaşık 150-350 FPS'tir; Mercan Kanalı'nın kesikli ray yolu da her karede çizilmek yerine arka plana pişirilince en yavaş harita olmaktan çıktı. Varsayılan 120 sınırı tüm haritalarda tutuyor. Ayarlardan FPS sayacını açıp kendi bilgisayarınızda görebilirsiniz.
+JavaFX `WebView`'ın kendi `requestAnimationFrame` döngüsü 60 FPS'e kilitlidir. Bu yüzden kareleri Java tarafındaki `AnimationTimer` sürer (`window.javaFrame`), hedef FPS ayarı da bunun üzerinde uygulanır. Asıl yük tuval çizimindeydi ve şunlarla azaltıldı: sprite'lar çizileceği boyuta bir kez küçültülüp önbelleğe alınır (500 piksellik resmi her karede küçültmek kare başına ~0,6 ms tutuyordu), karanlık haritanın gölgesi ve ışık huzmeleri arka plana bir kez pişirilir, boş kule yerleri küçük sprite olarak çizilir, ışık ağı tek katmandır, ray yolu arka plana pişirilir. Tuvalin iç çözünürlüğü ekrana göre 2700 piksele kadar çıkar (arka planlar 2700x1800'dür); Mercan Kanalı'nın eski 1536 piksellik arka planı da aynı boyuta büyütülüp keskinleştirildi. Sınırsız FPS'te, 12 yükseltilmiş kule ve çalışan bir dalga ile gerçek uygulamada (tam ekran) ölçülen değerler haritalara göre yaklaşık 150-350 FPS'tir; Mercan Kanalı'nın kesikli ray yolu da her karede çizilmek yerine arka plana pişirilince en yavaş harita olmaktan çıktı. Bu WebView'ın en ağır tuzağı **geniş alana yayılan tek bir çizim yolu**dur (ör. ekranın her yerine dağılmış 90 kar çizgisini tek `stroke()` ile çizmek, ışık sınırında büyük bir halka çizmek): her karede tuvalin tamamı kadar maske üretiliyor ve FPS yarıya düşüyor. Bu yüzden kar çizgileri, kıvılcımlar, duman, buz kristalleri, seviye çubukları ve hasar yazıları küçük sprite olarak (`drawImage`) basılır, buzlanma kenarlığı tuvalin gerçek piksel boyutunda bir kez çizilip 1:1 kopyalanır. Böylece en ağır sahnelerde (9. dalga, 12 yükseltilmiş kule, sürekli lav patlaması ya da kar fırtınası) bile 110-130 FPS, normal sahnelerde 150-180 FPS alınır (bu bilgisayarda; sınırsız FPS ayarıyla ölçüldü). Varsayılan 120 sınırı tüm haritalarda neredeyse hep tutuyor. Ayarlardan FPS sayacını açıp kendi bilgisayarınızda görebilirsiniz.
 
 ## Müzik
 
-Müzik de kodla üretilir (`MusicEngine.java`, ses dosyası yok): 98 BPM, La minör, 39 saniyelik kusursuz döngü, aynı akor dizisi üzerinde yedi katman. Durum oyunun gidişatına göre değişir ve katmanlar yaklaşık bir saniyede yumuşakça karışır:
+Müzik de kodla üretilir (`MusicEngine.java`, ses dosyası yok): 98 BPM, La minör, 39 saniyelik kusursuz döngü, aynı akor dizisi üzerinde dokuz katman. Durum oyunun gidişatına göre değişir ve katmanlar yaklaşık bir saniyede yumuşakça karışır:
 
 | Durum | Ne zaman | Çalan katmanlar |
 |---|---|---|
 | Menü / sakin | menü, harita seçimi, dalga arası, duraklatma | geniş ped, yumuşak çan arpeji, hafif bas |
-| Savaş | dalga sürerken | bas, bas davul, tıkırtılar; dalga ve tehlike arttıkça davul yükselir, 55%+ yoğunlukta hızlı arpej girer |
+| Savaş | dalga sürerken | pad ve çan geri çekilir; dişli bas, bas davul, tıkırtılar, eksik vuruşlara düşen parlak akor vuruşları (stab) ve sekizlik testere dişi arpej girer; dalga ve tehlike arttıkça yükselir, %55+ yoğunlukta hızlı arpej eklenir |
 | Patron | büyük patron ekranda | tam bas ve davul, hızlı onaltılık arpej (Geometry Dash tadı), alçak uğultu ve kalp atışı; patron yaklaştıkça ve can azaldıkça sertleşir |
+
+Katman düzeyleri tepe değerine göre değil, **laptop hoparlörlerinin çalabildiği 250-5000 Hz bandındaki ses gücüne** göre ayarlanır: ilk sürümde savaşın tüm ek enerjisi 150 Hz'in altındaydı (bas ve davul) ve küçük hoparlörlerde sakin müzikten ayırt edilemiyordu. Şimdi bu bantta savaş sakin müziğin yaklaşık 1,8, patron savaşın yaklaşık 1,3 katıdır.
 
 Ayarlardan Müzik (varsayılan %40) ve Efekt sesi ayrı kısılır; sessiz mod ikisini de kapatır. Dinlemek için `java -cp target/classes com.kule.savunma.MusicEngine muzik` dört durumu WAV olarak yazar.
 
@@ -144,7 +165,7 @@ flowchart LR
 - `game.js` çizimi, efektleri, sesi ve arayüzü yönetir; `core.js`'den gelen olaylara tepki verir
 - `maps.js` yeni harita eklemek için tek yerdir (yol, kule yerleri, hangi kuleler, patron türü, zorluk, ortam efektleri)
 - Java tarafı pencereyi açar, kare döngüsünü sürer, tam ekranı ve pencere boyutunu yönetir, sesi ve müziği çalar (`SoundPlayer`, `MusicEngine`), günlüğü (`LogWriter`) ve ayar/rekor dosyasını (`SaveStore`) yazar
-- JavaFX `WebView` WebGL ve Web Audio desteklemez; bu yüzden 3B (Three.js) kullanılamıyor, çizim 2B Canvas ile yapılıyor. Ayrıca `globalCompositeOperation = 'lighter'` bu WebView'da tuvali siliyor, CSS `blur()` filtresi ise büyük pencerede sayfayı tamamen beyaz bırakıyor (`RTTexture` hatası), başlangıç noktasız `ellipse` yayları da yol çiziciyi hataya düşürüyor; bunlar kullanılmıyor ve `node tools/test_core.js` ilk ikisini denetliyor. Görsel değişikliklerden sonra mutlaka gerçek pencerede `mvn javafx:run` ile de bakın, Chrome'da çalışan her şey WebView'da çalışmaz
+- JavaFX `WebView` WebGL ve Web Audio desteklemez; bu yüzden 3B (Three.js) kullanılamıyor, çizim 2B Canvas ile yapılıyor. Ayrıca `globalCompositeOperation = 'lighter'` bu WebView'da tuvali siliyor, CSS `blur()` filtresi ise büyük pencerede sayfayı tamamen beyaz bırakıyor (`RTTexture` hatası), başlangıç noktasız `ellipse` yayları da yol çiziciyi hataya düşürüyor; bunlar kullanılmıyor ve `node tools/test_core.js` ilk ikisini denetliyor. Büyük alana yayılan tek yollar da yukarıda anlatılan nedenle kaçınılır. Görsel değişikliklerden sonra mutlaka gerçek pencerede `mvn javafx:run` ile de bakın, Chrome'da çalışan her şey WebView'da çalışmaz
 
 ## Ses
 
@@ -196,6 +217,8 @@ node tools/test_core.js              # oyun çekirdeği denetimleri
 node tools/balans.js                 # botlarla denge simülasyonu (tüm haritalar)
 node tools/balans.js cukur hard      # tek harita ve zorluk
 node tools/balans.js "" all          # üç zorluk birden
+node tools/zorluk_testi.js           # zorluk ve strateji ölçütlerini denetler (tüm haritalar, birkaç dakika)
+node tools/zorluk_testi.js hizli     # üç haritada hızlı denetim (CI)
 BOTS=rastgele,karisik SEEDS=11,23,37,41,59 node tools/balans.js yosun   # bot ve tohum seçimi
 python tools/mapgen/build.py         # harita arka planlarını ve önizlemelerini yeniden üretir
 python tools/mapgen/export_js.py --write   # yolları (ve ilk kule yerlerini) maps.js'e yazar
@@ -205,7 +228,9 @@ python tools/sprites/build.py        # kule, mermi, patron ve özel düşman spr
 python tools/sprites/logo.py         # logo ve uygulama simgesi
 ```
 
-Denge botları: `spam` her yere tek tür dizer, `rastgele` türü, yeri ve yükseltmeyi rastgele seçip parayı bitirir, `karisik` türleri sırayla kullanıp en iyi yerlere dizer, `akilli` bunu sıradaki dalganın içeriğine göre uyarlar. Amaç `spam` ve `rastgele` normal zorlukta kaybederken `karisik`ın kazanmasıdır; yeni bir harita ya da kural eklerken `hpScale` buna göre ayarlanır.
+**Zorluk denetimi** (`tools/zorluk_testi.js`): botlar her haritayı normal, kolay ve zor oynar; ölçütler tutmazsa çıkış kodu 1 olur. Ölçütler: düzenli oynayan haritayı kazanır, rastgele dizen ve tek türe yığılan kaybeder; ara patron en az yolun %40'ında, son patron en az %55'inde ölür (keskin nişancıya yatırım yapan oyuncuya karşı ara patron en az %30); kolayda ara patron en az %35 yol alır; zorda 9 haritanın en az 5'inde galibiyet mümkündür. Her haritanın patron canı `bossScale` ve `miniHp` ile ayarlanır (`maps.js`). Ayrıca `test_core.js` içinde tek bir 3. seviye Kılıç Balığı'nın ara patronu yolun başında öldürememesi sınanır.
+
+Denge botları: `spam` her yere tek tür dizer, `rastgele` türü, yeri ve yükseltmeyi rastgele seçip parayı bitirir, `keskin` ilk parayı keskin nişancıya (Kılıç Balığı) yatırıp 5. seviyeye çıkarır, `karisik` türleri sırayla kullanıp en iyi yerlere dizer, `akilli` bunu sıradaki dalganın içeriğine göre uyarlar. Amaç `spam` ve `rastgele` normal zorlukta kaybederken `karisik`ın kazanmasıdır; yeni bir harita ya da kural eklerken `hpScale` buna göre ayarlanır.
 
 `spots.py` her yeri üç kurala göre denetler: yolun eksenine en az 80 piksel uzakta olmalı, normal yer en çok 185, yüksek zemin en çok 235 piksel uzakta olabilir ve en kısa menzilli kuleyle (200 piksel) yolun en az 150 pikselini kapsamalı. Kurallara uyan elle yerleştirilmiş yerleri korur, uymayanları siler, yola yakın bölgelerde ~170 pikselden büyük boşluk kalmayacak biçimde viraj içleri gibi yolu çok kapsayan noktalara yeni yerler ekler ve arka planın en karmaşık bölgelerinden (iskelet, kristal öbeği) kaçınır. `export_js.py` kule yerlerini de yeniden yazdığı için sırayla çalıştırılmalıdır: önce `export_js.py --write`, sonra `spots.py --write`.
 
