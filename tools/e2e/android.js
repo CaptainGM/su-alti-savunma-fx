@@ -9,7 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { chromium } = require('playwright');
+const cdp = require('./cdp.js');
 
 const PAKET = 'com.kule.savunma.mobil';
 const CIKTI = path.join(__dirname, 'ciktilar');
@@ -36,21 +36,22 @@ function onPlandaMi() { return adb('shell', 'dumpsys', 'activity', 'activities')
 async function baglan() {
     for (let i = 0; i < 120 && !pid(); i++) await bekle(500);
     ok(pid(), 'uygulama başlamadı');
-    let browser;
+    let c = null;
     let sonHata = '';
     // soğuk açılışta (özellikle CI emülatöründe) WebView ve sayfa geç hazır olabilir: 2 dakikaya kadar dener
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 80 && !c; i++) {
         try {
             adb('forward', '--remove-all');
             adb('forward', 'tcp:9222', 'localabstract:webview_devtools_remote_' + pid());
-            browser = await chromium.connectOverCDP('http://localhost:9222', { timeout: 5000 });
-            if (browser.contexts()[0] && browser.contexts()[0].pages().length) break;
-            await browser.close();
-            browser = null;
-        } catch (e) { sonHata = String(e.message).split(String.fromCharCode(10))[0]; browser = null; }
-        await bekle(1500);
+            c = await cdp.baglan(9222);
+            await c.page.waitForFunction(() => typeof Platform !== 'undefined' && typeof Settings !== 'undefined', null, { timeout: 8000 });
+        } catch (e) {
+            sonHata = String(e.message).split(String.fromCharCode(10))[0];
+            if (c) { await c.browser.close(); c = null; }
+            await bekle(1500);
+        }
     }
-    if (!browser) {
+    if (!c) {
         // tanı bilgisi: neden bağlanılamadı
         try {
             const satirlar = adb('logcat', '-d', '-t', '300').split(String.fromCharCode(10)).filter(l => /chromium|AndroidRuntime|FATAL|kule\.savunma|WebView|died/i.test(l)).slice(-25);
@@ -59,12 +60,11 @@ async function baglan() {
         } catch (e) { /* yoksay */ }
         try { goruntu('baglanti_hatasi'); } catch (e) { /* yoksay */ }
     }
-    ok(browser, 'WebView hata ayıklama bağlantısı kurulamadı: ' + sonHata);
-    const page = browser.contexts()[0].pages().find(p => /appassets\.androidplatform\.net/.test(p.url())) || browser.contexts()[0].pages()[0];
+    ok(c, 'WebView hata ayıklama bağlantısı kurulamadı: ' + sonHata);
     const hatalar = [];
-    page.on('pageerror', e => hatalar.push('pageerror: ' + e.message));
-    page.on('console', m => { if (m.type() === 'error') hatalar.push('console: ' + m.text()); });
-    return { browser, page, hatalar };
+    c.page.on('pageerror', e => hatalar.push('pageerror: ' + e.message));
+    c.page.on('console', m => { if (m.type() === 'error') hatalar.push('console: ' + m.text()); });
+    return { browser: c.browser, page: c.page, hatalar };
 }
 
 async function uygulamayiBaslat() {
