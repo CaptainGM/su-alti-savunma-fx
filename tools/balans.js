@@ -16,6 +16,17 @@ const web = path.join(__dirname, '..', 'src', 'main', 'resources', 'web', 'js');
 const Core = require(process.env.CORE || path.join(web, 'core.js'));
 const MAPS = require(path.join(web, 'maps.js'));
 
+// PERKSEL=A | B | R: botların yetenek seçimleri (varsayılan A). R sabit düzende karışık seçer.
+if (process.env.PERKSEL) {
+    const orig = Core.World.prototype.upgradeTower;
+    let n = 0;
+    Core.World.prototype.upgradeTower = function (t, c) {
+        const sel = process.env.PERKSEL;
+        const pick = sel === 'B' ? 1 : sel === 'A' ? 0 : ((n++ * 7 + 3) % 2);
+        return orig.call(this, t, c == null ? pick : c);
+    };
+}
+
 // bir yerin yola ne kadar uzunluk boyunca menzil verdiği
 function coverage(world, spot, range) {
     let covered = 0;

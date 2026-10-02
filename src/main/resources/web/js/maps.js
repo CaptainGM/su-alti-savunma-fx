@@ -25,7 +25,7 @@
             name: 'Mercan Kanalı',
             desc: 'Sualtı · Klasik S dönüşü',
             stars: 1,
-            hpScale: 1.35,
+            hpScale: 1.0,
             roadHalf: 56,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
             speedScale: 1,
             startMoney: 250,
@@ -105,7 +105,7 @@
             name: 'Mangrov Deltası',
             desc: 'Bataklık · Üçe ayrılan nehir',
             stars: 2,
-            hpScale: 0.9,
+            hpScale: 0.97,
             roadHalf: 56,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
             speedScale: 1.0,
             startMoney: 250,
@@ -155,7 +155,7 @@
             name: 'Batık Gemi Mezarlığı',
             desc: 'Sualtı · İki girişli tahta iskele',
             stars: 3,
-            hpScale: 0.97,
+            hpScale: 0.93,
             roadHalf: 46,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
             speedScale: 1,
             startMoney: 250,
@@ -199,7 +199,7 @@
             name: 'Atlantis Harabeleri',
             desc: 'Sualtı · Mermer basamaklar',
             stars: 3,
-            hpScale: 2.45,
+            hpScale: 2.25,
             roadHalf: 42,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
             speedScale: 1.0,
             startMoney: 250,
@@ -240,7 +240,7 @@
             name: 'Buz Koyu',
             desc: 'Kutup · Çarpı biçimli kanal',
             stars: 3,
-            hpScale: 0.74,
+            hpScale: 0.62,
             roadHalf: 60,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
             speedScale: 1.0,
             startMoney: 250,
@@ -328,7 +328,7 @@
             name: 'Volkanik Bacalar',
             desc: 'Yanardağ · Üç sütunlu zigzag',
             stars: 4,
-            hpScale: 1.8,
+            hpScale: 1.7,
             roadHalf: 46,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
             speedScale: 1.0,
             startMoney: 250,
@@ -371,7 +371,7 @@
             name: 'Derin Çukur',
             desc: 'Sualtı · Karanlık kaya adası',
             stars: 5,
-            hpScale: 0.93,
+            hpScale: 1.05,
             roadHalf: 46,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
             speedScale: 1,
             startMoney: 300,

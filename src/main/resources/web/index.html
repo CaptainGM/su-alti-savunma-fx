@@ -30,16 +30,27 @@
 
     <div id="towerModal" class="hidden">
         <h3 id="towerModalName" style="color:#00ff88; font-size:1.6em; margin-bottom:12px;">Kule</h3>
-        <div id="towerModalStats"></div>
-        <p id="towerModalPerk" style="font-size:0.9em; color:#9ab; margin-bottom:14px;"></p>
-        <button class="btn" id="modeBtn" onclick="cycleTargetMode()"
-            style="background:#26384a; box-shadow:none; font-size:1em; padding:10px; margin-bottom:10px;">Hedef: İlk</button>
-        <div style="display:flex; gap:10px;">
-            <button class="btn" id="upgradeBtn" onclick="upgradeSelectedTower()"
-                style="background:linear-gradient(135deg, #00d4ff, #0077aa); box-shadow:0 5px 15px rgba(0, 212, 255, 0.4);">YÜKSELT</button>
-            <button class="btn" id="sellBtn" onclick="sellSelectedTower()">SAT</button>
+        <div id="towerMain">
+            <div id="towerModalStats"></div>
+            <div id="towerModalPerk"></div>
+            <button class="btn" id="modeBtn" onclick="cycleTargetMode()"
+                style="background:#26384a; box-shadow:none; font-size:1em; padding:10px; margin-bottom:10px;">Hedef: İlk</button>
+            <div style="display:flex; gap:10px;">
+                <button class="btn" id="upgradeBtn" onclick="upgradeSelectedTower()"
+                    style="background:linear-gradient(135deg, #00d4ff, #0077aa); box-shadow:0 5px 15px rgba(0, 212, 255, 0.4);">YÜKSELT</button>
+                <button class="btn" id="sellBtn" onclick="sellSelectedTower()">SAT</button>
+            </div>
+            <button class="close-btn" onclick="closeTowerModal()" style="margin-top:15px;">KAPAT</button>
         </div>
-        <button class="close-btn" onclick="closeTowerModal()" style="margin-top:15px;">KAPAT</button>
+        <div id="perkChoice" class="hidden">
+            <h4 id="perkChoiceTitle"></h4>
+            <p id="perkChoiceSub"></p>
+            <div class="perk-cards">
+                <button class="perk-card" id="perkCard0"></button>
+                <button class="perk-card" id="perkCard1"></button>
+            </div>
+            <button class="close-btn" onclick="closePerkChoice()" style="margin-top:12px;">GERİ</button>
+        </div>
     </div>
 
     <div id="resumeModal" class="hidden">
