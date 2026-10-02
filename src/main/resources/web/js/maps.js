@@ -69,7 +69,7 @@
             stars: 2,
             hpScale: 2.15,
             roadHalf: 46,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
-            bossScale: 0.55,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            bossScale: 0.5,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
             miniHp: 0.6,           // ara patronun asıl patrona oranı
             speedScale: 1,
             startMoney: 250,
@@ -212,7 +212,7 @@
             name: 'Atlantis Harabeleri',
             desc: 'Sualtı · Mermer basamaklar',
             stars: 3,
-            hpScale: 2.0,
+            hpScale: 1.85,
             roadHalf: 42,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
             bossScale: 0.5,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
             miniHp: 0.5,           // ara patronun asıl patrona oranı
@@ -259,7 +259,7 @@
             hpScale: 0.6,
             roadHalf: 60,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
             bossScale: 0.65,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
-            miniHp: 0.25,           // ara patronun asıl patrona oranı
+            miniHp: 0.3,           // ara patronun asıl patrona oranı
             speedScale: 1.0,
             startMoney: 300,
             waves: 10,
@@ -350,9 +350,9 @@
             name: 'Volkanik Bacalar',
             desc: 'Yanardağ · Üç sütunlu zigzag',
             stars: 4,
-            hpScale: 1.5,
+            hpScale: 1.45,
             roadHalf: 46,        // yolun (kum şeridi, nehir, buz kanalı) merkezden kenara uzaklığı: kule yerleri halkası yola değmesin diye
-            bossScale: 0.8,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
+            bossScale: 0.7,        // patron canı çarpanı (hpScale'den bağımsız): patronların yolun ne kadarında öldüğünü ayarlar
             miniHp: 0.5,           // ara patronun asıl patrona oranı
             speedScale: 1.0,
             startMoney: 250,

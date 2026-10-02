@@ -34,11 +34,12 @@
     const SHOCK_WIND = 0.9;
     const SHOCK_STUN = 3.5;
 
-    // Patronun kule yeme sırası: kuleye döner ve hırlar (cast) -> kuleye zıplar (leap) -> ısırır (bite) -> yola geri atlar (back).
-    // Bu sürede patron yerinde durur; çizim bu evrelerden zıplama yayını türetir.
-    const FURY_CAST = 0.85;
+    // Patronun kule yeme sırası: hedef seçilince FURY_TIME sn sonra kule yenir (algoritma hep aynıdır, patron bu sürede yürümeye
+    // devam eder). Son FURY_LEAP sn'de patron kuleye atlar; yutunca FURY_BITE sn çiğner, FURY_BACK sn'de yola geri atlar.
+    // Atlama, çiğneme ve dönüş yalnızca görüntüdür: oyun kuralı hedef seçildikten FURY_TIME sn sonra kuleyi yok etmektir.
+    const FURY_TIME = 1.4;
     const FURY_LEAP = 0.5;
-    const FURY_BITE = 0.4;
+    const FURY_BITE = 0.35;
     const FURY_BACK = 0.55;
 
     // Patron çeşitleri: her harita birini seçer (map.boss)
@@ -66,7 +67,7 @@
         jellyfish: { name: 'Deniz Anası', cost: 60, range: 200, dmg: 12, rate: 1.7, slow: 0.5, slowTime: 3, projSpeed: 480, role: 'Vurduğu düşmanı yavaşlatır, kalabalığı geciktirir.' },
         swordfish: { name: 'Kılıç Balığı', cost: 100, range: 380, dmg: 40, rate: 3.6, projSpeed: 1100, pierce: 0.3, defaultMode: 'strong', role: 'Çok uzun menzilli keskin nişancı. Patronlara %50 fazla hasar verir.' },
         angler: { name: 'Fener Balığı', cost: 80, range: 200, dmg: 17, rate: 1.2, projSpeed: 620, pierce: 0.2, role: 'Dengeli bir kule. Karanlık haritada çevresini aydınlatır, ışığındaki kuleler menzil kaybetmez.' },
-        puffer: { name: 'Balon Balığı', cost: 90, range: 270, dmg: 38, rate: 3.0, aoe: 78, lob: true, groundOnly: true, projSpeed: 300, role: 'Havan: düşmanın gideceği yere atar, kümelere alan hasarı verir. Havadakini vuramaz.' },
+        puffer: { name: 'Balon Balığı', cost: 90, range: 270, dmg: 33, rate: 3.0, aoe: 78, lob: true, groundOnly: true, projSpeed: 300, role: 'Havan: düşmanın gideceği yere atar, kümelere alan hasarı verir. Havadakini vuramaz.' },
     };
 
     // ---------------------------------------------------------------- yetenek ağacı
@@ -422,9 +423,12 @@
             if (this.fury && this.mini) this.fury.casts = 1;      // ara patron yalnızca bir kez saldırır
             this.furyCasts = 0;
             this.furyTimer = this.fury ? this.fury.first : 0;
-            this.furyPhase = 'idle';       // idle | cast | leap | bite | back | done
+            this.furyPhase = 'idle';       // idle | cast | done
             this.furyT = 0;
             this.furyDur = 0;
+            this.furyAfter = 0;            // yuttuktan sonra çiğneme ve yola dönüş animasyonunun kalan süresi (yalnızca görüntü)
+            this.furyEaten = null;
+            this.leaped = false;
             this.furyTargets = [];
             this.furyTower = null;
             this.pathMul = world.pathSpeedFn(lane);   // haritaya özel yavaşlatma/hızlandırma bölgeleri
@@ -447,7 +451,6 @@
                 this.stunTime -= dt;
                 return false;
             }
-            if (this.furyPhase === 'cast' || this.furyPhase === 'leap' || this.furyPhase === 'bite' || this.furyPhase === 'back') return false;   // kuleyi yerken yürümez
             this.zoneMul = this.pathMul ? this.pathMul(this.traveled / this.path.length) : 1;
             this.traveled += this.speed * this.zoneMul * this.auraMul * (this.hidden ? 1.25 : 1) * (this.rageT > 0 ? BOSS_RAGE_SPEED : 1) * dt;
             if (this.traveled >= this.path.length) return true;
@@ -797,10 +800,11 @@
             }
         }
 
-        // -- patron saldırısı: kuleye döner ve hırlar, kuleye zıplar, ısırıp yutar (kule yok olur), yola geri atlar.
-        // Patron herhangi bir evrede ölürse ya da kule başka bir şeyle yok olursa kule kurtulur / saldırı iptal olur.
+        // -- patron saldırısı: hedef seçilir, FURY_TIME sn sonra kule yutulur (kule yok olur). Patron bu sürede yürür.
+        // Patron yutmadan ölürse ya da kule başka bir şeyle yok olursa kule kurtulur / saldırı boşa gider.
         tickBoss(e, dt) {
             const f = e.fury;
+            if (e.furyAfter > 0) e.furyAfter -= dt;
             if (e.furyPhase === 'done') return;
             if (e.furyPhase === 'idle') {
                 e.furyTimer -= dt;
@@ -813,39 +817,29 @@
                 e.furyTargets = targets;
                 e.furyTower = targets[0];
                 e.furyPhase = 'cast';
-                e.furyDur = e.furyT = FURY_CAST;
-                this.emit('bossFury', { enemy: e, towers: targets, time: FURY_CAST });
+                e.furyDur = e.furyT = FURY_TIME;
+                e.leaped = false;
+                this.emit('bossFury', { enemy: e, towers: targets, time: FURY_TIME });
                 return;
             }
             e.furyT -= dt;
-            if (e.furyT > 0) return;
-            const tower = e.furyTower;
-            const alive = !!tower && this.towers.includes(tower);
-            const next = (phase, dur) => { e.furyPhase = phase; e.furyDur = e.furyT = dur; };
-            switch (e.furyPhase) {
-                case 'cast':
-                    if (!alive) { this.endFury(e); break; }
-                    next('leap', FURY_LEAP);
-                    this.emit('bossLeap', { enemy: e, tower, time: FURY_LEAP });
-                    break;
-                case 'leap':
-                    if (alive) this.destroyTower(tower, 'patron', e);
-                    next('bite', FURY_BITE);
-                    break;
-                case 'bite':
-                    next('back', FURY_BACK);
-                    break;
-                default:
-                    this.endFury(e);
+            if (!e.leaped && e.furyT <= FURY_LEAP && this.towers.includes(e.furyTower)) {
+                e.leaped = true;
+                this.emit('bossLeap', { enemy: e, tower: e.furyTower, time: FURY_LEAP });
             }
-        }
-
-        endFury(e) {
+            if (e.furyT > 0) return;
+            for (const t of e.furyTargets) {
+                if (this.towers.includes(t)) {
+                    this.destroyTower(t, 'patron', e);
+                    e.furyEaten = t;
+                    e.furyAfter = FURY_BITE + FURY_BACK;
+                }
+            }
             e.furyTargets = [];
             e.furyTower = null;
             e.furyCasts++;
-            e.furyPhase = e.furyCasts >= e.fury.casts ? 'done' : 'idle';
-            e.furyTimer = e.fury.interval;
+            e.furyPhase = e.furyCasts >= f.casts ? 'done' : 'idle';
+            e.furyTimer = f.interval;
         }
 
         // -- lav patlaması: önce uyarı çemberi, sonra düşmanları yakar, yakındaki kuleleri susturur
@@ -1704,7 +1698,7 @@
         World, Enemy, Tower, Projectile,
         buildPath, generateSmoothPath, mapPaths, buildWavePlan, summarizePlan, totalWavesOf, waveHpScale, mulberry32,
         BOSS_PHASES, MINI_PHASES, BOSS_SHIELD, MINI_HP_MUL, pointAt, describeDifficulty, PERKS, perkOptions, findPerk, ENEMY_INTRO, SPECIAL_ENEMIES, HEAL_RANGE, SHOCK_RANGE, SHOCK_STUN,
-        FURY_CAST, FURY_LEAP, FURY_BITE, FURY_BACK,
+        FURY_TIME, FURY_LEAP, FURY_BITE, FURY_BACK,
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = Core;
