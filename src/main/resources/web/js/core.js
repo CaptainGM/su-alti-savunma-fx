@@ -19,6 +19,14 @@
     // özel düşmanların ilk görüneceği dalga (haritanın enemyPool'unda varsa)
     const ENEMY_INTRO = { shield: 3, stealth: 4, healer: 5, shocker: 6 };
     const SPECIAL_ENEMIES = Object.keys(ENEMY_INTRO);
+    // Patron evreleri: can bu oranların altına inince patron öfkelenir: kalkan kazanır, kısa süre hızlanır ve bir süre
+    // sersemletilemez. Böylece güçlü tek bir kuleyle patronu yolun başında eritmek mümkün olmaz.
+    const MINI_HP_MUL = 0.5;        // ara patronun asıl patrona göre can oranı
+    const BOSS_PHASES = [0.70, 0.40, 0.15];
+    const MINI_PHASES = [0.60];
+    const BOSS_SHIELD = 0.12;       // her evrede maksimum canın %12'si kadar kalkan
+    const BOSS_RAGE_TIME = 4.0;
+    const BOSS_RAGE_SPEED = 1.35;
     const HEAL_RANGE = 140;
     const HEAL_EVERY = 2.5;
     const SHOCK_RANGE = 175;
@@ -138,12 +146,12 @@
     const TARGET_MODES = ['first', 'last', 'strong', 'close', 'priority'];
 
     // Zorluk: oyunu gerçekten değiştiren ayarlar (arayüzde de gösterilir).
-    // startBonus: haritanın başlangıç enerjisine eklenir (kolay +50, zor -30).
+    // startBonus: haritanın başlangıç enerjisine eklenir (kolay +50, zor -20).
     // costStep: aynı türden her yeni kulenin fiyat artışı (yalnızca zorda var; yığılmayı alışma da cezalandırır).
     const DIFFICULTY = {
         easy: { label: 'Kolay', hp: 0.9, speed: 0.97, startBonus: 50, reward: 1.08, bonus: 1.15, refund: 0.6, health: 120, costStep: 0 },
         normal: { label: 'Normal', hp: 1.0, speed: 1.0, startBonus: 0, reward: 1.0, bonus: 1.0, refund: 0.5, health: 100, costStep: 0 },
-        hard: { label: 'Zor', hp: 1.04, speed: 1.02, startBonus: -30, reward: 0.98, bonus: 0.96, refund: 0.45, health: 95, costStep: 0.05 },
+        hard: { label: 'Zor', hp: 1.03, speed: 1.015, startBonus: -20, reward: 0.98, bonus: 0.97, refund: 0.45, health: 95, costStep: 0.05 },
     };
 
     function describeDifficulty(d) {
@@ -306,7 +314,7 @@
             if (m === 0) {
                 items.push({ type: 'boss', kind, gap: 3, hpMul: 1 });
             } else if (total >= 8 && m === Math.floor(total / 2)) {
-                items.push({ type: 'boss', kind, gap: 3, hpMul: 0.35, mini: true });
+                items.push({ type: 'boss', kind, gap: 3, hpMul: map.miniHp || MINI_HP_MUL, mini: true });
             }
         }
 
@@ -363,11 +371,14 @@
             // hpScale ilk dalgada 1'dir, son dalgada haritanın değerine ulaşır: erken oyun herkes için yumuşak kalır
             const base = totalWavesOf(world.map);
             const mapRamp = 1 + ((world.map.hpScale || 1) - 1) * Math.min(1, (waveNo - 1) / Math.max(1, base - 1));
-            this.maxHealth = Math.round(st.hp * (bk ? bk.hp : 1) * hpMul * waveHpScale(waveNo) * diff.hp * mapRamp);
+            this.maxHealth = Math.round(st.hp * (bk ? bk.hp : 1) * hpMul * waveHpScale(waveNo) * diff.hp * mapRamp * (type === 'boss' ? (world.map.bossScale || 1) : 1));
             this.health = this.maxHealth;
             // kalkan: önce kalkan erir (zırh hesabı sonrası hasar); zehir ve gaz kalkanı deler
             this.shieldMax = st.shield ? Math.round(this.maxHealth * st.shield) : 0;
             this.shield = this.shieldMax;
+            this.phases = type === 'boss' ? (this.mini ? MINI_PHASES : BOSS_PHASES).slice() : [];   // henüz tetiklenmemiş can eşikleri
+            this.rageT = 0;                     // patron öfkesi: hızlı ve sersemletilemez
+            this.phasePending = 0;              // dünyanın yayınlayacağı evre olayları
             this.healT = HEAL_EVERY * 0.6;      // şifacı: bir sonraki iyileştirmeye kalan süre
             this.hidden = false;                // gizlenen: kuleler hedef alamaz (ışıkta ya da alan hasarıyla ortaya çıkar)
             this.hideT = 3.2 + (id % 5) * 0.35; // gizlenen: durum değişimine kalan süre
@@ -422,12 +433,13 @@
                     this.isSlowed = false;
                 }
             }
+            if (this.rageT > 0) { this.rageT -= dt; this.stunTime = 0; }
             if (this.stunTime > 0) {
                 this.stunTime -= dt;
                 return false;
             }
             this.zoneMul = this.pathMul ? this.pathMul(this.traveled / this.path.length) : 1;
-            this.traveled += this.speed * this.zoneMul * this.auraMul * (this.hidden ? 1.25 : 1) * dt;
+            this.traveled += this.speed * this.zoneMul * this.auraMul * (this.hidden ? 1.25 : 1) * (this.rageT > 0 ? BOSS_RAGE_SPEED : 1) * dt;
             if (this.traveled >= this.path.length) return true;
 
             const d = this.path.dist;
@@ -465,7 +477,21 @@
             this.health -= toHealth;
             const dead = this.health <= 0;
             if (dead) this.health = 0;
+            this.crossPhases();
             return { dead, dmg: actual, shieldBroke: broke };
+        }
+
+        // can eşiklerini aşan patron kalkan kazanır ve öfkelenir
+        crossPhases() {
+            if (!this.phases.length || this.health <= 0) return;
+            while (this.phases.length && this.health <= this.maxHealth * this.phases[0]) {
+                this.phases.shift();
+                this.shieldMax = Math.round(this.maxHealth * BOSS_SHIELD);
+                this.shield = this.shieldMax;
+                this.rageT = BOSS_RAGE_TIME;
+                this.stunTime = 0;
+                this.phasePending++;
+            }
         }
 
         slowDown(factor, time) {
@@ -736,6 +762,8 @@
             if (e.type === 'boss') amount = Math.min(amount, e.maxHealth * 0.05);
             e.health -= amount;
             e.lastHit = this.time;
+            e.crossPhases();
+            this.flushPhase(e);
             if (e.health <= 0) {
                 e.health = 0;
                 this.money += e.reward;
@@ -1046,7 +1074,7 @@
                     id: e.id, type: e.type, lane: e.lane, kind: e.kind, mini: e.mini, waveNo: e.waveNo,
                     health: r(e.health), maxHealth: e.maxHealth, traveled: r(e.traveled), speed: r(e.speed), slowTime: r(Math.max(0, e.slowTime)),
                     stunTime: r(Math.max(0, e.stunTime)), didSplit: e.didSplit, furyCasts: e.furyCasts, furyTimer: r(e.furyTimer),
-                    shield: r(e.shield), hidden: e.hidden, hideT: r(e.hideT), healT: r(e.healT), shockT: r(e.shockT),
+                    shield: r(e.shield), shieldMax: e.shieldMax, phases: e.phases.slice(), rageT: r(Math.max(0, e.rageT)), hidden: e.hidden, hideT: r(e.hideT), healT: r(e.healT), shockT: r(e.shockT),
                 })),
                 queue: this.queue.map(it => Object.assign({}, it)),
                 spawnTimer: r(this.spawnTimer),
@@ -1103,6 +1131,7 @@
                 e.isSlowed = se.slowTime > 0;
                 e.stunTime = se.stunTime;
                 e.didSplit = se.didSplit;
+                if (se.phases) { e.phases = se.phases.slice(); e.shieldMax = se.shieldMax || e.shieldMax; e.rageT = se.rageT || 0; }
                 if (se.shield != null) { e.shield = se.shield; e.hidden = !!se.hidden; e.hideT = se.hideT; e.healT = se.healT; e.shockT = se.shockT; }
                 e.furyCasts = se.furyCasts;
                 e.furyTimer = Math.max(se.furyTimer, 1.5);
@@ -1394,12 +1423,28 @@
             return res;
         }
 
+        // patronun evre geçişini duyurur (hasar alındıktan sonra çağrılır)
+        flushPhase(e) {
+            while (e.phasePending > 0) {
+                e.phasePending--;
+                this.emit('bossPhase', { enemy: e, phase: e.phases.length, shield: e.shieldMax });
+            }
+        }
+
         // zamanla hasar (zehir, yanık, gaz): zırh saymaz, alışma uygulanır, öldürürse ödül verir
         dotDamage(e, amount, type) {
             if (e.health <= 0 || amount <= 0) return;
             const mul = 1 - (this.adapt[type] || 0);
-            const dmg = amount * mul;
+            let dmg = amount * mul;
+            if (e.shield > 0 && e.special !== 'shield') {
+                // evre kalkanı zehri de emer (kalkanlı kaplumbağa hariç: onda zehir kalkanı deler)
+                const ab = Math.min(e.shield, dmg);
+                e.shield -= ab;
+                dmg -= ab;
+            }
             e.health -= dmg;
+            e.crossPhases();
+            this.flushPhase(e);
             this.dealt[type] = (this.dealt[type] || 0) + dmg / mul;
             if (e.health <= 0) {
                 e.health = 0;
@@ -1458,33 +1503,35 @@
             if (JSON.stringify(next) !== before) this.emit('adapt', { adapt: next });
         }
 
-        // sıradaki dalgaya karşı hangi kuleler iyi? (arayüzdeki ipuçları)
-        waveAdvice(n) {
+        // Sıradaki dalgaya karşı hangi kuleler iyi? Yapısal ipuçları: haritada olmayan kuleler önerilmez.
+        // Her öğe: { enemy, good: [kule türleri], bad: [kule türleri], note }
+        waveAdviceItems(n) {
             if (n > this.totalWaves && !this.endless) return [];
-            const counts = summarizePlan(this.planFor(n));
+            const plan = this.planFor(n);
+            const counts = summarizePlan(plan);
             const has = t => this.available.includes(t);
-            const name = t => (this.map.towerNames && this.map.towerNames[t]) || TOWER_TYPES[t].name;
-            const list = types => types.filter(has).map(name).join(', ');
-            const out = [];
-            if (counts.armored >= 2) {
-                const good = list(['eel', 'swordfish', 'angler']);
-                const bad = has('octopus') ? ` ${name('octopus')} yarı hasar verir.` : '';
-                out.push(`Zırhlı: ${good} zırhı deler.${bad}`);
-            }
-            if (counts.flying >= 2) {
-                const no = list(['eel', 'puffer']);
-                out.push(`Uçan: ${no ? no + ' vuramaz; ' : ''}${list(['octopus', 'angler', 'jellyfish', 'swordfish'])} kullan.`);
-            }
-            if (counts.swarm >= 5) out.push(`Sürü: ${list(['puffer', 'eel', 'jellyfish'])} alan hasarıyla temizler.`);
-            if (counts.shield) out.push(`Kalkanlı: zehir ve gaz kalkanı deler${has('swordfish') ? `; ${name('swordfish')} kalkanı çabuk kırar` : ''}. Kalkan varken yavaşlatma zayıf.`);
-            if (counts.healer) out.push('Şifacı: konvoyu iyileştirir, önce onu vur (hedef modu "Öncelikli").');
-            if (counts.stealth) out.push(`Gizlenen: kuleler görmez; ${list(['angler'])} ışığı ya da ${list(['eel', 'puffer'])} alan hasarı gerekir.`);
-            if (counts.shocker) out.push(`Müren: yakınındaki kuleyi ${SHOCK_STUN} sn sersemletir; uzaktan vur${has('swordfish') ? ` (${name('swordfish')})` : ''} ya da yavaşlat.`);
+            const pick = list => list.filter(has);
+            const items = [];
+            const add = (enemy, good, bad, note) => items.push({ enemy, good: pick(good), bad: pick(bad), note });
+            if (counts.armored >= 2) add('armored', ['eel', 'swordfish', 'angler'], ['octopus'], 'Zırhı delen kuleler gerekir; Ahtapot yarı hasar verir.');
+            if (counts.flying >= 2) add('flying', ['octopus', 'angler', 'jellyfish', 'swordfish'], ['eel', 'puffer'], 'Yılan ve Balon Balığı havadakini vuramaz.');
+            if (counts.swarm >= 5) add('swarm', ['puffer', 'eel', 'jellyfish'], [], 'Alan hasarı kalabalığı eritir.');
+            if (counts.shield) add('shield', ['swordfish', 'puffer', 'jellyfish'], [], 'Zehir ve gaz kalkanı deler; kalkan varken yavaşlatma zayıf.');
+            if (counts.healer) add('healer', ['swordfish', 'octopus'], [], 'Konvoyu iyileştirir: önce onu vur (hedef modu: Öncelikli).');
+            if (counts.stealth) add('stealth', ['angler', 'eel', 'puffer'], ['octopus', 'swordfish'], 'Gizlenince kuleler göremez; ışık ya da alan hasarı ortaya çıkarır.');
+            if (counts.shocker) add('shocker', ['swordfish', 'jellyfish'], [], 'Yakınındaki kuleyi sersemletir: uzaktan vur ya da yavaşlat.');
             if (counts.boss) {
-                const fury = BOSS_KINDS[(this.planFor(n).find(i => i.type === 'boss') || {}).kind || 'shark'];
-                out.push(`Patron: en yüksek seviyeli kuleni yer.${has('swordfish') ? ` ${name('swordfish')} +%50 vurur.` : ''}${fury && fury.flying ? ' Havadan gelir.' : ''}`);
+                const boss = plan.find(i => i.type === 'boss') || {};
+                add('boss', ['swordfish'], [], boss.mini ? 'Ara patron: kalkan kazanıp öfkelenir, kule yer.' : 'Patron: kalkan kazanıp öfkelenir, en yüksek seviyeli kuleyi yer.');
             }
-            return out;
+            return items;
+        }
+
+        // Metin hâli (günlük ve testler için)
+        waveAdvice(n) {
+            const name = t => (this.map.towerNames && this.map.towerNames[t]) || TOWER_TYPES[t].name;
+            const labels = { armored: 'Zırhlı', flying: 'Uçan', swarm: 'Sürü', shield: 'Kalkanlı', healer: 'Şifacı', stealth: 'Gizlenen', shocker: 'Müren', boss: 'Patron' };
+            return this.waveAdviceItems(n).map(it => `${labels[it.enemy]}: ${it.good.length ? it.good.map(name).join(', ') + ' iyi' : ''}${it.bad.length ? '; ' + it.bad.map(name).join(', ') + ' kötü' : ''}. ${it.note}`);
         }
 
         // özel düşmanların yetenekleri: şifacı iyileştirir, kalamar gizlenir, müren kule sersemletir
@@ -1549,6 +1596,7 @@
 
         afterHit(enemy, tower, res, slowed) {
             enemy.lastHit = this.time;
+            this.flushPhase(enemy);
             if (enemy.hidden) enemy.revealT = Math.max(enemy.revealT, 1.2);      // alan hasarı vuruldu: kısa süre görünür
             if (res.shieldBroke) this.emit('shieldBreak', { enemy });
             this.emit('hit', { enemy, tower, dmg: res.dmg, slowed, dead: res.dead });
@@ -1606,7 +1654,7 @@
         ENEMY_TYPES, BOSS_KINDS, ENEMY_NAMES, TOWER_TYPES, DIFFICULTY, MAX_LEVEL, BUILD_SPOT_RADIUS, HIGH_GROUND_RANGE, TARGET_MODES,
         World, Enemy, Tower, Projectile,
         buildPath, generateSmoothPath, mapPaths, buildWavePlan, summarizePlan, totalWavesOf, waveHpScale, mulberry32,
-        pointAt, describeDifficulty, PERKS, perkOptions, findPerk, ENEMY_INTRO, SPECIAL_ENEMIES, HEAL_RANGE, SHOCK_RANGE, SHOCK_STUN,
+        BOSS_PHASES, MINI_PHASES, BOSS_SHIELD, MINI_HP_MUL, pointAt, describeDifficulty, PERKS, perkOptions, findPerk, ENEMY_INTRO, SPECIAL_ENEMIES, HEAL_RANGE, SHOCK_RANGE, SHOCK_STUN,
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = Core;
