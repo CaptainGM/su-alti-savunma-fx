@@ -20,6 +20,12 @@ import javax.sound.sampled.AudioSystem;
  *   hat/snare tıkırtılı vurmalılar                          (savaş, patron)
  *   lead     onaltılık hızlı arpej (Geometry Dash tadı)      (patron)
  *   drone    gerilimli alçak uğultu ve kalp atışı           (patron)
+ *   stab     eksik vuruşlara düşen parlak akor vuruşları     (savaş, patron)
+ *   drive    sekizlik testere dişi arpej                     (savaş, patron)
+ *
+ * Katman düzeyleri tepe değerine göre değil, küçük (laptop) hoparlörlerin çalabildiği 250-5000 Hz bandındaki
+ * ses gücüne göre ayarlanır. Bas ve davul alçak olduğu için tek başına küçük hoparlörde fark yaratmaz; savaşın
+ * "farklı" duyulması stab ve drive katmanlarının orta-tiz aralığından gelir.
  *
  * {@link #setState(String, double)} ile durum ("menu", "calm", "battle", "boss", "off") ve yoğunluk (0..1) verilir;
  * katmanların sesleri yaklaşık bir saniyede yumuşakça geçiş yapar. SoundPlayer her 10 ms'de {@link #mixInto} çağırır.
@@ -32,9 +38,10 @@ public final class MusicEngine {
     private static final int BARS = 16;
     private static final int N = BAR * BARS;
 
-    static final int PAD = 0, PLUCK = 1, BASS = 2, KICK = 3, HATS = 4, LEAD = 5, DRONE = 6, LAYERS = 7;
-    /** Her katmanın en yüksek örnek değeri (tepe normalizasyonu): hepsi birden açıkken bile taşmaz. */
-    private static final double[] PEAK = {0.17, 0.20, 0.26, 0.34, 0.15, 0.14, 0.15};
+    static final int PAD = 0, PLUCK = 1, BASS = 2, KICK = 3, HATS = 4, LEAD = 5, DRONE = 6, STAB = 7, DRIVE = 8, LAYERS = 9;
+    /** Her katmanın 250-5000 Hz bandındaki hedef ses gücü (RMS) ve izin verilen en yüksek örnek değeri. */
+    private static final double[] BAND_RMS = {0.026, 0.034, 0.022, 0.040, 0.036, 0.034, 0.022, 0.070, 0.062};
+    private static final double[] MAX_PEAK = {0.30, 0.34, 0.36, 0.50, 0.34, 0.32, 0.26, 0.46, 0.42};
 
     private static final int[] ROOT = {45, 41, 48, 43, 45, 41, 38, 40};
     private static final int[][] PAD_NOTES = {
@@ -78,16 +85,18 @@ public final class MusicEngine {
         float[] t;
         switch (state) {
             case "menu":
-                t = new float[] {0.90f, 0.70f, 0f, 0f, 0f, 0f, 0f};
+                t = new float[] {0.90f, 0.70f, 0f, 0f, 0f, 0f, 0f, 0f, 0f};
                 break;
             case "calm":
-                t = new float[] {1.00f, 0.60f, 0.20f, 0f, 0f, 0f, 0f};
+                t = new float[] {1.00f, 0.60f, 0.15f, 0f, 0f, 0f, 0f, 0f, 0f};
                 break;
             case "battle":
-                t = new float[] {0.75f, 0.35f, 0.85f, 0.45f + 0.30f * i, 0.40f + 0.35f * i, i > 0.55f ? 0.30f * (i - 0.55f) / 0.45f : 0f, 0f};
+                // pad ve çan geri çekilir; ritim (stab, drive, davul, tıkırtı) öne çıkar, yoğunlukla artar
+                t = new float[] {0.30f, 0.06f, 0.85f, 0.55f + 0.30f * i, 0.55f + 0.35f * i, i > 0.55f ? 0.55f * (i - 0.55f) / 0.45f : 0f, 0f,
+                    0.60f + 0.30f * i, 0.40f + 0.55f * i};
                 break;
             case "boss":
-                t = new float[] {0.55f, 0.12f, 1.00f, 0.85f, 0.85f, 0.55f + 0.35f * i, 0.30f + 0.60f * i};
+                t = new float[] {0.35f, 0f, 1.00f, 1.00f, 1.00f, 0.60f + 0.35f * i, 0.30f + 0.60f * i, 0.85f, 0.85f + 0.15f * i};
                 break;
             default:
                 t = new float[LAYERS];
@@ -127,8 +136,10 @@ public final class MusicEngine {
         out[HATS] = buildHats();
         out[LEAD] = buildLead();
         out[DRONE] = buildDrone();
+        out[STAB] = buildStab();
+        out[DRIVE] = buildDrive();
         for (int l = 0; l < LAYERS; l++) {
-            normalize(out[l], PEAK[l]);
+            normalize(out[l], BAND_RMS[l], MAX_PEAK[l]);
         }
         return out;
     }
@@ -137,12 +148,29 @@ public final class MusicEngine {
         return 440.0 * Math.pow(2, (midi - 69) / 12.0);
     }
 
-    private static void normalize(float[] a, double peak) {
+    /** 250-5000 Hz bandındaki ses gücü: tek kutuplu yüksek geçiren (250 Hz) + alçak geçiren (5 kHz). */
+    private static double bandRms(float[] a) {
+        double hpState = 0;
+        double lpState = 0;
+        double ah = Math.exp(-2 * Math.PI * 250 / RATE);
+        double al = 1 - Math.exp(-2 * Math.PI * 5000 / RATE);
+        double sum = 0;
+        for (float v : a) {
+            hpState = ah * hpState + (1 - ah) * v;
+            lpState += al * ((v - hpState) - lpState);
+            sum += lpState * lpState;
+        }
+        return Math.sqrt(sum / a.length);
+    }
+
+    /** Katmanı laptop bandındaki gücüne göre ölçekler; tepe değeri maxPeak'i aşarsa orada sınırlar. */
+    private static void normalize(float[] a, double bandTarget, double maxPeak) {
+        double r = Math.max(1e-9, bandRms(a));
         double mx = 1e-9;
         for (float v : a) {
             mx = Math.max(mx, Math.abs(v));
         }
-        float g = (float) (peak / mx);
+        float g = (float) Math.min(bandTarget / r, maxPeak / mx);
         for (int i = 0; i < a.length; i++) {
             a[i] *= g;
         }
@@ -222,14 +250,21 @@ public final class MusicEngine {
             for (int e = 0; e < 8; e++) {
                 int start = bar * BAR + e * (BEAT / 2);
                 double f = f0 * mult[e];
-                int len = (int) (RATE * 0.5);
+                int len = (int) (RATE * 0.45);
                 double ph = 0;
+                double lp = 0;
                 for (int i = 0; i < len; i++) {
                     double t = i / (double) RATE;
-                    double env = Math.exp(-t * 4.8) * (1 - Math.exp(-t / 0.004));
-                    ph += 2 * Math.PI * f / RATE;
-                    double v = Math.tanh(Math.sin(ph) * 1.7) * 0.8 + 0.2 * Math.sin(ph * 2);
-                    out[(start + i) % N] += (float) (v * env * (e % 2 == 0 ? 1.0 : 0.75));
+                    ph += f / RATE;
+                    if (ph >= 1) {
+                        ph -= 1;
+                    }
+                    // testere dişi + sinüs; süzgeç açıklığı notayla birlikte kapanır: orta aralıkta da duyulan "dişli" bas
+                    double saw = 2 * ph - 1;
+                    lp += (0.05 + 0.20 * Math.exp(-t * 9)) * (saw - lp);
+                    double v = Math.tanh((lp * 1.6 + Math.sin(2 * Math.PI * f * t) * 0.9) * 1.3);
+                    double env = Math.exp(-t * 5.2) * (1 - Math.exp(-t / 0.004));
+                    out[(start + i) % N] += (float) (v * env * (e % 2 == 0 ? 1.0 : 0.78));
                 }
             }
         }
@@ -241,16 +276,19 @@ public final class MusicEngine {
         Random r = new Random(5);
         for (int beat = 0; beat < BARS * 4; beat++) {
             int start = beat * BEAT;
-            float amp = beat % 4 == 0 ? 1.0f : 0.85f;
-            int len = (int) (RATE * 0.32);
+            float amp = beat % 4 == 0 ? 1.0f : 0.88f;
+            int len = (int) (RATE * 0.30);
             double ph = 0;
+            double ph2 = 0;
             for (int i = 0; i < len; i++) {
                 double t = i / (double) RATE;
-                double f = 46 + 120 * Math.exp(-t * 30);
-                ph += 2 * Math.PI * f / RATE;
+                ph += 2 * Math.PI * (48 + 150 * Math.exp(-t * 28)) / RATE;
+                ph2 += 2 * Math.PI * (210 + 520 * Math.exp(-t * 55)) / RATE;        // "toc": orta aralıkta da duyulan gövde
                 double env = Math.exp(-t * 9) * (1 - Math.exp(-t / 0.001));
-                double click = i < 140 ? (r.nextDouble() * 2 - 1) * (1 - i / 140.0) * 0.35 : 0;
-                out[(start + i) % N] += (float) ((Math.sin(ph) * env + click) * amp);
+                double body = Math.tanh(Math.sin(ph) * 1.6) * env;
+                double knock = Math.sin(ph2) * Math.exp(-t * 38) * 0.75;
+                double click = i < 220 ? (r.nextDouble() * 2 - 1) * (1 - i / 220.0) * 0.55 : 0;
+                out[(start + i) % N] += (float) ((body + knock + click) * amp);
             }
         }
         return out;
@@ -317,6 +355,67 @@ public final class MusicEngine {
             }
         }
         echo(out, (int) (BEAT * 0.375), 0.30f, 2);
+        return out;
+    }
+
+    /** Eksik vuruşlara düşen parlak akor vuruşları ("skank"): savaşın ritmini orta aralıkta taşır. */
+    private static float[] buildStab() {
+        float[] out = new float[N];
+        for (int bar = 0; bar < BARS; bar++) {
+            int[] chord = PAD_NOTES[bar / 2];
+            for (int hit = 0; hit < 4; hit++) {
+                int start = bar * BAR + (2 * hit + 1) * (BEAT / 2);
+                float accent = hit == 3 ? 1.0f : 0.8f;
+                int len = (int) (RATE * 0.17);
+                for (int note : chord) {
+                    double f = hz(note + (note < 55 ? 12 : 0));
+                    double ph = (note * 0.13) % 1.0;
+                    double lp = 0;
+                    for (int i = 0; i < len; i++) {
+                        double t = i / (double) RATE;
+                        ph += f / RATE;
+                        if (ph >= 1) {
+                            ph -= 1;
+                        }
+                        double saw = 2 * ph - 1;
+                        double sq = ph < 0.5 ? 1 : -1;
+                        lp += (0.10 + 0.30 * Math.exp(-t * 20)) * ((saw + sq * 0.5) - lp);
+                        double env = Math.exp(-t * 17) * (1 - Math.exp(-t / 0.002));
+                        out[(start + i) % N] += (float) (lp * env * accent);
+                    }
+                }
+            }
+        }
+        echo(out, (int) (BEAT * 0.75), 0.25f, 2);
+        return out;
+    }
+
+    /** Sekizlik testere dişi arpej: savaşa ilerleme ve aciliyet katar. */
+    private static float[] buildDrive() {
+        float[] out = new float[N];
+        int[][] pats = {{0, 2, 1, 3, 0, 2, 1, 3}, {3, 1, 2, 0, 3, 1, 2, 0}};
+        for (int bar = 0; bar < BARS; bar++) {
+            int[] a = ARP[bar / 2];
+            int[] pat = pats[bar % 2];
+            for (int e = 0; e < 8; e++) {
+                int start = bar * BAR + e * (BEAT / 2);
+                double f = hz(a[pat[e]] - 12);
+                int len = (int) (RATE * 0.22);
+                double ph = 0;
+                double lp = 0;
+                for (int i = 0; i < len; i++) {
+                    double t = i / (double) RATE;
+                    ph += f / RATE;
+                    if (ph >= 1) {
+                        ph -= 1;
+                    }
+                    lp += (0.06 + 0.34 * Math.exp(-t * 14)) * ((2 * ph - 1) - lp);
+                    double env = Math.exp(-t * 11) * (1 - Math.exp(-t / 0.002));
+                    out[(start + i) % N] += (float) (lp * env * (e % 2 == 0 ? 1.0 : 0.7));
+                }
+            }
+        }
+        echo(out, (int) (BEAT * 0.375), 0.28f, 2);
         return out;
     }
 
