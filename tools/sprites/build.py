@@ -12,6 +12,7 @@ from PIL import Image
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import angler  # noqa: E402
+import enemies  # noqa: E402
 import projectiles  # noqa: E402
 import puffer  # noqa: E402
 import swordfish  # noqa: E402
