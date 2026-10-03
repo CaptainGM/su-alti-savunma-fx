@@ -40,6 +40,43 @@ Ekran küçük olunca yan panel yerine solda kule çubuğu, sağda dalga ve komu
 
 ![Android](docs/mobil-oyun.jpg)
 
+## Ekran görüntüleri
+
+Masaüstü (resimlere tıklayınca büyüyor):
+
+<table>
+  <tr>
+    <td align="center"><a href="docs/harita-secimi.jpg"><img src="docs/harita-secimi.jpg" width="270"></a><br><sub>Harita seçimi</sub></td>
+    <td align="center"><a href="docs/kule-penceresi.jpg"><img src="docs/kule-penceresi.jpg" width="270"></a><br><sub>Kule penceresi</sub></td>
+    <td align="center"><a href="docs/yetenek-secimi.jpg"><img src="docs/yetenek-secimi.jpg" width="270"></a><br><sub>Yetenek seçimi</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/patron-ziplama.jpg"><img src="docs/patron-ziplama.jpg" width="270"></a><br><sub>Patron kuleyi yiyor</sub></td>
+    <td align="center"><a href="docs/patron-evre.jpg"><img src="docs/patron-evre.jpg" width="270"></a><br><sub>Patron öfkelenince</sub></td>
+    <td align="center"><a href="docs/yuksek-zemin-yazisi.jpg"><img src="docs/yuksek-zemin-yazisi.jpg" width="270"></a><br><sub>Yüksek zemin</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/rehber-harita.jpg"><img src="docs/rehber-harita.jpg" width="270"></a><br><sub>Rehber: haritalar</sub></td>
+    <td align="center"><a href="docs/rehber-yuksek-zemin.jpg"><img src="docs/rehber-yuksek-zemin.jpg" width="270"></a><br><sub>Rehber: yüksek zemin</sub></td>
+    <td align="center"><a href="docs/ipucu.jpg"><img src="docs/ipucu.jpg" width="270"></a><br><sub>İpucu penceresi</sub></td>
+  </tr>
+</table>
+
+Android:
+
+<table>
+  <tr>
+    <td align="center"><a href="docs/mobil-menu.jpg"><img src="docs/mobil-menu.jpg" width="270"></a><br><sub>Menü</sub></td>
+    <td align="center"><a href="docs/mobil-harita.jpg"><img src="docs/mobil-harita.jpg" width="270"></a><br><sub>Harita seçimi</sub></td>
+    <td align="center"><a href="docs/mobil-kule.jpg"><img src="docs/mobil-kule.jpg" width="270"></a><br><sub>Kule penceresi</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/mobil-ipucu.jpg"><img src="docs/mobil-ipucu.jpg" width="270"></a><br><sub>İpucu</sub></td>
+    <td align="center"><a href="docs/mobil-rehber.jpg"><img src="docs/mobil-rehber.jpg" width="270"></a><br><sub>Rehber</sub></td>
+    <td align="center"><a href="docs/devam-et.jpg"><img src="docs/devam-et.jpg" width="270"></a><br><sub>Kayıtlı oyuna devam</sub></td>
+  </tr>
+</table>
+
 ## Çalıştırma
 
 Masaüstü (Java 25 ve Maven gerekiyor):
